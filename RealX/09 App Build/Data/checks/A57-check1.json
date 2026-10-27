@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "A57 is built on contract fields that its money-oracle dependency A37 (AM3) does not have, and leaves them to a later 'loop A37.1'. A37's placement body has no statement_hash. Its status_label vocabulary has 10 values: no under_review, pending_confirmation, refund_pending or revoked. A frozen investor_cash account leaves the order as plain awaiting_funds. The order read has no agent {token_id, token_name}, no channel and no cancel reason. So the pill-table, under-review (tipping-off) and agent-marker pass criteria cannot be met against A37 as written, and fixing it later means reopening a gated oracle node two milestones on.",
+   "fix": "Amend A37's spec now: statement_hash in the POST /v1/offerings/{id}/orders body, passed to A35's G12 (ACK_STATEMENT_MISMATCH); status_label gains under_review, refund_pending, revoked (and pending_confirmation only if finding 2 keeps it), with written mapping rules (a frozen investor_cash maps to under_review whatever the state); the order read gains channel, agent {token_id, token_name}|null, cancel_reason and reconfirm_due_at, all in A37's oracle scope. Then remove the 'loop A37.1' and 'specify point (b)' fallbacks from A57."
+  },
+  {
+   "severity": "high",
+   "issue": "The 'Waiting for your confirmation' INV-03 state and its agent-parity challenge ('an agent order above the mandate cap must show Waiting for your confirmation on INV-03 with no order in escrow') contradict A37. A37 says an above-cap agent placement returns 428 CONFIRMATION_REQUIRED, 'creates nothing' and 'leaves no order', and A60 shows it as an ACC-05 confirmation card. With no order id there is no INV-03 page, so the challenge cannot pass.",
+   "fix": "Choose one model in both specs. Recommended: drop the state from INV-03. The challenge then asserts that the 428 leaves GET /v1/me/orders unchanged, that ACC-05 (A60) lists the confirmation, and that after the passkey the replayed order appears on INV-03 with the agent marker. The alternative is for A37 to persist a submitted order with nothing reserved, proven by A37's oracle."
+  },
+  {
+   "severity": "high",
+   "issue": "The confirm flow conflicts with A09's idempotency contract. The first keyed POST (with no confirmation) gets FRESH_ASSERTION_REQUIRED. The retry uses the same key with an added `confirmation`, so the body hash differs, and A09 returns 422 idempotency_key_reused if the first response was stored (A09 releases a claim only on 'handler failure'). A duplicate request in flight gets 409 idempotency_in_progress, not the original order. A57's error table has neither code and maps only ORD_DUPLICATE_KEY_CONFLICT (409 in A37, 422 in A09). The 'double click returns the original order' guarantee is therefore not assured and can pass only against a lenient mock.",
+   "fix": "Specify a sequence consistent with A09. Either (a) get the canonical payload_sha256 without a keyed write (from the quote response, or a non-mutating confirmation-challenge call) and send one keyed POST carrying the confirmation, or (b) record an A09 loop so pre-handler 428 and FRESH_ASSERTION_REQUIRED responses are never stored and `confirmation` is excluded from the body hash. Retry 409 idempotency_in_progress with the same key until the stored response replays. Map 422 idempotency_key_reused and ORD_DUPLICATE_KEY_CONFLICT to one sentence, align the code and status in A09 and A37, and add hidden cases."
+  },
+  {
+   "severity": "medium",
+   "issue": "The idempotency key is a random UUID in sessionStorage behind try/catch. The 'Twice is once' challenge closes and reopens the browser on /review and expects exactly one order, but closing the browser clears sessionStorage. The screen then redirects to step 0, and a new quote with a new key legitimately creates a second order (A37 allows top-ups). If storage throws, a refresh in flight also mints a new key.",
+   "fix": "Derive the key from the server's quote, for example uuidv5(quote_id + investor id), so the same quote always gives the same key whatever happens to storage. Redefine the reopen case to assert either a replay of the original order or an explicit new order after a new quote."
+  },
+  {
+   "severity": "medium",
+   "issue": "Dependencies are missing. A06 (seed for KST01, WLG01, RX-ORD-55120), A23 (Docker stack for the Playwright journeys) and A104 (MCP server for the 'MCP call does the same' parity checks) are not ancestors of A57 in final-graph.json. The J05 pass criterion checks funds on A59's wallet screen, and the G12 criterion checks POR-07 (A58); both are same-milestone non-dependencies. A59 does not support the deposit shortcut's ?return=/invest/{code}/buy round trip.",
+   "fix": "Add A06, A23 and A104 to the deps (AM0 and AM1, no cycle). Check the wallet balance and acknowledgements through ancestor SDK reads (A16 or A47, A35) instead of A58 or A59 screens. Record the return parameter as a requirement on A59, or route it through A52's return validator. Assert links to A58, A59 and A60 only against A52's route table."
+  },
+  {
+   "severity": "medium",
+   "issue": "A90 says it fills 'A57's reflection status and banner slot' without editing A57's files, but A57 defines no slot mechanism (import path, registry, props or test). A90 will be blocked or forced to edit A57's owned paths.",
+   "fix": "Define, for example, src/features/buy/slots.ts with registerOrderSlot('reflection' | 'inv01.regimeNote', Component<{order, refetch}>), rendered by StatusStep. Add a unit test with a dummy registration and list the slot in A57's exports."
+  },
+  {
+   "severity": "medium",
+   "issue": "A52's frozen route table puts INV-05 /invest/[code]/sell (a P1 preview route) and INV-06 /invest/[code]/board inside A57's owned (investor)/invest/ folder. A57's entry guard redirects closed offers to 'the sell preview', but no AM5 node builds that page, and A92 proposes moving the routes through loop A52.1. The redirect target is unowned or a 404 in P1.",
+   "fix": "Either build the P1 INV-05 preview page in A57 (defineScreen INV-05, PreviewBanner, mutations refused) or redirect to the property page with a 'Fully funded' banner. Record the sell/ and board/ subfolders as reserved and coordinated with A92's loop A52.1."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some INV-03 copy is hard-coded, although the spec says it renders server strings verbatim. 'Cancelled by you · {date}' is wrong when J22's token revocation cancels open agent orders, or when the offering is cancelled. 'within 5 business days' hard-codes A37's configurable orders.refund_sla_business_days.",
+   "fix": "Render cancel, expiry and refund titles from A37's timeline or cancel_reason (investor, token_revoked, offering_cancelled, material_change_not_reconfirmed), and the SLA from the server. Add a token-revoked cancellation fixture with a screenshot."
+  },
+  {
+   "severity": "medium",
+   "issue": "A document opens only after the awaited POST …/open returns its presigned URL. Browsers block window.open at that point, but A35's document_open row and the 'Opened' pill are still written. The G12 'documents opened' precondition can be recorded for a document the person never saw, and Playwright (which allows popups) will not catch it.",
+   "fix": "Open the window synchronously in the click handler and set its location when the URL arrives. If the window is null, show 'Allow pop-ups or open here' with a direct link. Add a Playwright case with popups blocked."
+  },
+  {
+   "severity": "low",
+   "issue": "ORD_GATE_FAILED handling covers only G01, G04, G06, G07, G11 and G12. A37's placement set also runs G21 (and G05 in P2), which have no defined screen behaviour.",
+   "fix": "Add a generic rule: any other gate returns to step 0 with its server row and fix_it text. Add a G21 fixture."
+  },
+  {
+   "severity": "low",
+   "issue": "The G12 forced-submission challenges go through the DOM only. A client-side guard could satisfy them, and no case sends a fabricated opened_at for a document that was never opened.",
+   "fix": "Add an SDK-level case with a forged opened_at that must be refused by the server with ACK_DOCUMENT_NOT_OPENED and nothing reserved, and assert that the refusal came from the server response."
+  },
+  {
+   "severity": "low",
+   "issue": "The feature lint bans '/' on _cents identifiers, while the spec allows floor(amount_cents / unit_price_cents).",
+   "fix": "Name the single exempt module (for example state/unitsForAmount.ts) in the lint config, test it at 100%, and forbid eslint-disable comments in features/buy."
+  },
+  {
+   "severity": "low",
+   "issue": "The product map's INV-01 component 'Minimum and maximum subscription' is shown only when G11 fails or in a preset tooltip.",
+   "fix": "Show the server's min and max ticket line persistently and add it to INV-01's done-when."
+  },
+  {
+   "severity": "low",
+   "issue": "The refund fixture 'Refunded · A$2,395.92 · 3 Oct 2026' is paired with 'Soft cap not reached · offer closed 14 Oct 2026', so the refund comes before the close.",
+   "fix": "Make the J05 fixture dates consistent (for example, reverted 11 Oct and refunded within 5 business days)."
+  },
+  {
+   "severity": "low",
+   "issue": "The D04 parity challenge does not check the audit line 'agent <prefix> on behalf of <person>' in the person's activity, the person's notice (J22 steps 2 and 3), or that a G22 cap refusal leaves nothing on INV-03.",
+   "fix": "Extend the challenge: check A12's /me/activity row and A101 or A43's notice, then exceed the daily cap and assert a G22 refusal with no order and no reservation."
+  },
+  {
+   "severity": "low",
+   "issue": "The status line says 'AM5 (Investor app)' but the graph name is 'Investor app and preview'. 8-12 h is low for three routes, 15+ states at two widths, two Docker journeys, large hidden suites and three-channel parity.",
+   "fix": "Use the graph's milestone name. Re-estimate at about 12-18 h, or split INV-03 into its own node."
+  }
+ ]
+}

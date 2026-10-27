@@ -1,0 +1,95 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The frozen business-day rule contradicts the frozen DST/holiday vector. The rule says a clock of N business days is due at 17:00 on the Nth business day after day 0, and when the trigger day is not a business day, day 0 is the next business day. For a Sev3 (N=1) alert raised Saturday 3 Oct 2026, day 0 is Tuesday 6 Oct (Monday 5 Oct is NSW Labour Day), so the rule gives Wednesday 7 Oct 17:00 AEDT. The challenge and the vector set require Tuesday 6 Oct 17:00. One of them must fail, and this is the escalation case the note itself names.",
+   "fix": "Choose one meaning and write it in both places. Recommended: 'when the trigger day is not a business day, the next business day is day 1' (Saturday to Tuesday 6 Oct 17:00 AEDT, 06:00 UTC). Add a vector for a trigger on a business day after 17:00, and state that the SMR vectors still hold under the chosen rule."
+  },
+  {
+   "severity": "high",
+   "issue": "The ALERT transition table is incomplete and contradicts itself, but the pass criteria require exhaustive tests generated from it. (a) The breach detector auto-escalates Sev1/Sev2 alerts that are unacknowledged, so their state is 'new'. But 'escalated' is reachable only from acknowledged or assigned, so the system's own escalation is a forbidden transition. (b) There are no exits from 'escalated'. (c) The note does not say whether assign is allowed from 'new', which ADM-01 needs. (d) It does not say whether reopen or escalation restarts an acknowledgement clock. (e) It does not say which audit actions one auto-escalation writes, yet the audit-count criterion needs an exact number.",
+   "fix": "Put the full table in the note as rows of (from, action, actor human|system, to, reason required, clock effect, audit action). Recommended: breach escalation changes owner_role and escalation_level and sets breached_at without changing state; the 'escalated' state is for manual escalation only; new->assigned is allowed; escalated->acknowledged|assigned|resolved is allowed; reopen opens a fresh ack clock; a breach writes exactly alert.breached plus alert.escalate. Derive the forbidden-pair count from that table."
+  },
+  {
+   "severity": "high",
+   "issue": "AML alerts break need-to-know and tipping-off rules (N08; SM-11 'case access limited to MLRO and CCO'). CCO, SECO and CEO see every alert. TP-AUD and TP-OBS read with no scope. On-call ENGO gets escalation pages. Digests and summary counts by owner role would include aml.smr_clock and aml.sanctions_list_hit. subject_ref may be the investor, which reveals that a case exists.",
+   "fix": "Add a need_to_know flag to alert_type, set on aml.* types, with visibility MLRO and CCO only. Enforce it by RLS on app.principal_role (the pattern of A04's aml_case) in list, detail, summary, digest, page events and escalation paths (MLRO->CCO only). Make subject_ref the case id and use templated titles with no investor attributes. Add cases: SECO, CEO, SUPP, TP-AUD, TP-OBS, SP-OWN and a SECO token each get 404, and the alerts are absent from their counts and digests."
+  },
+  {
+   "severity": "high",
+   "issue": "Graph gap: A13 depends only on A09 and A10, but its permission and token tests need A11 (sessions, RBAC middleware) and A12 (tokens, token ownership, on_behalf_of). A09 always sets the principal to 'anonymous'. Without A11 and A12, these pass criteria cannot run against real principals: permission tests per staff role, token parity with its human, self_subject, and on_behalf_of audit. A builder would fake them with a stub.",
+   "fix": "Add A11 and A12 as dependencies of A13. This creates no cycle, and A14 already depends on both. Require the permission and token tests to use real A11 sessions and A12-issued tokens. The alternative is an explicit A09-owned test-principal injector, with the token tests moved to A12's or A100's regression."
+  },
+  {
+   "severity": "high",
+   "issue": "Emitters named in the catalogue cannot call A13 under the graph. The note sources iam.break_glass_active 'from A11' and agent.revocation_storm 'from A12'. The challenges use 'A12's fixture' and 'A27's fixture'. But A11 and A12 do not depend on A13, and their specs contain no alert emission. A27 is a later AM2 dependent. These alerts would never be raised, and the challenges cannot run at A13's gate.",
+   "fix": "Have A13 raise both from detector jobs over A04 tables (an active break_glass_session row; a revocation-rate threshold over api_token revocations), like audit-chain-watch. Or move the revocation storm to A101. Rewrite both challenges to use A13's own local emit and fixture emitter."
+  },
+  {
+   "severity": "high",
+   "issue": "There is no extension mechanism for alert types and SLA policies, yet at least eight later nodes add them: A36 clock rows, A42, A45, A46 (integration.degraded via 'A13.1'), A48 (five types), A85 (eight), A101. catalogue.ts sits in A13's owned path, so each of them would have to edit A13's files. The pass criterion requires 'exactly' 27 types, and the note says emitters use 'these strings and nothing else'. Any later addition breaks A13's regression, and unknown codes are a boot error for the dependents.",
+   "fix": "Add registerAlertTypes([...]) and registerSlaPolicies([...]), modelled on A04's registerModuleSchema. They are called from the owning module's folder and validated at boot (unique code, owner role in A03, target screen in the 91-screen list, policy code exists). The pass criterion becomes: A13's own seed is exactly 17+10 types, and a type registered from a fixture module works with no file change under A13's paths. Drop the 'nothing else' sentence."
+  },
+  {
+   "severity": "high",
+   "issue": "The ratification-lapse contract disagrees with A14 and can raise two alerts for one lapse. A13 seeds approval.unratified as 'the code A14 uses', but A14 raises 'approval.ratification_missed' from its own 2-hour sweep, a code not in the catalogue, so A14 fails at boot. A13 also has A14 open a ratification clock with an on-breach alert, so the clock and the sweep both raise. A48 expects an escalation ladder (Sev1 with CEO as owner at 4 h, 'as sla_policy rows'), but A13's upgrade cannot change the owner and sla_policy has no ladder.",
+   "fix": "Name one code (approval.unratified) and one raiser: either the clock's on_breach or A14's sweep, never both. Record the A14 correction. Add escalation_ladder steps (after_ms, new_severity, new_owner_role) to sla_policy, applied in place with one alert.upgraded audit event per step. Test that one SGL+R lapse gives exactly one alert, Sev1 owned by CEO at 4 h."
+  },
+  {
+   "severity": "medium",
+   "issue": "The design fidelity criterion contradicts the design, and the read model cannot produce the design's rows. In adCmd the certificates row links to adKyc (ADM-10) and the valuation row to adListing (ADM-07), but the challenge demands ADM-11 and ADM-06 'matching adCmd'. The queue row 'Listing waiting for review' needs its detail 'Marine Parade Apartment · Harbour & Co' and age '5h', which the aggregate queues shape (name, items, oldest age, past SLA) cannot give. The row details and the mixed time formats are not specified. The note has A13 build 'the seed', but A06 owns packages\\db\\seed\\, already seeds these alerts, and is not a dependency.",
+   "fix": "State the reconciliation: target_screen follows the product map, and the design links are recorded as superseded (or add a design_target field). Add per-item queue rows (title, detail, object_label, entered_at, age_ms, target_screen, tone review). Specify the time-label rule, or return raw instants and let A66 format them. Add A06 as a dependency, with A13 adding only reference rows. Put the exact detail strings in the fidelity check."
+  },
+  {
+   "severity": "medium",
+   "issue": "The note says A66 needs no further backend, but product-map ADM-02 fields are missing: MTTA and MTTR by severity, a module filter, the 'Mine' and 'Unassigned' chips, a stored-digest read, and per-alert allowed_actions with snooze_max. A66 already calls these a follow-up, 'A13.1'.",
+   "fix": "Add them now: mtta_ms and mttr_ms by severity over 7 and 30 days in the summary; a module column on alert_type with a module filter; assignee=me|none; GET /v1/alerts/digests?date=&role=; and allowed_actions[] with snooze_max_until per alert. Add a pass case for each."
+  },
+  {
+   "severity": "medium",
+   "issue": "Sev1 is never notified at creation. The only page is alert.page, written when the 15-minute SLA breaches, and there is no creation outbox event. So nobody is told about a Sev1 until the SLA is already missed, although the product map says 'Sev1 pages on-call within 15 minutes'.",
+   "fix": "Write an alert.raised outbox event on creation and on upgrade for A43 (page for Sev1, notify for Sev2), respecting need-to-know. Keep alert.page for breach escalation. Test: a Sev1 emit writes one alert.raised event, and a breach writes one alert.page event."
+  },
+  {
+   "severity": "medium",
+   "issue": "The dedup rules do not cover the flapping challenge. Dedup matches only open alerts, so 300 on/off flips of chain.stuck_or_lagging create 300 alerts and 300 creation audit events, but the challenge expects a single alert. dedup_window is a column whose meaning is never defined.",
+   "fix": "Define dedup_window: an emit matching an alert resolved by the system within the window reopens it as a system transition (no reason, one alert.reopen audit event) and increments occurrences. Give exact expected counts in the challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "A human can hide an alert about themselves. self_subject refuses only tokens, so a SECO whose own token is on an anomaly hold (owner SECO) can snooze, assign or resolve it with a passkey. D04 says segregation of duties counts the agent as its human.",
+   "fix": "Extend self_subject to the human: acknowledge is allowed, but snooze, assign, escalate-down and resolve are refused with 403. Route such alerts to the owner role's head (for example CCO). Add this to the challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "No PII check is defined. emit() takes free-text title and detail, and 'the planted-name fixture is refused' has no deterministic rule behind it, so a builder can pass by matching the one fixture string.",
+   "fix": "Render titles and details from per-type templates with typed parameters. Validate payload_json with a per-type zod schema whose keys may not intersect PII_PATHS. Refuse any unknown parameter or free text with 422 pii_refused. The fixture then tries an extra investor_name parameter and a label override, and both must be refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "Digest scheduling contradicts A09. The digest is 'registered with the pg-boss cron here', but A09 forbids handing crons to pg-boss and fires schedules through its injected-clock scheduler.tick and job_schedule_fire. A pg-boss cron runs on wall time and would not fire when the clock is advanced, so the 07:00 DST-day challenges fail or get faked.",
+   "fix": "Register alerts.digest, alerts.audit-chain-watch and the minute jobs through A09's scheduler with zone Australia/Sydney, idempotent per (job, due instant). Keep the per-(date, role) uniqueness as a second guard."
+  },
+  {
+   "severity": "medium",
+   "issue": "The local emit endpoint could leak into the agent surface. POST /v1/_test/alerts/emit sits under /v1, and the note says every endpoint is in OpenAPI and the MCP catalogue, which would expose an alert-forging tool to the SDK and to agents. A09's convention is /__test/, outside OpenAPI.",
+   "fix": "Move it to /__test/alerts/emit, keep it out of OpenAPI, the SDK and MCP, and return 404 outside local and test modes. Add a pass case that no test operation appears in those surfaces."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle choice is weak for an authority-bearing clock service. These clocks drive SMR deadlines, SGL+R ratification lapses (which trigger reverts) and approval TTLs. Fable's vectors arrive only at Challenge and are filed after the gate. The self-contradicting Saturday vector shows they must be frozen first. A46, also oracle: no, already has hidden DST vectors written before its build.",
+   "fix": "Set oracle: yes, or adopt A46's wording: Fable writes the business-day, DST and holiday vectors (60 or more), the transition-table cases, and the bulk and self_subject cases to <workspace>\\gauntlet\\hidden\\A13\\ before the build."
+  },
+  {
+   "severity": "medium",
+   "issue": "A wrong Australian fact. The complaint rows are labelled 'acknowledgement 5 calendar days, final response 30 calendar days (RG 271 defaults)'. RG 271 expects acknowledgement within 24 hours (or one business day). The 5-day figure is the catalogue's placeholder (QA item 8), not an RG 271 default.",
+   "fix": "Relabel the rows as 'catalogue placeholder, set with counsel'. Recommend an acknowledgement default of 1 business day and 30 calendar days for the response, both set_with_counsel. Record N06's 'day 5 of 7' as a counsel question."
+  },
+  {
+   "severity": "low",
+   "issue": "The MCP pass criterion depends on A104, which is not a dependency of A13 and may not exist at A13's gate.",
+   "fix": "Require only the MCP-exposure annotations A104 consumes on each operation, and move the catalogue listing check to A104's and A100's regression."
+  }
+ ]
+}

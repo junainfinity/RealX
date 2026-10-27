@@ -1,0 +1,4478 @@
+{
+ "streams": 4,
+ "milestones": [
+  {
+   "id": "AM0",
+   "name": "Foundations",
+   "goal": "Charter and coverage baseline (91 screens, 21 journeys, 22 gates, 27 modules, 14 state machines), git repo and pinned toolchain, pure domain package (integer money, unit math, ids, all 14 state machines, permission matrix, gate codes incl. G22), Postgres schema with RLS, design system generated from the dc prototype tokens, seed and scenario simulator, local Hardhat chain with T-REX vendored, sandbox adapter framework, API and worker skeleton with the OpenAPI-generated SDK. Exit: `npm run verify` passes on a fresh clone on Node 24.21.0 and the T-REX reference suite compiles and tests green locally."
+  },
+  {
+   "id": "AM1",
+   "name": "Money, register, approvals and agent-access core",
+   "goal": "The risk core, proven before any UI: append-only audit chain, passkey/hardware-key auth with RBAC and SoD, API tokens with agent mandates for every user type (G22) and the MCP server generated from the OpenAPI document, the alerts and SLA-clock service, approvals engine (SM-00) with custody policy sandbox and approval-ID binding, double-entry client-money ledger, NPP/PayID bank rail sandbox, the legal unit register with registry adapter, the rules engine for G01-G22, three-way reconciliation with zero tolerance, licence-bound feature flags, identity and sanctions sandboxes. Exit: the whole stack (postgres, api, worker, hardhat, sandbox panels) boots green from Docker Desktop three times in a row, migrates, seeds, deploys the reference suite and the audit chain verifies; no live adapter or mainnet RPC is selectable."
+  },
+  {
+   "id": "AM2",
+   "name": "Token and wallet core",
+   "goal": "ERC-3643 suite per trust with RealX compliance modules, the AgentGateway that binds approval IDs on-chain, passkey smart wallets with paymaster and guardian recovery, chain adapter and indexer feeding reconciliation, token operations service, wallet service. Exit: a mint bound to an approval id runs approval to custody to gateway to indexer to registry ack to a clean targeted reconciliation on the local chain, and a replayed approval id is refused at every layer."
+  },
+  {
+   "id": "AM3",
+   "name": "Business services",
+   "goal": "Every API module the screens will need, each tested against the core and publishing its read contracts into the SDK: KYC and onboarding cases, on-chain claims, classification, tenancy and entities, properties and valuations, documents, offerings, orders/escrow/allocation, finalise-and-mint pipeline, treasury, distributions, tax, AML, comms, support, reporting, jobs, portfolio read models, halts and wind-down, partner principals, the agent guard (anomalies, notices, tiered kill switches) and the developer surface (versioning, docs, per-user sandbox). Exit: the money-path smoke runs J04, J05, J06 and J15 at service level through the SDK and sandbox panels in Docker (pay in, close, allocate, register entry, mint, reconcile, distribute, withdraw) and the founder can watch money and units move from a one-page 'magic inputs' guide."
+  },
+  {
+   "id": "AM4",
+   "name": "Design extension and shells",
+   "goal": "The ~58 undesigned screens (incl. ACC-05, SPN-16, ADM-35 and the five undrawn admin screens renumbered ADM-36..ADM-40) drawn in the prototype's own language and reviewed by the user before any UI node uses them; the web app shells (public, investor, sponsor) with passkey sign-in and the operator console shell with hardware-key sign-in. Exit: the user has reviewed both extension files in the browser and approved them (human gate HG-REVIEW)."
+  },
+  {
+   "id": "AM5",
+   "name": "Investor app and preview",
+   "goal": "Public site, onboarding, buy flow, portfolio, wallet, account and the investor and sponsor API-token screens on top of the proven services, then a Docker Desktop preview the user can open. Exit: J01, J02 and J04-to-escrow pass as Playwright journeys over the preview stack and the user has walked the preview (human step)."
+  },
+  {
+   "id": "AM6",
+   "name": "Sponsor console",
+   "goal": "Dashboard, apply, team and billing; the four-step listing wizard and offer monitor; register, distributions, property reporting, valuations and announcements; the partner portal for trustee, auditor, regulator observer and licensee users. Exit: J11, J12, J13, J14 and J19 pass end to end in Docker through the sponsor console, with operator steps driven through the SDK until the console screens land in AM7."
+  },
+  {
+   "id": "AM7",
+   "name": "Operator console",
+   "goal": "All 35 ADM screens plus the five undrawn admin screens (ADM-36..ADM-40), module by module, each bound to the approvals engine and audit log, including ADM-35 agent and API access. Exit: J20 (operator daily run) passes end to end through the console with every tile role-filtered and the hash chain verified."
+  },
+  {
+   "id": "AM8",
+   "name": "Journeys, hardening and launch",
+   "goal": "Playwright journeys J01-J06, J09-J15, J17, J19-J21 with planted breaks, an agent-driven journey through the API/MCP and the agent-parity matrix, security and performance passes, observability and runbooks with the nine runbook drills executed, backups with a restore drill and retention/erasure, a Base Sepolia integration run with the HG-AUDIT pack, design fidelity and accessibility, three clean regression runs with every gate G01-G22 exercised, and the Docker Desktop launch. Exit: all 17 P1 journeys green three times in a row and HG-LAUNCH signed by the user."
+  },
+  {
+   "id": "AM9",
+   "name": "P2 features (from about 8 April 2027)",
+   "goal": "Registered scheme and sub-funds with PDS, TMD and G05, retail cooling-off as a parameter, the guarded resale board (SM-09), governance votes (SM-10), P2 journeys J07, J08, J16 and a P2 launch update. Switched on only when a licence or relief record binds the flag."
+  },
+  {
+   "id": "AM10",
+   "name": "P3 later",
+   "goal": "Auto Invest with PayTo, AUD stablecoin rail with V5/V6 vaults and the travel rule (G15), minors and development or debt vehicles, licensed-market venue mode. Built behind P3 flags only after the advice and licensing reviews."
+  }
+ ],
+ "nodes": [
+  {
+   "id": "A00",
+   "title": "Charter and acceptance baseline",
+   "milestone": "AM0",
+   "lane": "Plan",
+   "deps": [],
+   "oracle": false,
+   "summary": "Freeze the build charter: fixed context D01-D03 and founder decision D04 (every user type manages API tokens so its own agents can carry out every account action under the same gates), P1/P2/P3 vocabulary, Q12 option 1 as a reversible decision with its swap points (custody Fireblocks-type, bank Monoova/Zepto-type, registry IQ-EQ/Automic-type, identity Equifax/Sumsub/Averer-type), the human gates list (HG-LEGAL, HG-VENDOR/ACCOUNTS, HG-KEYS, HG-AUDIT, HG-PENTEST, HG-CAPITAL, HG-PROD, HG-REVIEW, HG-LAUNCH), the canonical screen table reconciling design codes to product-map codes (design INV-01 = POR-01, INV-02 = INV-01+INV-02, INV-03 = POR-04) and renumbering the five undrawn admin screens to ADM-36 sign-in and 2FA, ADM-37 users/roles/access reviews, ADM-38 investor directory, ADM-39 entities register and detail, ADM-40 token registry list so they never clash with ADM-35, and the coverage matrix mapping every one of the 91 screens, 21 journeys, 22 gates, 27 modules and 14 state machines to a node or an exclusion. Records the SHA-256 of the design folder, never edited. D04 frozen as data: (a) the non-delegable action list (identity and liveness, first passkey and wallet, creating or widening tokens, changing the withdrawal account, recovery and guardian changes, closing the account) that no scope can cover; (b) HG-LEGAL counsel questions as parameters: which declarations must be personal (wholesale status, target market), whether an agent may acknowledge disclosures under standing consent, whether a mandate changes the licence perimeter (G21), whether a sponsor agent counts as one of the sponsor's two people; (c) partner user types (trustee/RE, valuer, property manager, auditor, regulator observer, licensee) as principal type PARTNER with their surfaces; (d) the API contract: versioned REST with OpenAPI, MCP, webhooks, SDK, per-user sandbox, idempotency, rate limits, cursor pagination. Documentation only; pass criterion: the matrix has no gaps and no node edits another node's paths.",
+   "screens": [],
+   "design_refs": [
+    "design:screen codes §3",
+    "design:mock data §7"
+   ],
+   "journeys": [],
+   "gates": [],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\docs\\charter\\"
+   ],
+   "est_lo": 2,
+   "est_hi": 4
+  },
+  {
+   "id": "A01",
+   "title": "Repo scaffold, toolchain and verify command",
+   "milestone": "AM0",
+   "lane": "Platform",
+   "deps": [
+    "A00"
+   ],
+   "oracle": false,
+   "summary": "git init at <workspace>\\app, npm workspaces, TypeScript 5.9, ESLint flat config with the module-boundary rule, Prettier, Vitest, Playwright, .gitattributes LF, secrets scanning, and one `npm run verify` (typecheck + lint + unit tests + audit). Pins every version after a real install on Node 24.21.0 and records what worked. Base docker compose with Postgres 17 only. Commit policy: one local commit per passed node; the gauntlet's status.json lives outside the repo.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\(root files only: package.json, package-lock.json, tsconfig.base.json, eslint.config.js, .prettierrc, .gitattributes, .gitignore, .npmrc, README.md)",
+    "<workspace>\\app\\infra\\base\\",
+    "<workspace>\\app\\scripts\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 6
+  },
+  {
+   "id": "A02",
+   "title": "Domain ids, money and unit math",
+   "milestone": "AM0",
+   "lane": "Domain core",
+   "deps": [
+    "A01"
+   ],
+   "oracle": true,
+   "summary": "Pure TypeScript: branded ids (APR-, OP-, RX-ORD-, INV-, AML-, TOK- for API tokens, MND- for mandates), integer-cent money with en-AU formatting, whole units, basis points, rounding rules (distribution lines round down, remainder to a rounding account, never lost), fee math (0.5% transaction fee, subtotal + fee = total to the cent), holder-cap arithmetic (qty/10,000 vs cap), price band (valuation x 85-115%), token valuation ((value + cash - debt - liabilities) / units), withholding rates as parameters (47% no-TFN, MIT 15%/30%), and screens.ts generated from the charter's canonical screen table. Property tests with fast-check are the oracle scope.",
+   "screens": [],
+   "design_refs": [
+    "design:mock data §7 constants",
+    "design:buy stepper order lines"
+   ],
+   "journeys": [],
+   "gates": [
+    "G07",
+    "G09",
+    "G16"
+   ],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\domain\\ (root files only)",
+    "<workspace>\\app\\packages\\domain\\src\\money\\",
+    "<workspace>\\app\\packages\\domain\\src\\ids\\",
+    "<workspace>\\app\\packages\\domain\\src\\screens\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A03",
+   "title": "State machines, gate codes, approval codes and permission matrix as data",
+   "milestone": "AM0",
+   "lane": "Domain core",
+   "deps": [
+    "A02"
+   ],
+   "oracle": true,
+   "summary": "All 14 state machines SM-00..SM-13 as transition tables with guards (every state and trigger from the catalogue), a generic engine that refuses any transition not in the table, gate codes G01-G22 with phase (G22 'Agent authority' applies to every agent-initiated action in every phase), approval policy codes (4E, 4E+Q, 6E, 6E+Q, SGL+R, AUTO), the 51-role list incl. AGNT and SVCA, the role x module x action matrix from which both RBAC and API-token scopes are derived (a scope is a matrix cell, so a token can never name a right its owner lacks; every cell carries a delegable flag and the charter's non-delegable actions are flagged false so no scope can include them; the matrix also has rows for the PARTNER principal types TP-RE, TP-VAL, TP-PM, TP-AUD, TP-OBS, TP-LIC), and the ten SoD rules as data incl. 'an agent is never a checker or a custody signer'. Exhaustive transition tests and forbidden-transition tests are the oracle scope.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [
+    "G13",
+    "G22"
+   ],
+   "modules": [],
+   "states": [
+    "SM-00",
+    "SM-01",
+    "SM-02",
+    "SM-03",
+    "SM-04",
+    "SM-05",
+    "SM-06",
+    "SM-07",
+    "SM-08",
+    "SM-09",
+    "SM-10",
+    "SM-11",
+    "SM-12",
+    "SM-13"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\domain\\src\\state-machines\\",
+    "<workspace>\\app\\packages\\domain\\src\\permissions\\",
+    "<workspace>\\app\\packages\\domain\\src\\codes\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A04",
+   "title": "Database schema, migrations and row-level security",
+   "milestone": "AM0",
+   "lane": "Platform",
+   "deps": [
+    "A02",
+    "A03",
+    "A08"
+   ],
+   "oracle": false,
+   "summary": "Drizzle schema for every entity in the architecture brief §3 (domains A-E) plus ApiToken, AgentPrincipal, AgentMandate and Alert, tenant_id on every row, _enc PII fields with envelope keys from the kms adapter interface, bitemporal RegisterEntry, integer cents, enum columns taken from the state machines, approval_id on privileged rows, on_behalf_of on audit rows, RLS policies per tenant, the insert-only trigger on audit_event, and migrations as reviewable files. RLS is tested by opening two tenant sessions.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\db\\ (root files only)",
+    "<workspace>\\app\\packages\\db\\src\\schema\\",
+    "<workspace>\\app\\packages\\db\\src\\client\\",
+    "<workspace>\\app\\packages\\db\\migrations\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A05",
+   "title": "Design system package from the prototype tokens",
+   "milestone": "AM0",
+   "lane": "Design",
+   "deps": [
+    "A01"
+   ],
+   "oracle": false,
+   "summary": "packages/ui generated from RealX App.dc.html: the full colour token table (§1.1 incl. TONE map), Newsreader/Geist/Geist Mono type scale, radii, spacing, shadows, and the 46 components of §2 (Button variants, StatusPill, KpiGrid, PropertyCard, RaiseBar, Tabs, DataTable, CheckList, HorizontalStepper, QuantityStepper, GateRow, AcknowledgeCard, Timeline, ApprovalListCard, SignatureMeter, DistributionChain, PriceBand, sidebars, Toast, Footer) with phone-width behaviour decided in §6.3. Storybook-style catalogue page and a token-diff test against the dc file so drift is caught by verify. WCAG AA contrast measured on the real tokens.",
+   "screens": [],
+   "design_refs": [
+    "design:tokens",
+    "design:components §2",
+    "design:PublicHeader",
+    "design:SponsorSidebar",
+    "design:AdminSidebar"
+   ],
+   "journeys": [],
+   "gates": [],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\ui\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A06",
+   "title": "Seed data and scenario simulator",
+   "milestone": "AM0",
+   "lane": "Platform",
+   "deps": [
+    "A04"
+   ],
+   "oracle": false,
+   "summary": "One seed script with a single as-of date (Wed 23 Sep 2026) built from the design's mock data (8 properties, 3 sponsors, Alex Morgan, the approvals queue, staff personas plus the KYCA, MLRO, CFO, TOKO, REGO personas SoD tests need, one agent principal per persona type for the agent journeys), fixing the prototype's inconsistencies (§6.4: Marine Parade not public until approved, one APR per object, wallet truncation, Kent Street escrow labelling) and locking the numeric invariants (§6.4 item 20). packages/sim generates investors, sponsors, offers, payments, distribution runs and planted breaks deterministically from a seed.",
+   "screens": [],
+   "design_refs": [
+    "design:mock data §7",
+    "design:bugs §6.4"
+   ],
+   "journeys": [],
+   "gates": [],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\sim\\",
+    "<workspace>\\app\\packages\\db\\seed\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A07",
+   "title": "Local chain and contracts toolchain (Hardhat, T-REX vendored)",
+   "milestone": "AM0",
+   "lane": "Chain",
+   "deps": [
+    "A01"
+   ],
+   "oracle": false,
+   "summary": "Hardhat project (2.26 line; trial Hardhat 3 and adopt only if T-REX compiles unchanged), T-REX v4.1.x as a pinned git submodule with checksum recorded and its GPL-3.0 licence file kept in its own workspace (counsel question HG-LEGAL recorded, clean-room fallback named), EntryPoint v0.7 and account-abstraction packages, Hardhat network as a docker service with deterministic accounts and test-controlled mining, and the T-REX test suite passing locally on Node 24. No RealX Solidity yet.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\contracts\\ (root files only: hardhat.config.ts, package.json, LICENSE notes)",
+    "<workspace>\\app\\contracts\\vendor\\",
+    "<workspace>\\app\\packages\\contracts\\ (root files only)",
+    "<workspace>\\app\\infra\\chain\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A08",
+   "title": "Sandbox adapter framework, config and phase flags",
+   "milestone": "AM0",
+   "lane": "Platform",
+   "deps": [
+    "A01",
+    "A02"
+   ],
+   "oracle": false,
+   "summary": "packages/adapters/core: the adapter registry selected by ADAPTER_<NAME>=sandbox|vendor, the conformance-suite harness every adapter must pass, magic-input scenario conventions, health reporting for ADM-32, and the sandbox operator hooks. packages/config: zod env schema, RUN_MODE=local refusing any production adapter, phase flags P1/P2/P3 defaults (offers.wholesale on; offers.retail, resale.board, payouts.stablecoin, platform.inflow_freeze off; agents.traffic on). A test asserts no production selector exists in the build. Documents every Q12 swap point. Also the kms/secrets adapter (getSecret, encrypt, decrypt, sign; sandbox = local encrypted store with a dev master key used by A04 envelope keys and the A15 keystore; swap: cloud KMS/HSM under HG-KEYS) and the storage adapter (putObject, getObject, presignUpload; sandbox = docker volume, sha256-addressed, encrypted, size and type limits) for every uploaded document and generated PDF; swap: any S3-compatible store.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\adapters\\core\\",
+    "<workspace>\\app\\packages\\config\\",
+    "<workspace>\\app\\packages\\adapters\\kms\\",
+    "<workspace>\\app\\packages\\adapters\\storage\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 6
+  },
+  {
+   "id": "A09",
+   "title": "API and worker skeleton with OpenAPI-generated SDK",
+   "milestone": "AM0",
+   "lane": "Platform",
+   "deps": [
+    "A04",
+    "A08"
+   ],
+   "oracle": false,
+   "summary": "Fastify 5 with zod type providers, OpenAPI generated from route schemas into packages/sdk (typed client), request, approval and on_behalf_of ids on every log line (pino with schema-driven redaction), OpenTelemetry hooks, health endpoints, idempotency keys on writes, per-principal rate-limit hook, module registration with the boundary lint, and the pg-boss worker process with the transactional outbox. Rule for every later service node: read contracts (list, detail and read-model schemas) are published into the OpenAPI document in the node's first commit so packages/sdk types and the MCP tool catalogue exist before the engine passes. Both processes run in compose against Postgres. Cursor pagination on every list endpoint, the /v1 prefix and deprecation-header hook (policy in A99), and an injectable clock as the only source of 'now': in RUN_MODE=local a test endpoint advances it so timelocks, SLA clocks and expiries run in minutes, driving sandbox delays and Hardhat time too.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\ (root files only)",
+    "<workspace>\\app\\services\\api\\src\\core\\",
+    "<workspace>\\app\\services\\worker\\ (root files only)",
+    "<workspace>\\app\\services\\worker\\src\\core\\",
+    "<workspace>\\app\\packages\\sdk\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A10",
+   "title": "Append-only hash-chained audit log",
+   "milestone": "AM1",
+   "lane": "Compliance core",
+   "deps": [
+    "A09"
+   ],
+   "oracle": true,
+   "summary": "AuditEvent writes with prev_event_sha256 and event_sha256 over the canonical event, before/after hashes never PII copies, actor plus on_behalf_of (the human principal an agent or token acted for) on every event, the daily verification job (R18) writing the head hash to evidence, audited exports and unmask events, 7-year retention with legal holds. Oracle: any UPDATE or DELETE is refused at the database; a mutated row breaks verification; every privileged step later in the system leaves exactly one event; an event written under a token always carries on_behalf_of.",
+   "screens": [],
+   "design_refs": [
+    "design:adAudit rows"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M25"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\audit\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\audit\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 8
+  },
+  {
+   "id": "A11",
+   "title": "Authentication, sessions, RBAC and segregation of duties",
+   "milestone": "AM1",
+   "lane": "Compliance core",
+   "deps": [
+    "A09",
+    "A10"
+   ],
+   "oracle": true,
+   "summary": "WebAuthn passkeys for investors and sponsor users (resident credentials, login passkeys separate from wallet passkeys), staff passkeys with hardware attestation required, server-side sessions with device binding and idle timeouts, 30-day dormancy lock, tenant context per request, 'view as tenant' audited, RBAC middleware generated from the permission matrix, the ten SoD rules enforced at role grant and at request time, break-glass sessions (2-of-3, at most 4 h, recorded), a principal model with types HUMAN, PARTNER (trustee/RE, valuer, property manager, auditor, regulator observer, licensee; the rows and portal are A98), AGNT and SVCA where AGNT is maker-only and can never hold a checker or signer role, and a 'fresh assertion' primitive (a WebAuthn assertion no older than N minutes over a given payload hash) that later nodes use for token creation, scope widening and passkey-confirmed actions. Oracle: generated tests for every matrix cell; no self-grant; SUPER never holds a money or signer role. Also email verification at sign-up and lost-login-passkey recovery (magic link, re-verification, cooling period, sessions revoked), separate from wallet recovery SM-13.",
+   "screens": [],
+   "design_refs": [
+    "design:bug 16 login placeholder replaced by passkey sign-in"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M25"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\auth\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A12",
+   "title": "API tokens, scopes, agent principals and mandates for every user type (G22)",
+   "milestone": "AM1",
+   "lane": "Compliance core",
+   "deps": [
+    "A11",
+    "A10",
+    "A03"
+   ],
+   "oracle": true,
+   "summary": "Founder decision D04 as a core auth capability every later API route inherits. ApiToken per principal of every user type: personal tokens for investors, tenant-scoped tokens for sponsor users (issued under SP-OWN approval), staff tokens (only after a hardware-key assertion), partner tokens for PARTNER principals (A98); scopes generated from the role x module x action matrix so a token can never exceed its owner's rights and can never include a non-delegable action (the G22 evaluator refuses those regardless of scope). Token secrets shown once, stored only as a hash with a type prefix (rx_inv_, rx_spn_, rx_ptr_, rx_stf_, rx_sb_ sandbox), one named agent per token, per-token limits (per-action and daily amount caps in cents, allowed vehicles and properties, allowed actions, time windows, expiry, optional IP allow-list, rate limits), rotation, last-used tracking, immediate revoke that fails closed within one request (cache invalidated synchronously). AgentPrincipal (AGNT) and AgentMandate rows binding a token to a named human (on_behalf_of), a scope set, spending and quantity caps, expiry and revocation; creation and widening need a fresh passkey assertion by the human. Token-bound confirmation: actions the design confirms with a passkey (order confirm, withdrawal request) may be pre-authorised within a mandate's caps through a mandate signing key registered under that assertion, so an agent can complete every account action within its mandate while every money-moving action still passes the ordinary gates and maker-checker; above the caps the human's passkey is required. Joint accounts follow their signing rule; entity accounts issue tokens only through a verified signatory. G22 'Agent authority' evaluator as a pure function in packages/domain (mandate live, scope covers module and action, limits hold, the human still holds the role, the agent is never the checker for a request its principal or a sibling agent made and never a custody signer), the middleware running it on every token call and recording a GateEvaluation naming the missing scope, the platform-wide agents.traffic kill switch (SGL+R once the approvals engine exists; a flag until then; per-user and per-tenant tiers are A101), and the token-introspection interface that A104, A99 and A101 consume. Oracle (hidden): a token cannot act outside its owner's cell; a revoked token or mandate fails within one request; an agent can never be a checker; a G22 refusal names the missing scope; widening without a fresh assertion is refused; a non-delegable action is refused even when a scope names it; every agent-written audit event carries on_behalf_of; a token secret never appears in a log, audit event or column.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ACC-05",
+    "design-ext:SPN-16",
+    "design-ext:ADM-35"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M25",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\agent-access\\",
+    "<workspace>\\app\\packages\\domain\\src\\agent-authority\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A13",
+   "title": "Alerts and SLA-clocks service",
+   "milestone": "AM1",
+   "lane": "Platform",
+   "deps": [
+    "A09",
+    "A10"
+   ],
+   "oracle": false,
+   "summary": "Alert model for the 17 alert types of the catalogue with severities Sev1 (15 min), Sev2 (1 h), Sev3 (1 business day), Sev4, business-day clocks in AEST/AEDT incl. public holidays as data, owners by role, acknowledge / assign / escalate / snooze with a mandatory reason, bulk acknowledge for Sev3/4 only, the 07:00 daily digest job, a queue-SLA-breach detector, and typed emission hooks that reconciliation, identity, treasury, property, wallets, AML, licences, approvals (SGL+R ratification timers) agent-access (revocation storms, kill switch) and the agent guard (anomaly holds) call. Backend for ADM-02 and the ADM-01 tiles.",
+   "screens": [],
+   "design_refs": [
+    "design:adCmd alert TaskRows",
+    "design-ext:ADM-02"
+   ],
+   "journeys": [],
+   "gates": [],
+   "modules": [
+    "M01"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\alerts\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\alerts\\"
+   ],
+   "est_lo": 5,
+   "est_hi": 8
+  },
+  {
+   "id": "A14",
+   "title": "Approvals engine and maker-checker (SM-00)",
+   "milestone": "AM1",
+   "lane": "Compliance core",
+   "deps": [
+    "A11",
+    "A03",
+    "A12",
+    "A13"
+   ],
+   "oracle": true,
+   "summary": "ApprovalRequest with APR-<yyyymmdd>-<base32> ids, canonical payload and payload_sha256, ApprovalPolicy rows as versioned data (thresholds, checker role sets, TTL 72 h, timelocks 48/72 h), precheck hook interface for the rules engine, SoD exclusion of the maker through every route (direct, delegation, agent or token acting on behalf of the maker, mid-flight role change), WebAuthn assertion over the payload hash stored per decision (never satisfiable by a token), SGL+R act-first with a 2 h ratification timer that raises Sev2 through the alerts service and auto-reverts where reversible, AUTO only on an exact hash match, expiry and cancellation, bulk approve for low-risk types only. Agents and tokens may submit requests (maker) and never approve them. Oracle §6.3 of the architecture brief plus: a checker decision presented with a token credential is refused.",
+   "screens": [],
+   "design_refs": [
+    "design:adApprovals checks and SoD note"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M25"
+   ],
+   "states": [
+    "SM-00"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\approvals\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A15",
+   "title": "Custody sandbox adapter and policy engine P1-P10",
+   "milestone": "AM1",
+   "lane": "Compliance core",
+   "deps": [
+    "A14",
+    "A08"
+   ],
+   "oracle": true,
+   "summary": "CustodyAccount records V1 owner 3-of-5 (48-72 h timelock), V2 token agent 2-of-3, V3 pauser 1-of-N restrict-only, V4 identity agent auto within policy, V7 paymaster with daily cap and runway alert, V5/V6 reserved. Local encrypted keystore generated on first run (no value), EIP-712 attestation key, policy rules P1 approval-ID binding, P2 function allow-list, P3 supply guard, P4 destination guard, P5 amount bands, P6 time window, P9 initiator not signer (and never an AGNT principal), P10 timelock, and CustodyOp states prepared to reconciled. Signer approvals are console actions under each signer's own hardware-key login. Rotation schedule modelled. Swap point: Fireblocks-type engine behind the same adapter interface and conformance suite. Oracle: nothing signs without an approved request; a replayed approval id is refused; a signing request carrying a token credential is refused.",
+   "screens": [],
+   "design_refs": [
+    "design:adToken SignatureMeter 2-of-3"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M08",
+    "M09"
+   ],
+   "states": [
+    "SM-00"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\adapters\\custody\\",
+    "<workspace>\\app\\services\\api\\src\\modules\\custody\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A16",
+   "title": "Client-money ledger (double entry)",
+   "milestone": "AM1",
+   "lane": "Money",
+   "deps": [
+    "A09",
+    "A02"
+   ],
+   "oracle": true,
+   "summary": "LedgerAccount and LedgerEntry: one AUD account per investor, escrow account per offering, trust bank mirror, fee and rounding accounts, operating account marked 'not client money' and never counted; every journal balanced in one transaction; available vs reserved balances; withdrawal thresholds as configuration (design default A$50k second approval, A$25k AUTO to an allow-listed account); ledger balance snapshots at a statement cut; read contracts for the wallet and activity screens published to the SDK. Oracle: property tests that no cent is created or destroyed across 100,000 random journal sequences; reserved never exceeds balance; operating excluded from client-money totals.",
+   "screens": [],
+   "design_refs": [
+    "design:adTreasury accounts",
+    "design:wallet KPIs"
+   ],
+   "journeys": [],
+   "gates": [
+    "G11",
+    "G13"
+   ],
+   "modules": [
+    "M16"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\ledger\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A17",
+   "title": "Bank rail sandbox adapter (NPP/PayID/PayTo) and receipt matching",
+   "milestone": "AM1",
+   "lane": "Money",
+   "deps": [
+    "A16",
+    "A08"
+   ],
+   "oracle": true,
+   "summary": "Bank adapter interface (createVirtualAccount per investor PayID, listTransactions, createPayout, createPayToMandate stub, statement feed, webhook) with a sandbox bank: virtual accounts, an API and console panel to 'receive' a payment with a payer name, random NPP delay scenarios, returned payments, duplicate webhooks, daily statements. Matching engine: payer name must match the verified investor or the receipt is held; manual match above A$10k routes to CFO; unmatched receipts older than 48 h alert; cash over A$10k flags a TTR line for AML. Swap point: Monoova/Zepto-type rail. Oracle: a mismatched name never credits a wallet; matching is idempotent under webhook retries.",
+   "screens": [],
+   "design_refs": [
+    "design:onb ONB-09 PayID",
+    "design:wallet Deposit card"
+   ],
+   "journeys": [],
+   "gates": [
+    "G02",
+    "G14"
+   ],
+   "modules": [
+    "M16",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\adapters\\bank\\",
+    "<workspace>\\app\\services\\api\\src\\modules\\payments\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A18",
+   "title": "Unit register (legal record) and registry sandbox adapter",
+   "milestone": "AM1",
+   "lane": "Register",
+   "deps": [
+    "A09",
+    "A02",
+    "A14"
+   ],
+   "oracle": true,
+   "summary": "RegisterEntry (bitemporal, lots with acquired_at, price and lock_in_until), RegisterVersion certification (REGO then trustee, 4E), register instructions issue/transfer/redeem/adjust with acks, 'register first' rule (no mint reference without a register entry), cap table as-of date, signed extracts, logged exports, monthly certification, register adjustment as 6E (REGO to CCO + CFO plus trustee). Escrow balances are never register entries (design bug 14). Registry adapter sandbox applies instructions with configurable delay, produces the 02:00 CSV extract, can reject or drift for recon tests. Swap point: IQ-EQ/Automic-type registry or the trustee's own register. Oracle: an adjustment without 6E is refused; extracts reproduce entries exactly; export writes an audit event.",
+   "screens": [],
+   "design_refs": [
+    "design:spRegister columns",
+    "design:adRecon register column",
+    "design:bug 14 escrow is not register"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M11"
+   ],
+   "states": [
+    "SM-07"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\register\\",
+    "<workspace>\\app\\packages\\adapters\\registry\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A19",
+   "title": "Rules engine: gates G01-G22, rule packs, threshold monitors, simulator",
+   "milestone": "AM1",
+   "lane": "Compliance core",
+   "deps": [
+    "A09",
+    "A03",
+    "A12"
+   ],
+   "oracle": true,
+   "summary": "GateEvaluation for every action (order, transfer, mint, distribution line, withdrawal, agent call) storing inputs hash, result, reason codes and rule_pack_version so decisions replay; RulePack AU-W-2026.1 (immutable once effective; AU-R-2027.1 as a P2 stub), per-token ComplianceRule parameters with params_sha256; FIRB eligibility matrix by property type (established residential residents-only until 30 Jun 2029, commercial and BTR after FIRB checks); ThresholdMonitor for holder cap 90%, landholder duty, foreign %, s601ED member count (default 20); simulator showing holders a change would breach; investor-specific overrides with legal basis and end date; every gate evaluator is a pure function with a fix-it message; G22 registered from the agent-authority package so every agent-initiated action is evaluated and replayable here like any other gate. Gates not yet backed by a service (G05, G09, G15) return 'not applicable in this phase'. Oracle: vectors per gate incl. a 500-token order failing G07 naming the maximum allowed and an agent order over its mandate cap failing G22 naming the cap.",
+   "screens": [],
+   "design_refs": [
+    "design:buy stepper GateRows",
+    "design:adListing gates",
+    "design:onb ONB-10 checks"
+   ],
+   "journeys": [],
+   "gates": [
+    "G01",
+    "G02",
+    "G03",
+    "G04",
+    "G05",
+    "G06",
+    "G07",
+    "G08",
+    "G09",
+    "G10",
+    "G11",
+    "G12",
+    "G13",
+    "G14",
+    "G15",
+    "G16",
+    "G17",
+    "G18",
+    "G19",
+    "G20",
+    "G21",
+    "G22"
+   ],
+   "modules": [
+    "M10"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\rules\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A20",
+   "title": "Three-way reconciliation engine with zero tolerance",
+   "milestone": "AM1",
+   "lane": "Register",
+   "deps": [
+    "A18",
+    "A16",
+    "A19",
+    "A13"
+   ],
+   "oracle": true,
+   "summary": "Pure comparison functions in packages/domain/src/recon over snapshot objects (register version, chain snapshot, bank statement) implementing R1-R18 (R9, R15, R16 stubbed), ReconRun reproducible from its three keys, ReconBreak with type, delta, owner and proposed fix raised through the alerts service, targeted runs after every CustodyOp and registry ack, pre-flight runs before mint, distribution approval and (P2) board opening, the 02:00 AEST nightly job. While a Sev1 break is open for a vehicle: G10 halt flag set, mints, burns and payouts refused for it. Chain snapshot source is an interface with an in-memory stub here; the chain adapter node registers the real indexer source. Oracle: planted drifts (9,998 vs 10,000 units, unknown holder, bank delta of one cent) produce exactly the expected break set and halts; a break closes only on a clean re-run.",
+   "screens": [],
+   "design_refs": [
+    "design:adRecon grid",
+    "design:adCmd register-break alert",
+    "design:prop ProofBand"
+   ],
+   "journeys": [],
+   "gates": [
+    "G10",
+    "G13"
+   ],
+   "modules": [
+    "M11",
+    "M26"
+   ],
+   "states": [
+    "SM-00",
+    "SM-07"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\recon\\",
+    "<workspace>\\app\\packages\\domain\\src\\recon\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\recon\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A21",
+   "title": "Licences, feature flags and licence perimeter (G21)",
+   "milestone": "AM1",
+   "lane": "Compliance core",
+   "deps": [
+    "A14",
+    "A08",
+    "A13"
+   ],
+   "oracle": false,
+   "summary": "Licence and CAR register with authorisations, conditions and expiry alerts T-90/30/7; FeatureFlag bound to a licence record with auto-revert when the binding lapses; toggles as 4E (SUPER to CCO) refused without a binding; DAF Act low-value exemption meter (A$10m trailing 12 months, A$5k per client, Sev2 at 80%); launch state resale/retail/stablecoins off; listing visibility mode configurable. Every phase-gated module reads flags from here. Kill switches and halts are owned by the halts node, which reads and sets the platform flags through this module's API.",
+   "screens": [],
+   "design_refs": [
+    "design:Wholesale · P1 pill",
+    "design:footer CAR/AFSL disclosure"
+   ],
+   "journeys": [],
+   "gates": [
+    "G21",
+    "G13"
+   ],
+   "modules": [
+    "M02",
+    "M27"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\perimeter\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 8
+  },
+  {
+   "id": "A22",
+   "title": "Identity/DVS and sanctions sandbox adapters",
+   "milestone": "AM1",
+   "lane": "Services",
+   "deps": [
+    "A08"
+   ],
+   "oracle": false,
+   "summary": "Identity adapter (startVerification, getResult, webhook, verifyEntity, resolveUbo) with scenarios keyed by name suffix (approve, refer, reject, PEP, fraud), simulated DVS two-source match and liveness score, ABN/ACN lookup fixtures. Sanctions adapter (screenPerson, screenEntity, screenWallet stub, subscribeListUpdates) shipping a fixture DFAT-style list with planted names and a list-update event. Conformance suites define what a real vendor must satisfy. Swap points: Equifax/Sumsub/Averer-type providers (HG-VENDOR).",
+   "screens": [],
+   "design_refs": [
+    "design:adKyc checks (DVS, liveness 0.98, PEP low-confidence)"
+   ],
+   "journeys": [],
+   "gates": [
+    "G01",
+    "G02",
+    "G03"
+   ],
+   "modules": [
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\adapters\\identity\\",
+    "<workspace>\\app\\packages\\adapters\\sanctions\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 8
+  },
+  {
+   "id": "A23",
+   "title": "Whole-stack Docker boot (AM1 exit)",
+   "milestone": "AM1",
+   "lane": "Platform",
+   "deps": [
+    "A06",
+    "A07",
+    "A10",
+    "A15",
+    "A17",
+    "A18",
+    "A22",
+    "A12",
+    "A13",
+    "A21",
+    "A104"
+   ],
+   "oracle": false,
+   "summary": "infra/stack compose profile for postgres, api, worker, hardhat (auto-mine under test control, deterministic accounts), the sandbox panels (bank, identity, registry, custody signer) and an OTel collector stub; one command boots, migrates, seeds, deploys the T-REX reference suite to the local chain and reports health; sandbox keys generated on first run; the MCP server starts against the API and lists its tools. Pass criterion (milestone AM1 exit): stack green three boots in a row on Windows 11 Docker Desktop, the audit chain verifies, a token-authenticated call to a seeded read endpoint succeeds and the same call with a revoked token fails, and a test asserts no live adapter or mainnet RPC is selectable. Surfaces toolchain drift (Node 24, Hardhat 2 vs 3, T-REX compile, Playwright in Docker) about forty nodes before the investor preview.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [],
+   "modules": [
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\infra\\stack\\",
+    "<workspace>\\app\\docs\\stack\\"
+   ],
+   "est_lo": 5,
+   "est_hi": 8
+  },
+  {
+   "id": "A24",
+   "title": "ERC-3643 suite and RealX compliance modules",
+   "milestone": "AM2",
+   "lane": "Chain",
+   "deps": [
+    "A07"
+   ],
+   "oracle": true,
+   "summary": "Shared IdentityRegistryStorage, TrustedIssuersRegistry, ClaimTopicsRegistry (KYC_VERIFIED, SANCTIONS_CLEAR, WHOLESALE_AU, RESIDENCY_FIRB, TMD_FIT), ClaimIssuer, ONCHAINID factory; per-trust Token (0 decimals, 10,000 units default), IdentityRegistry, ModularCompliance with CountryAllowModule, MaxBalanceModule (holder cap), RealX HolderCountModule, LockInModule (per-holder unlock set at mint), HaltModule (V3 flag distinct from pause), DocumentAnchor; factory deploy script per vehicle with CREATE2 addresses. Oracle: canTransfer vectors for every module; forced transfers blocked while paused; a wallet not in the registry cannot receive; module parameter hash matches the approved rule. Audit before mainnet is HG-AUDIT (open).",
+   "screens": [],
+   "design_refs": [
+    "design:prop Details tab foreign investors rule"
+   ],
+   "journeys": [],
+   "gates": [
+    "G01",
+    "G06",
+    "G07",
+    "G08",
+    "G10"
+   ],
+   "modules": [
+    "M09",
+    "M10"
+   ],
+   "states": [
+    "SM-06",
+    "SM-07"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\contracts\\src\\token\\",
+    "<workspace>\\app\\contracts\\src\\compliance\\",
+    "<workspace>\\app\\contracts\\test\\token\\",
+    "<workspace>\\app\\contracts\\test\\compliance\\",
+    "<workspace>\\app\\contracts\\deploy\\suite\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A25",
+   "title": "AgentGateway and owner multisig: approval IDs bound on-chain",
+   "milestone": "AM2",
+   "lane": "Chain",
+   "deps": [
+    "A24"
+   ],
+   "oracle": true,
+   "summary": "AgentGateway.execute(approvalId, target, data, signerSigs, attestation): EIP-712 attestation check, unused approvalId, target+selector allow-list per vault, distinct-signer quorum with the attested maker excluded, per-approval mint cap, Executed event; a second restrict-only instance for V3; RealXOwnerMultisig 3-of-5 with 48 h timelock and veto during the queue. About 200 lines of custom Solidity, invariant-tested. Oracle: replayed id refused; attestation for one calldata cannot execute another; mint total over the cap reverts; maker among signers reverts.",
+   "screens": [],
+   "design_refs": [
+    "design:adToken approval id per op"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M09"
+   ],
+   "states": [
+    "SM-00"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\contracts\\src\\gateway\\",
+    "<workspace>\\app\\contracts\\test\\gateway\\",
+    "<workspace>\\app\\contracts\\deploy\\gateway\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A26",
+   "title": "Passkey smart wallet, paymaster and guardian recovery contracts",
+   "milestone": "AM2",
+   "lane": "Chain",
+   "deps": [
+    "A07"
+   ],
+   "oracle": true,
+   "summary": "ERC-4337 v0.7 smart account with P-256 passkey owners (RIP-7212 precompile when present, Solidity verifier on Hardhat), SmartAccountFactory (CREATE2, salt = investor id hash), RecoveryModule with two guardians (RealX guardian under 2-of-3 control and the investor's second device), proposeOwner with a 48 h timelock, veto by the old passkey, execution requiring the RealX guardian, RealXPaymaster (VerifyingPaymaster) sponsoring only RealX targets within per-wallet daily caps. Oracle: recovery cannot execute inside 48 h; veto works; paymaster refuses non-RealX targets; account cannot be drained by the guardian alone. Also a SessionKeyModule (D04): the owner passkey registers a delegated session key limited to allow-listed contracts and selectors, an amount cap, an expiry and a nonce, revocable at once by the owner or the RealX guardian; it can never change owners, guardians or keys. Oracle adds: no call outside the allow-list, over the cap, after expiry or after revocation.",
+   "screens": [],
+   "design_refs": [
+    "design:onb ONB-08 passkey wallet",
+    "design:wallet Token wallet card"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M08"
+   ],
+   "states": [
+    "SM-13"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\contracts\\src\\wallet\\",
+    "<workspace>\\app\\contracts\\test\\wallet\\",
+    "<workspace>\\app\\contracts\\deploy\\wallet\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A27",
+   "title": "Chain adapter, deployment manifests and indexer",
+   "milestone": "AM2",
+   "lane": "Chain",
+   "deps": [
+    "A24",
+    "A25",
+    "A26",
+    "A09",
+    "A13"
+   ],
+   "oracle": false,
+   "summary": "viem transport behind the chain adapter (Hardhat now, Base Sepolia and mainnet later by URL and chain id), typed ABIs and deployment manifests per chain in packages/contracts, Token registry rows (SM-06 designed to configured), the indexer building Holding read models at block N and matching Executed(approvalId) events to CustodyOp, direct balanceOf/totalSupply/isFrozen cross-checks, the chain snapshot source registered with the recon engine, stuck-transaction (30 min) and indexer-lag (5 min) alerts through the alerts service.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M09",
+    "M26"
+   ],
+   "states": [
+    "SM-06",
+    "SM-07"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\adapters\\chain\\",
+    "<workspace>\\app\\packages\\contracts\\src\\",
+    "<workspace>\\app\\packages\\contracts\\deployments\\",
+    "<workspace>\\app\\services\\api\\src\\modules\\chain\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\indexer\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A28",
+   "title": "Token operations service (mint, burn, freeze, pause, forced transfer, recovery)",
+   "milestone": "AM2",
+   "lane": "Chain",
+   "deps": [
+    "A27",
+    "A15",
+    "A18",
+    "A20"
+   ],
+   "oracle": true,
+   "summary": "The lifecycle of §6.2 end to end for every V2/V3 function: approval to CustodyOp to policy engine to gateway call to indexer confirmation to registry instruction to targeted recon to closed. Deploy token 6E+Q via V1; mint only against a locked Allocation file (CFO, plus CCO + CEO when not from a file); burn 4E+Q; pause SGL+R ratified in 2 h; unpause 6E+Q; forced transfer 6E+Q with 48 h timelock waivable only by CCO + CEO with a court order; recoveryAddress; lock-up dates 4E+Q; upgrade 72 h. Milestone AM2 exit lives here: one mint bound to an approval id round-trips on the local chain and a replayed id is refused at every layer. Oracle: a confirmed transaction the register does not reflect opens a break, not a success; supply never exceeds the allocation; nothing broadcasts with fewer than 2 signatures.",
+   "screens": [],
+   "design_refs": [
+    "design:adToken ops and Recent table"
+   ],
+   "journeys": [],
+   "gates": [
+    "G07",
+    "G10",
+    "G13"
+   ],
+   "modules": [
+    "M09"
+   ],
+   "states": [
+    "SM-06",
+    "SM-07",
+    "SM-13"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\tokenops\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A29",
+   "title": "Wallet service: smart-account factory, bundler sandbox, guardians and recovery requests",
+   "milestone": "AM2",
+   "lane": "Wallets",
+   "deps": [
+    "A26",
+    "A27",
+    "A14",
+    "A12"
+   ],
+   "oracle": true,
+   "summary": "Wallet rows (passkey_aa, external, vault, paymaster), account creation from the wallet passkey (counterfactual address first so onboarding never waits on a deployment), sandbox bundler submitting handleOps from a funded local EOA (real bundler behind the same adapter on testnet), paymaster policy signer and runway alert below 3 days, guardian set-up requiring re-verification and a waiting period, RecoveryRequest (SM-13) with 48 h timelock, cancel from any signed-in device, notices to old channels, smart-wallet recovery attempted before the token-level fallback, gas-sponsorship policy change ENGO to CFO. Wallet mechanism kept behind an interface (open DAP design point). Oracle: recovery refused before timelock without a CCO + CEO waiver record; new wallet must be identity-registered; old balance zero after fallback. Mandates needing on-chain acts (P2 asks and bids, claim acceptance, ballots) get a session key registered under the mandate's fresh assertion (A12) with the mandate's contracts, functions, amounts and expiry; revoking the mandate revokes the key in the same request; the owner key never reaches an agent.",
+   "screens": [],
+   "design_refs": [
+    "design:wallet Token wallet card",
+    "design:onb ONB-08"
+   ],
+   "journeys": [],
+   "gates": [
+    "G01",
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M08"
+   ],
+   "states": [
+    "SM-13"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\adapters\\bundler\\",
+    "<workspace>\\app\\services\\api\\src\\modules\\wallets\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A30",
+   "title": "Investor onboarding, KYC cases and KYB (SM-01)",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A22",
+    "A11",
+    "A14",
+    "A19"
+   ],
+   "oracle": false,
+   "summary": "Investor and Account records, investor types (individual, joint with either/both signing rule, SMSF, company, trust), residency and FIRB flag captured at creation, KYCCase per verification event with provider decision, screening hits, risk points, 24 h SLA clock, RFI with 30-day expiry, fraud auto-reject, EDD as 6E (KYCA to MLRO + senior manager), PEP clearance KYCA to MLRO (4E, reason code mandatory, tighter than the design's one-click), true sanctions match freezes silently, BeneficialOwner cases for entities (owners at 25% or more; entity cannot invest until every person is verified), periodic refresh, suspension. Masked PII by default with reason-coded unmask. Every endpoint callable under a scoped token.",
+   "screens": [],
+   "design_refs": [
+    "design:onb ONB-01..03",
+    "design:adKyc"
+   ],
+   "journeys": [],
+   "gates": [
+    "G01",
+    "G02",
+    "G03",
+    "G06"
+   ],
+   "modules": [
+    "M06",
+    "M07"
+   ],
+   "states": [
+    "SM-01"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\investors\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A31",
+   "title": "On-chain identity and claims service (V4 identity agent)",
+   "milestone": "AM3",
+   "lane": "Chain",
+   "deps": [
+    "A27",
+    "A15",
+    "A19",
+    "A30"
+   ],
+   "oracle": true,
+   "summary": "registerIdentity, updateCountry, deleteIdentity and claim issuance through the V4 auto-signing policy, only for KYCCase rows in state approved (the case model is owned by the onboarding node); IdentityClaim off-chain mirror with topic, validity and revocation; wholesale claim with a two-year expiry; residency/FIRB claim; the nightly sweep revoking expired claims; R4/R5 checks feeding recon; revoke as 4E; residency change as 4E with re-evaluation. Oracle: isVerified true only after an approved case; expired wholesale claim blocks a new wholesale purchase but not holding or selling; a deleted identity cannot receive.",
+   "screens": [],
+   "design_refs": [
+    "design:onb ONB-08 'linked to your verified identity'"
+   ],
+   "journeys": [],
+   "gates": [
+    "G01",
+    "G02",
+    "G04",
+    "G06"
+   ],
+   "modules": [
+    "M07",
+    "M09"
+   ],
+   "states": [
+    "SM-01",
+    "SM-02",
+    "SM-07"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\claims\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\claims\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A32",
+   "title": "Classification: wholesale certificates and target-market hooks (SM-02)",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A30",
+    "A31"
+   ],
+   "oracle": false,
+   "summary": "InvestorClassification with basis (A$500k-in-this-offer per offer with CCO check, accountant's certificate valid two years from certificate date, sophisticated, professional), CLSR review queue, expiring at 30 days with reminders at 60 and 30, expiry lapsing the on-chain claim while holdings stay, renewal creating a new case without removing the valid claim, rejection and revocation. TMD questionnaire model and G05 evaluation hook stubbed behind offers.retail for the P2 scheme node.",
+   "screens": [],
+   "design_refs": [
+    "design:onb ONB-06 options",
+    "design:adCmd certificates-expiring alert"
+   ],
+   "journeys": [],
+   "gates": [
+    "G04",
+    "G05"
+   ],
+   "modules": [
+    "M07"
+   ],
+   "states": [
+    "SM-02"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\classification\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 8
+  },
+  {
+   "id": "A33",
+   "title": "Sponsor tenancy, entities, licences of sponsors and admission pipeline",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A11",
+    "A14",
+    "A30",
+    "A12"
+   ],
+   "oracle": false,
+   "summary": "Tenant (sponsor) with guardrails a tenant cannot switch off (KYC required locked on, eligibility packs, holder-cap ceiling, fee caps), TenantUser roles SP-OWN/OPS/FIN/IR with 2FA, internal approval rules that cannot weaken platform minimums (a user never approves their own submission; a sponsor agent never approves anything), admission pipeline applied to KYB to background to fee agreement to approved to tenant created (KYCA to CCO 4E, PART to CCO 4E), Entity and Vehicle (Trust now, SubFund in P2) records, sponsor billing (listing fee, per-investor monthly fee, invoices; unpaid 30+ days pauses new listings), sponsor performance metrics and watchlist, suspension SGL+R (also revokes the tenant's tokens), revenue share.",
+   "screens": [],
+   "design_refs": [
+    "design:spDash tenant card",
+    "design:prop Sponsor tab facts"
+   ],
+   "journeys": [],
+   "gates": [
+    "G02",
+    "G03",
+    "G13",
+    "G19",
+    "G21"
+   ],
+   "modules": [
+    "M02",
+    "M24",
+    "M27"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\tenancy\\",
+    "<workspace>\\app\\services\\api\\src\\modules\\entities\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A34",
+   "title": "Properties, valuations and proof of property (SM-03)",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A33",
+    "A14",
+    "A19"
+   ],
+   "oracle": false,
+   "summary": "Property master data with lifecycle SM-03 (title verification mandatory before spv_formed; owner of record custodian or trustee), due-diligence pack with missing or expired items blocking submission, Valuation records (panel valuer, at most 6 months old, listing valuation at most 3 months old, moves above 10% need comparable sales, committee publish 6E updating token valuation and the band reference), PropertyAttestation monthly with evidence and public flags as a flag separate from distribution approval (design bug 2; overdue 10 days pauses the sponsor's new offers), obligations calendar (rates, land tax, insurance), distress signals and legal hold as data consumed by the halts node, investment-committee approval 6E, rent-roll CSV import and valuer upload adapters.",
+   "screens": [],
+   "design_refs": [
+    "design:spNew due-diligence checks",
+    "design:prop Proof of property tab",
+    "design:spReport items",
+    "design:bug 2 attestation flag separate from distribution"
+   ],
+   "journeys": [],
+   "gates": [
+    "G06",
+    "G10",
+    "G13",
+    "G19",
+    "G20"
+   ],
+   "modules": [
+    "M03",
+    "M22"
+   ],
+   "states": [
+    "SM-03"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\properties\\",
+    "<workspace>\\app\\packages\\adapters\\property-data\\",
+    "<workspace>\\app\\packages\\adapters\\valuation-feed\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A35",
+   "title": "Documents, disclosure library, e-sign and acknowledgements (G12)",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A14",
+    "A10"
+   ],
+   "oracle": false,
+   "summary": "Versioned Document library (FSG, terms, privacy, complaints policy, fees; per-listing IM or PDS/SPDS, TMD, deed, valuation, notices) with sha256, effective dates, superseded kept and marked, 7-year retention and legal holds, publish as 4E (LEGL to CCO) with optional on-chain anchor via DocumentAnchor, acknowledgement records (document id, version, timestamp per order; documents must have been opened, and an agent acknowledging under a mandate is recorded as such with on_behalf_of and only when the holder has a standing-consent record created with a passkey and the counsel parameter in A00 allows delegated acknowledgement; otherwise the order waits for the person), cooling-off statement text per regime (wholesale none; retail per PDS, configurable), e-sign adapter sandbox (auto-sign after delay or console button), templates with sponsor placeholders, investor document vault. Also the deterministic PDF renderer for confirmations, advices, statements, extracts and board packs (same inputs, same bytes, sha256 recorded, stored through the storage adapter).",
+   "screens": [],
+   "design_refs": [
+    "design:prop Documents tab",
+    "design:buy stepper AcknowledgeCard (G12)"
+   ],
+   "journeys": [],
+   "gates": [
+    "G12",
+    "G13"
+   ],
+   "modules": [
+    "M18"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\documents\\",
+    "<workspace>\\app\\packages\\adapters\\esign\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 8
+  },
+  {
+   "id": "A36",
+   "title": "Offerings: offer terms, listing review, raise monitor (SM-04)",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A34",
+    "A35",
+    "A19",
+    "A21"
+   ],
+   "oracle": false,
+   "summary": "Offering with regime, unit price, soft and hard caps, min and max ticket, per-investor cap 5% default, lock-in 3 months default per listing, close date, allocation rule (first-come or pro-rata), residency rule from property type, distribution policy and reserve months, sponsor retained stake, terms outside RealX limits needing a reason; rules simulation on save; submission draft to compliance_review (operator submits, owner approves, then RealX); listing review with pack constraints read-only, blockers and warnings, due-diligence sign-offs, 'return with comments'; go-live 4E+Q requiring the platform CCO; extend or material change 4E with investor re-confirmation within 5 business days; pause SGL+R; live raise funnel and escrow balance; not public until approved (design bug 19). Public and sponsor read contracts (listings by status, open offers, raise bars) published to the SDK first.",
+   "screens": [],
+   "design_refs": [
+    "design:spNew offer terms",
+    "design:adListing gates",
+    "design:spOffer KPIs",
+    "design:bug 19 not public until approved"
+   ],
+   "journeys": [],
+   "gates": [
+    "G11",
+    "G13",
+    "G17",
+    "G21"
+   ],
+   "modules": [
+    "M04"
+   ],
+   "states": [
+    "SM-04"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\offerings\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A37",
+   "title": "Orders, escrow, allocation and refunds (SM-05)",
+   "milestone": "AM3",
+   "lane": "Money",
+   "deps": [
+    "A36",
+    "A16",
+    "A17",
+    "A19",
+    "A18"
+   ],
+   "oracle": true,
+   "summary": "Order lifecycle: submitted to eligibility_check (G01, G04, G06, G07 live and again at mint; G22 when placed under a token) to awaiting_funds (wholesale never enters reflection_period) to funded on payment match to allocated to settled only when both a register entry and a token delivery exist; cancel until close if the listing permits; the confirm step accepts either a fresh passkey assertion or a mandate signing key within the mandate's caps; escrow accounts per offering with Δ 0 against funded orders before any allocation; allocation workbench (first-come or pro-rata, scaled to hard cap, capped at 5% never silently accepted, ineligible at mint excluded and refunded) producing a locked Allocation file with sha256; refunds 4E within 5 business days; expiry of unfunded orders; confirmation records. Oracle: sum of allocations equals the file; sum of refunds equals funded orders on a failed raise; fee to the cent; G07 with existing holdings; an agent order above its mandate cap is refused by G22 and never reserves funds.",
+   "screens": [],
+   "design_refs": [
+    "design:buy stepper order lines and timeline",
+    "design:spOffer applications"
+   ],
+   "journeys": [],
+   "gates": [
+    "G01",
+    "G04",
+    "G06",
+    "G07",
+    "G11",
+    "G12",
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M05"
+   ],
+   "states": [
+    "SM-05"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\orders\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A38",
+   "title": "Finalise-and-mint and revert-and-refund pipelines",
+   "milestone": "AM3",
+   "lane": "Register",
+   "deps": [
+    "A37",
+    "A28"
+   ],
+   "oracle": true,
+   "summary": "Service-level J04 steps 7-13 and J05: close at end date or hard cap; soft cap reached or missed; finalising locks the allocation; escrow release 6E (FINA to CFO + CCO); trustee register entries first; batchMint per the locked file through the token operations service (6E+Q, V2 2-of-3); reconcile supply = register = allocations; order settled and confirmation issued; revert-and-refund 4E+Q with every order ending refunded and no tokens minted. Oracle: no mint before a register entry; supply not equal to register freezes the mint queue (Sev1); an ineligible recipient is excluded and refunded; the whole pipeline is idempotent under retries.",
+   "screens": [],
+   "design_refs": [
+    "design:buy stepper Status timeline",
+    "design:adToken 'Mint on offer close'"
+   ],
+   "journeys": [
+    "J04",
+    "J05"
+   ],
+   "gates": [
+    "G07",
+    "G11",
+    "G13"
+   ],
+   "modules": [
+    "M05",
+    "M09",
+    "M11"
+   ],
+   "states": [
+    "SM-04",
+    "SM-05"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\settlement\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A39",
+   "title": "Treasury: withdrawals, escrow release, client-money reconciliation",
+   "milestone": "AM3",
+   "lane": "Money",
+   "deps": [
+    "A16",
+    "A17",
+    "A14",
+    "A19",
+    "A13"
+   ],
+   "oracle": true,
+   "summary": "Withdrawal to the verified account only (name match, else held), sanctions re-screen and AML pattern check before every payout, AUTO up to the allow-listed threshold, TRSY to CFO 4E above it (default A$50k, configuration), a withdrawal request under a mandate is accepted within the mandate's amount band and refused above it by G22, AML restriction holds payouts and shows 'under review' to support, return of unmatched funds and internal transfers with dual bank authorisation, daily bank-vs-ledger reconciliation R10 with Δ 0 as a precondition for allocation, escrow release and distribution approval, payout-funding-short alert (7 days), fees and float-interest disclosure data.",
+   "screens": [],
+   "design_refs": [
+    "design:wallet Withdraw card and A$50k note",
+    "design:adTreasury KPIs",
+    "design:adApprovals APR-2286 checks"
+   ],
+   "journeys": [
+    "J15"
+   ],
+   "gates": [
+    "G02",
+    "G11",
+    "G13",
+    "G14",
+    "G22"
+   ],
+   "modules": [
+    "M16"
+   ],
+   "states": [
+    "SM-05"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\treasury\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A40",
+   "title": "Distributions engine (SM-08)",
+   "milestone": "AM3",
+   "lane": "Money",
+   "deps": [
+    "A18",
+    "A16",
+    "A14",
+    "A34"
+   ],
+   "oracle": true,
+   "summary": "IncomePeriod from rent roll and expenses (gross rent - PM fee - maintenance and insurance - reserve top-up - management fee = net), record-date snapshot locked from a RegisterVersion before calculation, per-token amount and per-line gross with rounding down and remainder to the rounding account, variance checks vs last month and forecast, exceptions (AML hold with no notice, closed accounts, dust carried forward), approval chain sponsor accountant to sponsor owner to FINA to CFO (CEO above A$1m or 25% variance) bound to the payment file hash, funding (Δ 0 required), execution to AUD wallets, retries up to the approved amount then manual 4E, closed only when paid equals approved, zero or reduced declaration 6E, legal hold pauses, exit waterfall computation for the halts node. Oracle: changing a line after approval invalidates it; per-token x units at record date equals gross per line; R8 and R13 reproduce the file hash.",
+   "screens": [],
+   "design_refs": [
+    "design:spDist DistributionChain and per-token maths",
+    "design:adApprovals APR-2291 checks"
+   ],
+   "journeys": [
+    "J06"
+   ],
+   "gates": [
+    "G13",
+    "G14",
+    "G16"
+   ],
+   "modules": [
+    "M12"
+   ],
+   "states": [
+    "SM-08"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\distributions\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\distributions\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A41",
+   "title": "Tax engine: profiles, withholding, AMMA and CRS/FATCA",
+   "milestone": "AM3",
+   "lane": "Money",
+   "deps": [
+    "A40",
+    "A30"
+   ],
+   "oracle": true,
+   "summary": "TaxProfile (TFN/ABN encrypted, residencies and TINs, FATCA/CRS self-certification, consequence of no TFN explained), withholding engine applied per distribution line (no TFN 47%; MIT 15% or 30% for foreign residents; rates as versioned parameters), TaxComponent per run, AMMA statements per trust per year by 30 September, annual statements, cost base and lots, remittance and filing calendar, withholding rule edits 6E (TAXO to CCO + CFO). Oracle: withholding vectors to the cent; AMMA components sum to the year's lines; a TFN added mid-year changes only later lines.",
+   "screens": [],
+   "design_refs": [
+    "design:onb ONB-05",
+    "design:statements KPIs"
+   ],
+   "journeys": [],
+   "gates": [
+    "G16",
+    "G13"
+   ],
+   "modules": [
+    "M13"
+   ],
+   "states": [
+    "SM-08"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\tax\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A42",
+   "title": "AML screening, monitoring, cases and SMR clocks (SM-11)",
+   "milestone": "AM3",
+   "lane": "Compliance core",
+   "deps": [
+    "A30",
+    "A22",
+    "A17",
+    "A28",
+    "A14",
+    "A13"
+   ],
+   "oracle": true,
+   "summary": "Screening hub (names and wallets, nightly re-screen at 03:00, re-screen before every payout, list-update hits Sev1), monitoring scenarios (rapid in/out, third-party deposits, round-tripping, unusual SMSF contribution, unusual agent-driven order bursts), alert to triage to case with need-to-know ACL limited to MLRO and CCO, restriction as freeze-now-ratify-later (CCO within 2 h, auto-escalates through the alerts service), wallet freeze creating a token operation, SMR clocks in business days (3, or 24 h for terrorism financing) with late filing surfaced as Sev1, TTR and IFTI items, RFI only after a tipping-off check, exit relationship MLRO to CCO. Oracle: SUPP and IRCM cannot read case fields through any API or token scope; investor-facing endpoints return no case data; clocks computed correctly across weekends and AEST/AEDT.",
+   "screens": [],
+   "design_refs": [
+    "design:adAml table",
+    "design:adToken 'Freeze wallet · AML-118'"
+   ],
+   "journeys": [
+    "J10"
+   ],
+   "gates": [
+    "G02",
+    "G13",
+    "G14"
+   ],
+   "modules": [
+    "M20"
+   ],
+   "states": [
+    "SM-11"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\aml\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\screening\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A43",
+   "title": "Communications, notifications, tasks and marketing claims (G17)",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A14",
+    "A35"
+   ],
+   "oracle": false,
+   "summary": "Notification model by type and channel with preferences and 'mark all read', email and SMS sandbox adapters capturing into a local inbox used by e2e, templates, the worker jobs that turn events into the design's sponsor 'Needs you' tasks (from due dates: distribution approval, attestation due, RealX review changes) and investor notifications (offer opening and closing, income paid, certificate expiring, proof flags, and the agent notices A101 emits: a new token created or widened, first use from a new IP, every money-moving agent action above the person's notice threshold, anomaly holds and kill-switch events; plus daily agent activity summaries), sponsor announcements and significant-event notices with the RG 234 claims lint (configurable versioned blocked phrases such as 'guaranteed', 'capital protected', 'backed by real estate', 'beats the market'; yields need basis and date; treated as adversarial input), approval workflow IRCM to CCO (+ LEGL for material items), terms versions with 30-day notice, public KPIs 6E. Nothing publishes without an approval record.",
+   "screens": [],
+   "design_refs": [
+    "design:adListing G17 flagged phrases",
+    "design:spNew marketing copy check",
+    "design:spDash Needs you tasks"
+   ],
+   "journeys": [],
+   "gates": [
+    "G17",
+    "G13"
+   ],
+   "modules": [
+    "M21"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\comms\\",
+    "<workspace>\\app\\packages\\adapters\\email\\",
+    "<workspace>\\app\\packages\\adapters\\sms\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\notify\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A44",
+   "title": "Support, complaints (SM-12) and Investor 360 read model",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A30",
+    "A42"
+   ],
+   "oracle": false,
+   "summary": "Tickets and the complaints register with acknowledgement and final-response clocks as parameters (defaults 5 and 30 days, marked 'set with counsel'), any dissatisfied ticket converts to a complaint, redress CMPH to CCO (+ CFO above A$5k), AFCA escalation with AFCA details shown, reopen and retention; Investor 360 aggregate (profile, limits, wallets, holdings, orders, payouts, tax, documents, cases, messages, votes, tokens and mandates, audit) masked by default with reason-coded unmask, support seeing only 'account under review'. Support cannot change money or records.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ACC-04",
+    "design-ext:ADM-09"
+   ],
+   "journeys": [],
+   "gates": [
+    "G18"
+   ],
+   "modules": [
+    "M06",
+    "M23"
+   ],
+   "states": [
+    "SM-12"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\support\\",
+    "<workspace>\\app\\services\\api\\src\\modules\\investor360\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 8
+  },
+  {
+   "id": "A45",
+   "title": "Reporting, regulatory calendar, filings and metric governance",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A21",
+    "A42",
+    "A41",
+    "A98"
+   ],
+   "oracle": false,
+   "summary": "RegulatoryObligation calendar (AUSTRAC, ASIC, ATO, DDO, CAR obligations at 7/30/90 days) with owners and evidence, filing workspace (SMR, TTR, IFTI, CRS/FATCA, outside-TMD report stub with a 10-business-day clock), overdue filing Sev2, regulator and auditor data room with time-boxed scoped access (CCO to SECO), board and investor report exports (audited), metrics dictionary where 'capital raised' is defined and versioned and 'tokenised value' is never rendered, sponsor track-record figures for the public profile.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ADM-26"
+   ],
+   "journeys": [],
+   "gates": [
+    "G05",
+    "G14",
+    "G16",
+    "G17",
+    "G21"
+   ],
+   "modules": [
+    "M19"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\reporting\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 8
+  },
+  {
+   "id": "A46",
+   "title": "Job scheduler, integrations health and webhooks",
+   "milestone": "AM3",
+   "lane": "Platform",
+   "deps": [
+    "A09",
+    "A20",
+    "A27",
+    "A13",
+    "A12"
+   ],
+   "oracle": false,
+   "summary": "Cron schedules (snapshot 00:00, reconciliation 02:00, sanctions re-screen 03:00, claim expiry sweep, certificate reminders, attestation reminders, payout execution; the 07:00 digest is emitted by the alerts service) as idempotent replayable jobs, Job run history, Integration rows with health, latency and environment (sandbox or live) per adapter, WebhookSubscription with signed payloads and replay windows for sponsors and investors (subscriptions are scoped like tokens), RPC or network config change ENGO to SECO. Backend for ADM-32; tokens and mandates live in the agent-access module. Webhook subscriptions carry their creating token's scopes and stop when it is revoked; failed jobs land in a dead-letter list on ADM-32 with idempotent replay and a Sev3 alert.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ADM-32"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\integrations\\",
+    "<workspace>\\app\\services\\worker\\src\\scheduler\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 8
+  },
+  {
+   "id": "A47",
+   "title": "Portfolio, holdings and transactions read models with statements",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A18",
+    "A16",
+    "A40",
+    "A27"
+   ],
+   "oracle": false,
+   "summary": "Read models for the investor and sponsor views: portfolio value at valuation and at last price equal to the sum of holdings, cash available and reserved, monthly income series, holding detail with average cost, income received, lock-in end, on-chain balance and register match date from the last reconciliation ('we are checking this with the trustee' on mismatch), transactions ledger with on-chain reference and confirmation PDF generation, distribution history per trust, sponsor register view (holders, class, residency, largest vs cap, last reconciliation, break banner, logged export), public transparency table per trust. All exposed as read scopes for tokens. Rows carry actor and on_behalf_of so activity shows 'placed by your agent <name>' where a mandate acted.",
+   "screens": [],
+   "design_refs": [
+    "design:port KPIs and HoldingRows",
+    "design:activity table",
+    "design:spRegister"
+   ],
+   "journeys": [
+    "J17"
+   ],
+   "gates": [
+    "G10"
+   ],
+   "modules": [
+    "M11",
+    "M06"
+   ],
+   "states": [
+    "SM-07"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\portfolio\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 8
+  },
+  {
+   "id": "A48",
+   "title": "Halts, kill switches and wind-down",
+   "milestone": "AM3",
+   "lane": "Compliance core",
+   "deps": [
+    "A21",
+    "A28",
+    "A34",
+    "A40",
+    "A36",
+    "A13"
+   ],
+   "oracle": false,
+   "summary": "Single owner of J21 and the emergency controls: Halt records per vehicle with cause (manual, meeting, valuation stale, recon break, token pause, distress) where published reopening criteria and an end date are mandatory (a halt without them is refused), ratification timers (halt 2 h, kill switch 2 h, board 24 h in P2) with auto-escalation through the alerts service, kill switches as SGL+R (global inflow freeze, marketplace suspend, all agent traffic) acting at once by setting the platform flags in the perimeter module, distressed and legal-hold transitions of SM-03 that pause distributions and new offers, exit approval, sale completion, exit waterfall hand-off to the distributions engine, burn request (burn = supply) and register close through token operations, 7-year retention flag on every trust record, runbooks R1-R9 as data. G10 reads the halt state from here. The agent-traffic switch here is the platform-wide tier; per-user and per-tenant tiers are A101 and call the same interface.",
+   "screens": [],
+   "design_refs": [
+    "design:adCmd emergency pause",
+    "design-ext:ADM-34 kill-switch banner"
+   ],
+   "journeys": [
+    "J21"
+   ],
+   "gates": [
+    "G10",
+    "G13",
+    "G21",
+    "G22"
+   ],
+   "modules": [
+    "M27",
+    "M22"
+   ],
+   "states": [
+    "SM-03",
+    "SM-06"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\halts\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\halts\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A49",
+   "title": "Money-path smoke through the SDK (AM3 exit and founder checkpoint)",
+   "milestone": "AM3",
+   "lane": "Quality",
+   "deps": [
+    "A23",
+    "A30",
+    "A29",
+    "A38",
+    "A39",
+    "A40",
+    "A41",
+    "A06"
+   ],
+   "oracle": false,
+   "summary": "A 'money' compose profile and a Vitest suite over packages/sdk (no UI yet): onboard a seeded investor to approved with claims issued, pay in through the sandbox bank panel, place an order under a passkey and a second one under an agent mandate, close, allocate, register entry, mint on the local chain, targeted reconciliation, distribution run to paid with withholding, withdrawal above and below the threshold, a planted registry drift that halts the mint queue and clears on a clean re-run. J04, J05, J06 and J15 at service level. A one-page 'magic inputs' guide lets the founder watch money and units move from the sandbox panels and the transparency read model. Milestone AM3 exit; the founder's feedback becomes fix items on the owning nodes.",
+   "screens": [],
+   "design_refs": [
+    "design:adRecon grid (as evidence)",
+    "design:spDist per-token maths"
+   ],
+   "journeys": [
+    "J04",
+    "J05",
+    "J06",
+    "J15"
+   ],
+   "gates": [
+    "G07",
+    "G10",
+    "G11",
+    "G13",
+    "G16",
+    "G22"
+   ],
+   "modules": [],
+   "states": [
+    "SM-04",
+    "SM-05",
+    "SM-07",
+    "SM-08"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\money-smoke\\",
+    "<workspace>\\app\\infra\\money-preview\\",
+    "<workspace>\\app\\docs\\money-preview\\"
+   ],
+   "est_lo": 5,
+   "est_hi": 8
+  },
+  {
+   "id": "A50",
+   "title": "Design extension A: investor and sponsor screens not in the prototype",
+   "milestone": "AM4",
+   "lane": "Design",
+   "deps": [
+    "A05",
+    "A00"
+   ],
+   "oracle": false,
+   "summary": "A new dc-format prototype file (the design folder stays untouched) extending RealX App.dc.html in its own language for PUB-02, PUB-07, PUB-08, PUB-09, ONB-04, ONB-07, INV-04, INV-06, INV-07, POR-02, POR-03, POR-06, GOV-01, GOV-02, ACC-01, ACC-02, ACC-03, ACC-04, ACC-05 (API tokens and agents: create token with a scope picker limited to the viewer's rights, mandate limits and expiry in plain English, agent activity log, last-used, revoke), SPN-01, SPN-11, SPN-12, SPN-13, SPN-14, SPN-15, SPN-16 (per-team-member tokens under SP-OWN approval) the investor and sponsor passkey sign-in and sign-out screens, the partner sign-in and the partner variant of the light sidebar (Trustee, Auditor, Regulator observer, Licensee) that A105 builds, sandbox-token and notice-settings sections on ACC-05 and SPN-16, following §5 of the design analysis (new blocks: SliderField, OrderBook, ThresholdMeter, TextArea, ScopePicker, MandateSummary) and the same shells. Screen codes are product-map ids. Human gate HG-REVIEW: the user reviews the extension in the browser and approves it before any dependent UI node starts; Fable checks token fidelity against §1-§2.",
+   "screens": [
+    "PUB-02",
+    "PUB-07",
+    "PUB-08",
+    "PUB-09",
+    "ONB-04",
+    "ONB-07",
+    "INV-04",
+    "INV-06",
+    "INV-07",
+    "POR-02",
+    "POR-03",
+    "POR-06",
+    "GOV-01",
+    "GOV-02",
+    "ACC-01",
+    "ACC-02",
+    "ACC-03",
+    "ACC-04",
+    "ACC-05",
+    "SPN-01",
+    "SPN-11",
+    "SPN-12",
+    "SPN-13",
+    "SPN-14",
+    "SPN-15",
+    "SPN-16"
+   ],
+   "design_refs": [
+    "design:tokens",
+    "design:components §2",
+    "design:PG page pattern",
+    "design:undesigned screens §5",
+    "design:bug 17 entity and joint steps"
+   ],
+   "journeys": [],
+   "gates": [
+    "G22"
+   ],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\design-ext\\investor-sponsor\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A51",
+   "title": "Design extension B: operator console screens not in the prototype",
+   "milestone": "AM4",
+   "lane": "Design",
+   "deps": [
+    "A05",
+    "A00"
+   ],
+   "oracle": false,
+   "summary": "Second dc-format extension file for the dark admin shell: ADM-02, ADM-03, ADM-04, ADM-05, ADM-06, ADM-08, ADM-09, ADM-11, ADM-12, ADM-13, ADM-15, ADM-16, ADM-19, ADM-20, ADM-21, ADM-22, ADM-23, ADM-24, ADM-26, ADM-27, ADM-28, ADM-29, ADM-32, ADM-33, ADM-34, ADM-35 (agent and API access: every token and mandate platform-wide, staff tokens with hardware-key issuance, agent principals, G22 evaluation log, kill switch for all agent traffic as SGL+R) plus the five undrawn admin screens under their charter ids ADM-36 sign-in and 2FA, ADM-37 users/roles/access reviews, ADM-38 investor directory, ADM-39 entities register and detail, ADM-40 token registry list; extended sidebar groups (Overview, Onboarding & listings, Assets & money, Markets (P2), Asset life, Risk & records, Platform), the hardware-key confirmation modal for approvals, and the new blocks ExemptionMeter, funnel row, approvals chain and MandateTable. Human gate HG-REVIEW: user review before any console UI node starts.",
+   "screens": [
+    "ADM-02",
+    "ADM-03",
+    "ADM-04",
+    "ADM-05",
+    "ADM-06",
+    "ADM-08",
+    "ADM-09",
+    "ADM-11",
+    "ADM-12",
+    "ADM-13",
+    "ADM-15",
+    "ADM-16",
+    "ADM-19",
+    "ADM-20",
+    "ADM-21",
+    "ADM-22",
+    "ADM-23",
+    "ADM-24",
+    "ADM-26",
+    "ADM-27",
+    "ADM-28",
+    "ADM-29",
+    "ADM-32",
+    "ADM-33",
+    "ADM-34",
+    "ADM-35"
+   ],
+   "design_refs": [
+    "design:AdminSidebar",
+    "design:adApprovals ApprovalList/Detail pattern",
+    "design:undesigned admin screens §5"
+   ],
+   "journeys": [],
+   "gates": [
+    "G22"
+   ],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\design-ext\\admin\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A52",
+   "title": "Web app shells, routing and passkey sign-in (public, investor, sponsor)",
+   "milestone": "AM4",
+   "lane": "Investor app",
+   "deps": [
+    "A05",
+    "A11",
+    "A09",
+    "A50"
+   ],
+   "oracle": false,
+   "summary": "apps/web with Next.js App Router: route groups (public), (investor), (sponsor)/s/[tenant], the PublicHeader with visitor and investor states and a phone menu, SponsorSidebar (collapsible below 1024 px), footer with CAR/AFSL disclosure, the passkey sign-in and sign-out screens from design extension A (replacing the prototype's one-click login, bug 16), session handling through packages/sdk, product-map routes declaring the design screen they render, the Toast, empty and error states, a dev-only 'view as' switch for QA. Phone width 375 px with 16 px gutters and no horizontal scroll.",
+   "screens": [],
+   "design_refs": [
+    "design:PublicHeader",
+    "design:SponsorSidebar",
+    "design:Footer",
+    "design:Toast",
+    "design-ext:sign-in (investor and sponsor)",
+    "design:bug 16 login placeholder"
+   ],
+   "journeys": [],
+   "gates": [
+    "G21"
+   ],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\ (root files only)",
+    "<workspace>\\app\\apps\\web\\app\\layout.tsx",
+    "<workspace>\\app\\apps\\web\\app\\(auth)\\",
+    "<workspace>\\app\\apps\\web\\src\\shell\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A53",
+   "title": "Operator console shell, hardware-key sign-in and approval action pattern",
+   "milestone": "AM4",
+   "lane": "Operator console",
+   "deps": [
+    "A05",
+    "A11",
+    "A14",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "apps/console on its own origin: the dark AdminSidebar with extended groups and live badges, user card, PROD/SANDBOX badge, global search, sponsor switcher ('view as tenant' audited), hardware-key sign-in with 2FA (ADM-36 from design extension B), the shared 'approve with hardware key' modal (WebAuthn assertion over the payload hash), the maker-checker action pattern every module screen reuses (draft, precheck results, submit, diff, simulation, evidence), break-glass button for CCO, SECO and on-call ENGO, table and filter primitives with server-side paging. Empty, loading and error states for every table and pane; the 'submitted by agent on behalf of' marker as a shared cell.",
+   "screens": [],
+   "design_refs": [
+    "design:AdminSidebar",
+    "design:adApprovals Approve/Reject",
+    "design-ext:ADM-36 sign-in and 2FA"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M01",
+    "M25"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\ (root files only)",
+    "<workspace>\\app\\apps\\console\\app\\layout.tsx",
+    "<workspace>\\app\\apps\\console\\app\\(auth)\\",
+    "<workspace>\\app\\apps\\console\\src\\shell\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A54",
+   "title": "Public site: home, investments, property page, sponsor profile, fees",
+   "milestone": "AM5",
+   "lane": "Investor app",
+   "deps": [
+    "A52",
+    "A36",
+    "A34",
+    "A20",
+    "A47"
+   ],
+   "oracle": false,
+   "summary": "PUB-01 hero, how-it-works strip, open offers and an audited-numbers strip; PUB-03 with the product map's filters (investment, type, location, status, eligibility, sponsor) and sorts, eligibility chips on every card, 'notify me' on no results; PUB-04 with the seven tabs, sticky aside, soft-cap marker, proof-of-property band from the last recon run, buy button computed server-side naming a failed check; PUB-05 both as the tab and a standalone route with planned vs actual and overdue proof; PUB-06 with effective dates and float interest. Static rendering of approved copy only. Fidelity checked against the prototype screens.",
+   "screens": [
+    "PUB-01",
+    "PUB-03",
+    "PUB-04",
+    "PUB-05",
+    "PUB-06"
+   ],
+   "design_refs": [
+    "design:home",
+    "design:invest",
+    "design:prop",
+    "design:fees",
+    "design:PropertyCard",
+    "design:FeaturedCard"
+   ],
+   "journeys": [
+    "J01"
+   ],
+   "gates": [
+    "G04",
+    "G06",
+    "G12",
+    "G17",
+    "G19",
+    "G20",
+    "G21"
+   ],
+   "modules": [],
+   "states": [
+    "SM-03",
+    "SM-04"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(public)\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\public-core\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A55",
+   "title": "Public site: how it works, returns calculator, transparency, help and documents",
+   "milestone": "AM5",
+   "lane": "Investor app",
+   "deps": [
+    "A52",
+    "A50",
+    "A20",
+    "A35"
+   ],
+   "oracle": false,
+   "summary": "PUB-02 with risks above the fold and 'who holds what'; PUB-07 calculator (annual change -10% to 20%, amount, 1-10 years, income vs capital breakdown, 'illustrative only, not a forecast' on every result); PUB-08 transparency with audited totals, per-trust register / on-chain / bank / last run / result rows (a break shows red with its opened date), contract addresses and audit report links; PUB-09 searchable documents with versions and superseded marks. Built from the design extension.",
+   "screens": [
+    "PUB-02",
+    "PUB-07",
+    "PUB-08",
+    "PUB-09"
+   ],
+   "design_refs": [
+    "design-ext:PUB-02",
+    "design-ext:PUB-07",
+    "design-ext:PUB-08",
+    "design-ext:PUB-09",
+    "design:howSteps"
+   ],
+   "journeys": [
+    "J01"
+   ],
+   "gates": [
+    "G10",
+    "G12",
+    "G17"
+   ],
+   "modules": [
+    "M18"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(public-info)\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\public-info\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A56",
+   "title": "Onboarding flow ONB-01 to ONB-10 with entity branch",
+   "milestone": "AM5",
+   "lane": "Investor app",
+   "deps": [
+    "A52",
+    "A30",
+    "A32",
+    "A29",
+    "A17",
+    "A41",
+    "A50"
+   ],
+   "oracle": false,
+   "summary": "The sticky vertical stepper and card of the prototype for ONB-01 (passkey account, residency, 18+, consent), ONB-02 (type choice now branches: joint adds the second person, SMSF/company/trust goes to ONB-04; design bug 17), ONB-03 (identity with liveness DropBox; referred shows 'we are reviewing' with an expected time; a sanctions hit shows nothing), ONB-04 (ABN lookup, people checklist, deed upload), ONB-05 (TFN with consequence), ONB-06 (three tests, certificate upload, expiry), ONB-08 (passkey wallet, guardians; 'linked to your verified identity' only after registerIdentity), ONB-09 (bank in own name, PayID), ONB-10 (checklist G01, G02, G16, G04, G06 with next action). Portfolio unreachable until every check is green.",
+   "screens": [
+    "ONB-01",
+    "ONB-02",
+    "ONB-03",
+    "ONB-04",
+    "ONB-05",
+    "ONB-06",
+    "ONB-08",
+    "ONB-09",
+    "ONB-10"
+   ],
+   "design_refs": [
+    "design:onb",
+    "design:VerticalStepper",
+    "design:OptionCard",
+    "design:DropBox",
+    "design-ext:ONB-04",
+    "design:bug 17 entity and joint steps"
+   ],
+   "journeys": [
+    "J02",
+    "J03"
+   ],
+   "gates": [
+    "G01",
+    "G02",
+    "G03",
+    "G04",
+    "G06",
+    "G16"
+   ],
+   "modules": [
+    "M06",
+    "M07",
+    "M08"
+   ],
+   "states": [
+    "SM-01",
+    "SM-02"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\onboarding\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\onboarding\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A57",
+   "title": "Buy flow: order, review and confirm, order status (INV-01 to INV-03)",
+   "milestone": "AM5",
+   "lane": "Investor app",
+   "deps": [
+    "A52",
+    "A37",
+    "A35",
+    "A38"
+   ],
+   "oracle": false,
+   "summary": "The prototype's single stepped screen with three routes: INV-01 quantity stepper and presets, live eligibility GateRows (G01, G04, G06, G07 with post-order percentage, G11), cap breach suggests the maximum, deposit shortcut, dark OrderSummaryAside to the cent; INV-02 with documents that must be opened, the acknowledgement card, the 'no cooling-off' statement for wholesale, confirm with passkey; INV-03 timeline (placed, escrow, soft cap, units issued on the register, tokens delivered) plus scaled-back, refunded and cancelled states, and an 'placed by your agent' marker when the order came in under a mandate. Wholesale-only copy and fee note as designed.",
+   "screens": [
+    "INV-01",
+    "INV-02",
+    "INV-03"
+   ],
+   "design_refs": [
+    "design:buy stepper",
+    "design:QuantityStepper",
+    "design:GateRow",
+    "design:AcknowledgeCard",
+    "design:Timeline",
+    "design:OrderSummaryAside"
+   ],
+   "journeys": [
+    "J04",
+    "J05"
+   ],
+   "gates": [
+    "G01",
+    "G04",
+    "G06",
+    "G07",
+    "G11",
+    "G12"
+   ],
+   "modules": [
+    "M05"
+   ],
+   "states": [
+    "SM-05"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\invest\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\buy\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A58",
+   "title": "Portfolio, holding detail, transactions, distributions and statements",
+   "milestone": "AM5",
+   "lane": "Investor app",
+   "deps": [
+    "A52",
+    "A47",
+    "A41",
+    "A50"
+   ],
+   "oracle": false,
+   "summary": "POR-01 (KPIs, holdings rows with value at valuation and at last price, empty state pointing to open offers), POR-02 (property band, tokens, average cost, income, lock-in end, register match date, distributions table, Sell only from a holding), POR-04 transactions with confirmation PDFs and on-chain references (title may stay 'Activity'), POR-03 distributions chart and table (month, trust, per token, tokens at record date, gross, withheld, paid), POR-07 AMMA and annual statements with TFN status. Lists paginated. POR-04 rows show the 'by your agent <name>' marker and link to ACC-05 where a mandate acted.",
+   "screens": [
+    "POR-01",
+    "POR-02",
+    "POR-03",
+    "POR-04",
+    "POR-07"
+   ],
+   "design_refs": [
+    "design:port",
+    "design:activity",
+    "design:statements",
+    "design:HoldingRow",
+    "design-ext:POR-02",
+    "design-ext:POR-03"
+   ],
+   "journeys": [
+    "J17"
+   ],
+   "gates": [
+    "G16"
+   ],
+   "modules": [
+    "M12",
+    "M13"
+   ],
+   "states": [
+    "SM-07",
+    "SM-08"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\portfolio\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\portfolio\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A59",
+   "title": "AUD wallet, token wallet and account screens",
+   "milestone": "AM5",
+   "lane": "Investor app",
+   "deps": [
+    "A52",
+    "A39",
+    "A29",
+    "A43",
+    "A44",
+    "A50"
+   ],
+   "oracle": false,
+   "summary": "POR-05 AUD wallet (available vs reserved, PayID deposit card, PayTo note, withdraw to the verified account with the second-approval threshold copy, float-interest policy, ledger table); POR-06 token wallet and recovery (tokens by trust with frozen amounts and generic reasons, passkeys and devices, guardians, start recovery); ACC-01 profile and security (changes re-run checks, passkeys, bank accounts, classification expiry, close account, link to ACC-05 API tokens and agents); ACC-02 recover account stepper with the 48 h wait and fallback banner; ACC-03 notifications with preferences; ACC-04 support and complaints with AFCA details when a deadline is missed.",
+   "screens": [
+    "POR-05",
+    "POR-06",
+    "ACC-01",
+    "ACC-02",
+    "ACC-03",
+    "ACC-04"
+   ],
+   "design_refs": [
+    "design:wallet",
+    "design:WalletCard",
+    "design-ext:POR-06",
+    "design-ext:ACC-01",
+    "design-ext:ACC-02",
+    "design-ext:ACC-03",
+    "design-ext:ACC-04"
+   ],
+   "journeys": [
+    "J09",
+    "J15",
+    "J17"
+   ],
+   "gates": [
+    "G02",
+    "G13",
+    "G14",
+    "G18"
+   ],
+   "modules": [
+    "M08",
+    "M16",
+    "M23"
+   ],
+   "states": [
+    "SM-12",
+    "SM-13"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\wallet\\",
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\account\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\wallet-account\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A60",
+   "title": "Investor and sponsor API tokens and agents screens (ACC-05, SPN-16)",
+   "milestone": "AM5",
+   "lane": "Investor app",
+   "deps": [
+    "A52",
+    "A12",
+    "A50",
+    "A33",
+    "A99",
+    "A101"
+   ],
+   "oracle": false,
+   "summary": "ACC-05 'API tokens and agents' for investors: create a personal access token with a scope picker limited to the viewer's own rights (read portfolio, place orders up to a cap, request withdrawals up to a cap, manage documents and notifications), mandate limits and expiry, the mandate summary in plain English ('your agent may buy up to A$5,000 a month in any open wholesale offer and may not withdraw'), a fresh passkey assertion to create or widen, agent activity log with on_behalf_of and G22 outcomes, last-used, rotate and revoke; a copy-once token display and the MCP connection snippet. SPN-16 the sponsor equivalent under /s/[tenant]: per-team-member tokens scoped to the member's role including the valuer and property-manager members from A98, SP-OWN approval before issue (never self-approved), tenant-wide agent activity, revoke on role change. Both offer a sandbox token (A99) beside a live one, the notice and anomaly settings (A101) and the per-user kill switch ('pause all my agents'). Both built from design extension A in the ACC/SPN shells.",
+   "screens": [
+    "ACC-05",
+    "SPN-16"
+   ],
+   "design_refs": [
+    "design-ext:ACC-05",
+    "design-ext:SPN-16",
+    "design:AcknowledgeCard",
+    "design:DataTable"
+   ],
+   "journeys": [
+    "J17",
+    "J19"
+   ],
+   "gates": [
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M25",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\agents\\",
+    "<workspace>\\app\\apps\\web\\app\\(sponsor)\\s\\[tenant]\\agents\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\agent-access\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A61",
+   "title": "Docker Desktop preview of the investor app (AM5 exit)",
+   "milestone": "AM5",
+   "lane": "Quality",
+   "deps": [
+    "A54",
+    "A56",
+    "A57",
+    "A58",
+    "A06",
+    "A23",
+    "A104"
+   ],
+   "oracle": false,
+   "summary": "A compose profile (postgres, api, worker, web, hardhat, sandbox bank and identity panels, MCP server) that starts from Docker Desktop with one command, seeds the design dataset, and lets the user walk visitor to investor: browse, onboard as Alex Morgan, deposit through the sandbox bank panel, buy Kent Street tokens, see the order in escrow. Playwright journeys J01, J02 and J04-to-escrow run over this profile as the milestone AM5 exit, with side-by-side screenshots of every designed investor screen beside the prototype in evidence. A one-page guide with the sandbox 'magic inputs'. Human step HG-REVIEW: the user opens the preview and gives feedback that becomes fix items or new nodes. Deliberately not waiting on the wallet/account and info pages so the checkpoint lands one gauntlet earlier.",
+   "screens": [
+    "PUB-01",
+    "PUB-03",
+    "PUB-04",
+    "ONB-01",
+    "INV-01",
+    "POR-01"
+   ],
+   "design_refs": [
+    "design:home",
+    "design:buy stepper",
+    "design:all visitor and investor screens"
+   ],
+   "journeys": [
+    "J01",
+    "J02",
+    "J04"
+   ],
+   "gates": [
+    "G01",
+    "G02",
+    "G04",
+    "G06",
+    "G07",
+    "G11",
+    "G12"
+   ],
+   "modules": [],
+   "states": [
+    "SM-01",
+    "SM-05"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\infra\\preview\\",
+    "<workspace>\\app\\docs\\preview\\",
+    "<workspace>\\app\\e2e\\preview\\"
+   ],
+   "est_lo": 5,
+   "est_hi": 8
+  },
+  {
+   "id": "A62",
+   "title": "Sponsor console: apply, dashboard, team and approvals, billing",
+   "milestone": "AM6",
+   "lane": "Sponsor console",
+   "deps": [
+    "A52",
+    "A33",
+    "A50",
+    "A43",
+    "A98"
+   ],
+   "oracle": false,
+   "summary": "SPN-01 application wizard (company, licence, people, track record, commitments with acknowledgement cards; declined can reapply after 6 months), SPN-02 dashboard with KPIs, listings by status, 'needs you' tasks from the comms module (overdue turns red and flags the listing publicly), RealX messages; SPN-14 team with roles, 2FA status, internal approval rules, the platform-minimum banner and a link to SPN-16 tokens; SPN-15 billing with invoices and the 30-day pause rule. Tenant-scoped by RLS. SPN-14 also lists valuer and property-manager members (A98) with their limited roles.",
+   "screens": [
+    "SPN-01",
+    "SPN-02",
+    "SPN-14",
+    "SPN-15"
+   ],
+   "design_refs": [
+    "design:spDash",
+    "design:TaskRow",
+    "design-ext:SPN-01",
+    "design-ext:SPN-14",
+    "design-ext:SPN-15"
+   ],
+   "journeys": [
+    "J11",
+    "J19"
+   ],
+   "gates": [
+    "G03",
+    "G13",
+    "G21"
+   ],
+   "modules": [
+    "M02",
+    "M24",
+    "M27"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(sponsor)\\s\\[tenant]\\(admin)\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\sponsor-admin\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A63",
+   "title": "Sponsor console: new listing wizard SPN-03 to SPN-06 and offer monitor SPN-07",
+   "milestone": "AM6",
+   "lane": "Sponsor console",
+   "deps": [
+    "A52",
+    "A36",
+    "A34",
+    "A35",
+    "A43"
+   ],
+   "oracle": false,
+   "summary": "The four-step wizard as designed with one route per step: property (type sets residency rules), due diligence checklist (a Missing item blocks submission), offer terms with live rule simulation and RealX limits, documents and submit with the claims check showing flagged phrases and the sponsor-owner approval required from a different person; changes requested returns to draft with comments. SPN-07 offer monitor with KPIs, progress card with soft-cap marker, applications table, and requests to extend, close early or cancel-and-refund that need RealX approval.",
+   "screens": [
+    "SPN-03",
+    "SPN-04",
+    "SPN-05",
+    "SPN-06",
+    "SPN-07"
+   ],
+   "design_refs": [
+    "design:spNew",
+    "design:spOffer",
+    "design:HorizontalStepper",
+    "design:OfferProgressCard"
+   ],
+   "journeys": [
+    "J12"
+   ],
+   "gates": [
+    "G11",
+    "G13",
+    "G17",
+    "G19",
+    "G20"
+   ],
+   "modules": [
+    "M03",
+    "M04"
+   ],
+   "states": [
+    "SM-03",
+    "SM-04"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(sponsor)\\s\\[tenant]\\listings\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\sponsor-listing\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A64",
+   "title": "Sponsor console: register, distributions, property reporting, valuations, announcements",
+   "milestone": "AM6",
+   "lane": "Sponsor console",
+   "deps": [
+    "A52",
+    "A18",
+    "A40",
+    "A34",
+    "A43",
+    "A50",
+    "A47"
+   ],
+   "oracle": false,
+   "summary": "SPN-08 read-only register with wallet, classification and residency columns, Frozen shown without reason, largest vs cap, last reconciliation and the break banner, logged export; SPN-09 distributions with rent-roll import, proposal, withholding preview, the DistributionChain (accountant, owner, RealX FINA, RealX CFO, paid) and past runs; SPN-10 monthly attestation with evidence and the 'late reports pause new offers' rule (separate flag from distribution approval, fixing prototype bug 2); SPN-11 valuation upload with token valuation preview and the 10% banner; SPN-12 announcements with the claims check.",
+   "screens": [
+    "SPN-08",
+    "SPN-09",
+    "SPN-10",
+    "SPN-11",
+    "SPN-12"
+   ],
+   "design_refs": [
+    "design:spRegister",
+    "design:spDist",
+    "design:spReport",
+    "design:DistributionChain",
+    "design-ext:SPN-11",
+    "design-ext:SPN-12",
+    "design:bug 2 attestation flag"
+   ],
+   "journeys": [
+    "J06",
+    "J13",
+    "J14",
+    "J19"
+   ],
+   "gates": [
+    "G10",
+    "G13",
+    "G16",
+    "G17",
+    "G19",
+    "G20"
+   ],
+   "modules": [
+    "M11",
+    "M12",
+    "M22"
+   ],
+   "states": [
+    "SM-08"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(sponsor)\\s\\[tenant]\\operations\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\sponsor-operations\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A65",
+   "title": "Sponsor journeys J11, J12, J13, J14, J19 end to end in Docker (AM6 exit)",
+   "milestone": "AM6",
+   "lane": "Quality",
+   "deps": [
+    "A61",
+    "A62",
+    "A63",
+    "A64",
+    "A60",
+    "A38",
+    "A45",
+    "A105"
+   ],
+   "oracle": false,
+   "summary": "Playwright over the preview stack extended with the sponsor console: J11 sponsor joins (apply to KYB to tenant created), J12 lists a property (wizard to submitted to live to a public page), J13 six-monthly valuation with a >10% move refused without comparables, J14 reporting breach with the public amber flag, J19 sponsor month-end with tasks from due dates; operator steps (listing review, admission approval, token deploy) are driven through the SDK and the approvals API with the right personas until the console screens land in AM7, when the operations e2e node replaces them with console paths. Every failure path in the catalogue is a negative test; SPN-16 token issue and revoke is exercised once. Milestone AM6 exit.",
+   "screens": [],
+   "design_refs": [
+    "design:spNew",
+    "design:spDash",
+    "design:spReport"
+   ],
+   "journeys": [
+    "J11",
+    "J12",
+    "J13",
+    "J14",
+    "J19"
+   ],
+   "gates": [
+    "G03",
+    "G13",
+    "G17",
+    "G19",
+    "G20",
+    "G21",
+    "G22"
+   ],
+   "modules": [],
+   "states": [
+    "SM-03",
+    "SM-04"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\sponsor\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A66",
+   "title": "Console: command center, alerts centre, approvals inbox, audit log",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A14",
+    "A10",
+    "A20",
+    "A46",
+    "A13"
+   ],
+   "oracle": false,
+   "summary": "ADM-01 with role-filtered tiles, queues with SLAs, compliance clocks, chain and custody health, treasury Δ 0, live badges; ADM-02 alerts centre over the alerts service (severity SLAs Sev1 15 min, Sev2 1 h, Sev3 1 business day, acknowledge/assign/escalate/snooze with reason, bulk acknowledge Sev3/4 only, daily digest); ADM-30 approvals inbox with diff vs last, simulation, file hash, evidence, SoD note, hardware-key approve, reject with reason, bulk approve for low-risk, 72 h TTL column, custody binding, 'submitted by agent on behalf of' marker; ADM-31 audit log with hash-chain verification banner, on_behalf_of column and audited exports.",
+   "screens": [
+    "ADM-01",
+    "ADM-02",
+    "ADM-30",
+    "ADM-31"
+   ],
+   "design_refs": [
+    "design:adCmd",
+    "design:adApprovals",
+    "design:adAudit",
+    "design-ext:ADM-02"
+   ],
+   "journeys": [
+    "J20"
+   ],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M01",
+    "M25"
+   ],
+   "states": [
+    "SM-00"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(overview)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\command\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A67",
+   "title": "Console: users, roles, access reviews and break-glass (ADM-37)",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A11",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "ADM-37 from the charter's renumbered undrawn screens: staff users with hardware-key status and dormancy, role grants (SUPER to SECO 4E, SoD conflicts refused with the rule cited), quarterly access-review tasks, break-glass activation (2-of-3 sealed credentials, at most 4 h, review within 5 business days), and the audit of 'view as tenant'. Agent principals, tokens and mandates live on ADM-35 (its own node). Built from design extension B.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ADM-37 users/roles/access reviews",
+    "design-ext:ADM-36 sign-in and 2FA"
+   ],
+   "journeys": [
+    "J20"
+   ],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M25"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(access)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\access\\"
+   ],
+   "est_lo": 5,
+   "est_hi": 8
+  },
+  {
+   "id": "A68",
+   "title": "Console: identity review, wholesale certificates, investor directory and Investor 360",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A30",
+    "A32",
+    "A44",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "ADM-10 queue with provider decision, risk and SLA, document tiles and liveness score, extracted vs entered fields, screening hits with false-positive / true-match / need-info, decisions approve / reject / request info / escalate to EDD with mandatory reason codes and the MLRO as checker on PEP clearance; ADM-11 certificate queue with filters (queue, expiring 60 days, expired), evidence viewer, accountant verification; ADM-38 investor directory with server-side filters; ADM-09 Investor 360 tabs with masked fields, reason-coded unmask and a tokens-and-mandates tab.",
+   "screens": [
+    "ADM-09",
+    "ADM-10",
+    "ADM-11"
+   ],
+   "design_refs": [
+    "design:adKyc",
+    "design:KycReview",
+    "design-ext:ADM-09",
+    "design-ext:ADM-11",
+    "design-ext:ADM-38 investor directory"
+   ],
+   "journeys": [
+    "J02",
+    "J03"
+   ],
+   "gates": [
+    "G01",
+    "G02",
+    "G03",
+    "G04"
+   ],
+   "modules": [
+    "M06",
+    "M07"
+   ],
+   "states": [
+    "SM-01",
+    "SM-02"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(investors)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\investors\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A69",
+   "title": "Console: sponsor admission, licences, sponsors and guardrails, feature flags, entities register",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A33",
+    "A21",
+    "A51",
+    "A48"
+   ],
+   "oracle": false,
+   "summary": "ADM-03 admission pipeline with detail and approvals chain; ADM-04 licence table, CAR register, activity-to-flag map, DAF exemption meter, expiry alerts; ADM-33 tenant list and detail with guardrails and versions (KYC required locked on); ADM-34 flags with licence binding and state, kill switches from the halts module with the 2 h ratification banner and reopening-criteria form, launch state confirmation; ADM-39 entities register and detail.",
+   "screens": [
+    "ADM-03",
+    "ADM-04",
+    "ADM-33",
+    "ADM-34"
+   ],
+   "design_refs": [
+    "design-ext:ADM-03",
+    "design-ext:ADM-04",
+    "design-ext:ADM-33",
+    "design-ext:ADM-34",
+    "design-ext:ADM-39 entities register"
+   ],
+   "journeys": [
+    "J11",
+    "J20",
+    "J21"
+   ],
+   "gates": [
+    "G03",
+    "G13",
+    "G21"
+   ],
+   "modules": [
+    "M02",
+    "M27"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(platform)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\sponsors-perimeter\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A70",
+   "title": "Console: property register, valuations workbench, property operations",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A34",
+    "A51",
+    "A48"
+   ],
+   "oracle": false,
+   "summary": "ADM-05 lifecycle table with filters and a detail reusing the PUB-04 tabs plus the supply calculator; ADM-06 valuation schedule and review with comparable-sales banner and the committee approvals chain; ADM-22 obligations table, compliance score per trust, title and encumbrance monitor, reserves vs target months, vacancy and FIRB vacancy-fee evidence, record notice, escalate to distressed and the wind-down actions of the halts module (exit, waterfall, burn, register close).",
+   "screens": [
+    "ADM-05",
+    "ADM-06",
+    "ADM-22"
+   ],
+   "design_refs": [
+    "design-ext:ADM-05",
+    "design-ext:ADM-06",
+    "design-ext:ADM-22",
+    "design:prop tabs"
+   ],
+   "journeys": [
+    "J12",
+    "J13",
+    "J14",
+    "J21"
+   ],
+   "gates": [
+    "G10",
+    "G13",
+    "G19",
+    "G20"
+   ],
+   "modules": [
+    "M03",
+    "M22"
+   ],
+   "states": [
+    "SM-03"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(assets)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\properties\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A71",
+   "title": "Console: listing review, live raise monitor, orders and allocation",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A36",
+    "A37",
+    "A38",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "ADM-07 listing queue with the gate list as designed (G03, G21, G19, G20, G06, G17 with exact flagged phrases, missing insurance in red), constraints read-only, sign-offs, 'return with comments', approval living in the inbox; ADM-08 funnel tiles, commitments with flags, client-money Δ 0 banner, countdown, extend / close early / revert actions; ADM-12 order blotter (with an 'agent' marker on mandate orders), allocation workbench with the rule line and scale-back preview, refunds queue, settlement status per order (not complete until reconciliation passes).",
+   "screens": [
+    "ADM-07",
+    "ADM-08",
+    "ADM-12"
+   ],
+   "design_refs": [
+    "design:adListing",
+    "design-ext:ADM-08",
+    "design-ext:ADM-12"
+   ],
+   "journeys": [
+    "J04",
+    "J05",
+    "J12"
+   ],
+   "gates": [
+    "G07",
+    "G11",
+    "G13",
+    "G17"
+   ],
+   "modules": [
+    "M04",
+    "M05"
+   ],
+   "states": [
+    "SM-04",
+    "SM-05"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(offerings)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\offerings\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A72",
+   "title": "Console: token operations, forced transfer and recovery desk, wallets and custody, token registry",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A28",
+    "A29",
+    "A15",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "ADM-14 with contract header (supply vs cap, state, pause), role holders, new action form (reason, legal basis, evidence), precheck (canTransfer, identity registry, register impact), the waiting-for-signatures list with SignatureMeter and Sign / Broadcast under each signer's own login, history with approval ids and tx hashes; ADM-15 desk with evidence hashes, timelock countdown, waiver record, register impact preview, notice-sent banner; ADM-13 wallet registry, vaults V1-V7 with quorum and policy, signer policy rules, paymaster runway, recovery requests with the waiting-period timeline; ADM-40 token registry list.",
+   "screens": [
+    "ADM-13",
+    "ADM-14",
+    "ADM-15"
+   ],
+   "design_refs": [
+    "design:adToken",
+    "design:TokenOpRow",
+    "design:SignatureMeter",
+    "design-ext:ADM-13",
+    "design-ext:ADM-15",
+    "design-ext:ADM-40 token registry list"
+   ],
+   "journeys": [
+    "J09"
+   ],
+   "gates": [
+    "G07",
+    "G10",
+    "G13"
+   ],
+   "modules": [
+    "M08",
+    "M09"
+   ],
+   "states": [
+    "SM-06",
+    "SM-07",
+    "SM-13"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(token)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\token-custody\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A73",
+   "title": "Console: rule packs and threshold monitors, register and reconciliation",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A19",
+    "A20",
+    "A18",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "ADM-16 with the monitor table (holder cap, largest, landholder duty, foreign %, members), pack banner with version, parameter change with attached simulation showing affected holders, investor overrides, the G22 evaluation log filter; ADM-17 recon grid as designed plus the product map's layout (chain supply / register / bank or escrow / Δ), unknown-holders strip, break panel with likely cause, proposed fix and the 6E adjustment action, cap table as-of, snapshots, signed extracts, force re-sync, and the halt state per trust.",
+   "screens": [
+    "ADM-16",
+    "ADM-17"
+   ],
+   "design_refs": [
+    "design:adRecon",
+    "design-ext:ADM-16"
+   ],
+   "journeys": [
+    "J20"
+   ],
+   "gates": [
+    "G06",
+    "G07",
+    "G10",
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M10",
+    "M11"
+   ],
+   "states": [
+    "SM-07"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(register)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\rules-recon\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A74",
+   "title": "Console: treasury, distribution run review, tax centre",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A39",
+    "A40",
+    "A41",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "ADM-18 accounts (client money, escrow per offering, distributions, operating marked separate), pay-in matching with held receipts, pay-outs and withdrawals with thresholds, escrow view, reconciliation Δ 0, fees; ADM-19 calculation breakdown, checks (vs last month, forecast, snapshot locked, Δ 0), exceptions with 'AML hold, no notice', lines, file-hash line and the bound approval; ADM-20 profiles, withholding exceptions, AMMA batch generation, filing and remittance calendar.",
+   "screens": [
+    "ADM-18",
+    "ADM-19",
+    "ADM-20"
+   ],
+   "design_refs": [
+    "design:adTreasury",
+    "design-ext:ADM-19",
+    "design-ext:ADM-20"
+   ],
+   "journeys": [
+    "J06",
+    "J15"
+   ],
+   "gates": [
+    "G02",
+    "G11",
+    "G13",
+    "G14",
+    "G16"
+   ],
+   "modules": [
+    "M12",
+    "M13",
+    "M16"
+   ],
+   "states": [
+    "SM-08"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(money)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\money\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A75",
+   "title": "Console: AML cases, complaints register, marketing compliance, disclosure library",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A42",
+    "A44",
+    "A43",
+    "A35",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "ADM-25 cases with SMR clocks, restriction actions, sealed content limited to MLRO and CCO, filing records; ADM-27 complaints with acknowledgement and response deadlines and AFCA escalation; ADM-28 approvals queue for announcements, campaigns and site copy with the blocked phrase highlighted and suggested wording, claims library, terms versions; ADM-24 disclosure library with version, effective date, anchored state and publish.",
+   "screens": [
+    "ADM-24",
+    "ADM-25",
+    "ADM-27",
+    "ADM-28"
+   ],
+   "design_refs": [
+    "design:adAml",
+    "design-ext:ADM-24",
+    "design-ext:ADM-27",
+    "design-ext:ADM-28"
+   ],
+   "journeys": [
+    "J10",
+    "J14"
+   ],
+   "gates": [
+    "G12",
+    "G13",
+    "G14",
+    "G17",
+    "G18"
+   ],
+   "modules": [
+    "M18",
+    "M20",
+    "M21",
+    "M23"
+   ],
+   "states": [
+    "SM-11",
+    "SM-12"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(risk)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\risk-records\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A76",
+   "title": "Console: regulatory calendar and data room, sponsor performance, integrations and jobs",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A45",
+    "A33",
+    "A46",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "ADM-26 obligations calendar, filing workspace, data-room access grants (time-boxed), board pack export; ADM-29 sponsor performance table (raised, yield plan vs paid, on-time, proof score, retained stake, watchlist flag) and fee agreements; ADM-32 connectors with environment (sandbox or live), latency and health, job runs with last result, webhooks, the sandbox operator panels (receive a payment, refer a case, drift the registry, trigger a list update), the human-gate status board (HG-LEGAL, HG-VENDOR, HG-KEYS, HG-AUDIT, HG-PENTEST, HG-CAPITAL, HG-PROD shown as open) and a link to ADM-35 for tokens and agents.",
+   "screens": [
+    "ADM-26",
+    "ADM-29",
+    "ADM-32"
+   ],
+   "design_refs": [
+    "design-ext:ADM-26",
+    "design-ext:ADM-29",
+    "design-ext:ADM-32"
+   ],
+   "journeys": [
+    "J20"
+   ],
+   "gates": [
+    "G13",
+    "G14",
+    "G19",
+    "G21"
+   ],
+   "modules": [
+    "M19",
+    "M24",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(reporting)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\reporting-integrations\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A77",
+   "title": "Console: agent and API access (ADM-35)",
+   "milestone": "AM7",
+   "lane": "Operator console",
+   "deps": [
+    "A53",
+    "A12",
+    "A51",
+    "A48",
+    "A67",
+    "A99",
+    "A101",
+    "A104"
+   ],
+   "oracle": false,
+   "summary": "ADM-35 'Agent and API access': every token and mandate platform-wide with owner, principal type, scopes, limits, last-used and status; staff tokens issued only under a hardware-key assertion with SECO as checker (4E); agent principals with their human owners; the G22 evaluation log with refusals and the missing scope named; revoke any token immediately with reason; the 'all agent traffic' kill switch as SGL+R through the halts module with the 2 h ratification banner; per-tenant and per-investor rate-limit views; MCP tool catalogue as published by A104; sandbox tokens shown apart from live ones (A99); the anomaly queue, per-user and per-tenant kill switches and notice log from A101. Built from design extension B with the MandateTable block.",
+   "screens": [
+    "ADM-35"
+   ],
+   "design_refs": [
+    "design-ext:ADM-35",
+    "design:adApprovals hardware-key modal",
+    "design:DataTable"
+   ],
+   "journeys": [
+    "J20"
+   ],
+   "gates": [
+    "G13",
+    "G21",
+    "G22"
+   ],
+   "modules": [
+    "M25",
+    "M26",
+    "M27"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\console\\app\\(agent-access)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\agent-access\\"
+   ],
+   "est_lo": 5,
+   "est_hi": 8
+  },
+  {
+   "id": "A78",
+   "title": "Operator journey J20 end to end in Docker (AM7 exit)",
+   "milestone": "AM7",
+   "lane": "Quality",
+   "deps": [
+    "A66",
+    "A67",
+    "A68",
+    "A69",
+    "A70",
+    "A71",
+    "A72",
+    "A73",
+    "A74",
+    "A75",
+    "A76",
+    "A77",
+    "A65"
+   ],
+   "oracle": false,
+   "summary": "Playwright for J20 operator daily run through the console with distinct personas per role (KYCA, MLRO, CFO, TOKO, REGO, CCO, SECO, ENGO): every ADM-01 tile role-filtered, the alerts centre worked with SLA clocks, three approvals with hardware-key assertions and SoD refusals, a token operation signed 2-of-3 and reconciled, the hash chain verified, launch flags confirmed off, a staff token issued and revoked on ADM-35. Also re-runs the AM6 sponsor journeys with the operator steps now taken through the console screens. Milestone AM7 exit.",
+   "screens": [],
+   "design_refs": [
+    "design:adCmd",
+    "design:adApprovals",
+    "design:adToken"
+   ],
+   "journeys": [
+    "J20"
+   ],
+   "gates": [
+    "G13",
+    "G21",
+    "G22"
+   ],
+   "modules": [],
+   "states": [
+    "SM-00"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\operator\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A79",
+   "title": "End-to-end journeys: investor money path",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A61",
+    "A59",
+    "A55",
+    "A66",
+    "A68",
+    "A71",
+    "A72",
+    "A73",
+    "A74"
+   ],
+   "oracle": false,
+   "summary": "Playwright over the compose stack for J01 browse, J02 sign up and verify (referred case decided in ADM-10, claims issued), J03 SMSF, J04 first investment through escrow, close, allocation, register entry, mint via the token console and reconciliation to a settled order, J05 soft cap missed with full refunds, J15 withdrawal above and below threshold, J17 check-in. Every failure path in the catalogue becomes a negative test.",
+   "screens": [],
+   "design_refs": [
+    "design:screen codes §3"
+   ],
+   "journeys": [
+    "J01",
+    "J02",
+    "J03",
+    "J04",
+    "J05",
+    "J15",
+    "J17"
+   ],
+   "gates": [
+    "G01",
+    "G02",
+    "G03",
+    "G04",
+    "G06",
+    "G07",
+    "G11",
+    "G12",
+    "G13",
+    "G14",
+    "G16"
+   ],
+   "modules": [],
+   "states": [
+    "SM-01",
+    "SM-02",
+    "SM-04",
+    "SM-05"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\investor\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A80",
+   "title": "End-to-end journeys: sponsor and operations",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A78",
+    "A62",
+    "A63",
+    "A64",
+    "A69",
+    "A70",
+    "A73",
+    "A74",
+    "A75",
+    "A76",
+    "A48",
+    "A105"
+   ],
+   "oracle": false,
+   "summary": "J06 monthly distribution from rent roll to paid and AMMA, J11 sponsor admission to a live tenant, J12 listing from property to a deployed token and a public page, J13 six-monthly valuation with a >10% move refused without comparables, J14 reporting breach with the public amber flag and distressed state, J19 sponsor month-end, J20 operator daily run, J21 wind-down with a halt that carries reopening criteria, kill-switch ratification timer, final waterfall and burn = supply, all through the built console screens.",
+   "screens": [],
+   "design_refs": [
+    "design:spNew",
+    "design:spDist",
+    "design:adCmd"
+   ],
+   "journeys": [
+    "J06",
+    "J11",
+    "J12",
+    "J13",
+    "J14",
+    "J19",
+    "J20",
+    "J21"
+   ],
+   "gates": [
+    "G03",
+    "G10",
+    "G13",
+    "G16",
+    "G17",
+    "G19",
+    "G20",
+    "G21"
+   ],
+   "modules": [],
+   "states": [
+    "SM-03",
+    "SM-06",
+    "SM-08"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\operations\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A81",
+   "title": "End-to-end journeys: recovery, AML and planted breaks",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A59",
+    "A66",
+    "A68",
+    "A72",
+    "A75",
+    "A73"
+   ],
+   "oracle": false,
+   "summary": "J09 lost-phone recovery (smart-wallet path, then the fallback with freeze, timelock, custody signing and register update), J10 AML alert to SMR with the tipping-off guard checked from the investor, support and token-scope sides, plus the simulator's planted drifts (registry drift, unknown holder, bank cent delta, stale valuation) proving that each break opens the right alert, halts the right trust, blocks mint and payout, shows on PUB-08 and SPN-08, and closes only on a clean re-run.",
+   "screens": [],
+   "design_refs": [
+    "design:adRecon break row",
+    "design:adAml"
+   ],
+   "journeys": [
+    "J09",
+    "J10"
+   ],
+   "gates": [
+    "G02",
+    "G10",
+    "G13",
+    "G14"
+   ],
+   "modules": [],
+   "states": [
+    "SM-11",
+    "SM-13"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\risk\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A82",
+   "title": "End-to-end: an agent drives the account through the API and MCP",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A61",
+    "A78",
+    "A60",
+    "A77",
+    "A12",
+    "A98",
+    "A99",
+    "A101",
+    "A104"
+   ],
+   "oracle": false,
+   "summary": "A scripted agent (an MCP client using packages/mcp with a token per persona) completes, with gate results identical to the human path: an investor's agent browsing offers, placing an order under a mandate, having the deposit matched, and requesting a withdrawal under its cap (J04 and J15 shape); a sponsor accountant's agent preparing a distribution proposal that humans then approve (J06 shape); an operator's agent running the read-only daily checks and submitting, never approving, an approval request (J20 shape); a valuer's agent uploading a valuation report and a trustee's agent reading a signed register extract (A98). The script runs first against each persona's sandbox token (A99) with identical gate results. Negatives: revoked token refused within one request, out-of-scope call refused naming the scope, order above the mandate cap refused by G22, agent presented as checker refused, agent token used for a custody signature refused, the per-user, per-tenant and platform-wide kill switches each stop exactly their tier at once, an anomaly hold pauses a token until the person clears it, every agent-written audit event carries on_behalf_of.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ACC-05",
+    "design-ext:ADM-35"
+   ],
+   "journeys": [
+    "J04",
+    "J06",
+    "J15",
+    "J20"
+   ],
+   "gates": [
+    "G07",
+    "G11",
+    "G13",
+    "G14",
+    "G22"
+   ],
+   "modules": [
+    "M25",
+    "M26"
+   ],
+   "states": [
+    "SM-00",
+    "SM-05",
+    "SM-08"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\agent\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A83",
+   "title": "Security hardening",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A79",
+    "A80",
+    "A81",
+    "A104"
+   ],
+   "oracle": false,
+   "summary": "Generated RBAC matrix-cell tests against the live API, token-scope and mandate bypass tests (scope escalation, expired mandate, replayed mandate signature, cross-tenant token), RLS cross-tenant tests, CSP and cookie settings, CSRF, rate limits per session and per token, webhook signature and replay tests, secrets scanning and dependency audit in verify, PII redaction of logs and evidence, adversarial input tests for the claims lint and document parsing and for MCP tool descriptions (prompt-injection style), a test that no production adapter selector or mainnet RPC exists in any artefact, threat model document. Hardening code lives in its own security folder so no other node's paths are edited. HG-PENTEST stays open and is recorded as such. The parity matrix (A100) and the runtime agent controls (A101) are separate nodes; this node attacks them.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [
+    "G13",
+    "G21",
+    "G22"
+   ],
+   "modules": [
+    "M25",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\security\\",
+    "<workspace>\\app\\e2e\\security\\",
+    "<workspace>\\app\\docs\\security\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A84",
+   "title": "Performance and scale",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A79",
+    "A80"
+   ],
+   "oracle": false,
+   "summary": "Simulator-generated 100 trusts x 10,000 holders: nightly snapshot and reconciliation inside their windows, distribution calculation and execution for the largest trust, server-side paging on investments, transactions, audit log and blotters, phone-width investor screens within budget, API load with p95 targets incl. a token-driven burst, indexer catch-up time. Findings become fix items on the owning nodes.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [],
+   "gates": [],
+   "modules": [
+    "M11",
+    "M12"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\perf\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A85",
+   "title": "Observability and runbooks",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A79",
+    "A80"
+   ],
+   "oracle": false,
+   "summary": "OpenTelemetry collector and dashboards in compose, traces carrying request, approval, on_behalf_of and job ids, alert routing by severity with the SLA clocks, health pages for adapters and the chain, and runbooks R1-R9 (inflow freeze, emergency pause, registry sync failure R4, stuck transaction, break resolution, key rotation drill, break-glass, agent traffic kill switch) written for the operators named in Human Gates. Runbooks are text and checklists here; A103 executes each one as a drill.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [
+    "J20"
+   ],
+   "gates": [],
+   "modules": [
+    "M01",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\infra\\observability\\",
+    "<workspace>\\app\\docs\\runbooks\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 8
+  },
+  {
+   "id": "A86",
+   "title": "Base Sepolia integration run and HG-AUDIT pack",
+   "milestone": "AM8",
+   "lane": "Chain",
+   "deps": [
+    "A81",
+    "A27"
+   ],
+   "oracle": false,
+   "summary": "Deploy the full suite (shared identity layer, one trust token, gateway, wallet factory, paymaster) to Base Sepolia at CREATE2 addresses with faucet-funded throwaway keys, run the real bundler adapter, exercise mint, claim issuance, a wallet recovery and a forced transfer through the sandbox custody signers, and reconcile against the local register. Manifests checked in. Produces the audit pack for HG-AUDIT: inventory of every piece of custom Solidity (AgentGateway, owner multisig, HolderCount, LockIn and Halt compliance modules, RecoveryModule, paymaster policy) with tests, invariants and known limits. Redbelly testnet kept as a script option pending credentials (HG-ACCOUNTS). No value moves; mainnet remains HG-PROD after HG-AUDIT.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [
+    "J04",
+    "J09"
+   ],
+   "gates": [
+    "G13"
+   ],
+   "modules": [
+    "M09"
+   ],
+   "states": [
+    "SM-06"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\contracts\\deploy\\testnet\\",
+    "<workspace>\\app\\docs\\testnet\\",
+    "<workspace>\\app\\docs\\audit-pack\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A87",
+   "title": "Design fidelity and accessibility pass",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A79",
+    "A80",
+    "A81"
+   ],
+   "oracle": false,
+   "summary": "For every drawn screen and every screen of the two design extensions: screenshot the built page and the prototype view and compare layout tokens (fonts, colours, spacing, radii) not pixels, in every listed state, at desktop and 375 px; WCAG AA contrast on the real tokens, keyboard focus order, aria-live on counters and toasts, no horizontal scroll at 375 px, 16 px gutters; jargon expanded on first use; prototype bugs 2, 14, 16, 17 and 19 confirmed fixed in the build. Findings become fix items on the owning UI nodes. Human step: founder sign-off on visual QA.",
+   "screens": [],
+   "design_refs": [
+    "design:tokens",
+    "design:components §2",
+    "design:all prototype screens",
+    "design-ext:all"
+   ],
+   "journeys": [],
+   "gates": [],
+   "modules": [],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\fidelity\\",
+    "<workspace>\\app\\docs\\fidelity\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A88",
+   "title": "P1 full regression: 17 journeys, three clean runs, every gate exercised",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A83",
+    "A84",
+    "A85",
+    "A86",
+    "A87",
+    "A82",
+    "A100",
+    "A102",
+    "A103"
+   ],
+   "oracle": false,
+   "summary": "All P1 journeys J01-J06, J09-J15, J17, J19-J21 plus the agent journey and the simulator's planted-break run against a fresh compose stack three times in a row with no flaky retries; every gate G01-G22 exercised at least once in P1 form (G05, G09, G15 as refusals behind flags, G22 as both a pass and a refusal); the coverage matrix from the charter re-checked against evidence; resume from status.json verified by killing a run mid-way. Nothing after this node changes code except fix items it raises.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [
+    "J01",
+    "J02",
+    "J03",
+    "J04",
+    "J05",
+    "J06",
+    "J09",
+    "J10",
+    "J11",
+    "J12",
+    "J13",
+    "J14",
+    "J15",
+    "J17",
+    "J19",
+    "J20",
+    "J21"
+   ],
+   "gates": [
+    "G01",
+    "G02",
+    "G03",
+    "G04",
+    "G05",
+    "G06",
+    "G07",
+    "G08",
+    "G09",
+    "G10",
+    "G11",
+    "G12",
+    "G13",
+    "G14",
+    "G15",
+    "G16",
+    "G17",
+    "G18",
+    "G19",
+    "G20",
+    "G21",
+    "G22"
+   ],
+   "modules": [],
+   "states": [
+    "SM-00",
+    "SM-01",
+    "SM-02",
+    "SM-03",
+    "SM-04",
+    "SM-05",
+    "SM-06",
+    "SM-07",
+    "SM-08",
+    "SM-11",
+    "SM-12",
+    "SM-13"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\regression\\",
+    "<workspace>\\app\\docs\\regression\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A89",
+   "title": "Docker Desktop launch (P1)",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A88"
+   ],
+   "oracle": false,
+   "summary": "The full stack (postgres, api, worker, web, console, hardhat, sandbox panels, MCP server, observability) starting from Docker Desktop with seed data and a smoke test of the P1 journeys, a launch guide with the personas, 'magic inputs' and a token for each persona type, the status of every human gate (HG-LEGAL, HG-VENDOR, HG-KEYS, HG-AUDIT, HG-PENTEST, HG-CAPITAL, HG-PROD) shown on ADM-32 as open. Human step HG-LAUNCH: the user runs it and signs off the software evidence. Release notes: a CHANGELOG per milestone generated from status.json and the evidence manifests, shipped with the launch guide (A94 reuses it).",
+   "screens": [
+    "ADM-01",
+    "ADM-32"
+   ],
+   "design_refs": [
+    "design:adCmd"
+   ],
+   "journeys": [
+    "J01",
+    "J02",
+    "J04",
+    "J06",
+    "J20"
+   ],
+   "gates": [
+    "G21"
+   ],
+   "modules": [
+    "M01",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\infra\\launch\\",
+    "<workspace>\\app\\docs\\launch\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 8
+  },
+  {
+   "id": "A90",
+   "title": "P2: registered scheme, sub-funds, PDS and TMD, target market (G05), retail cooling-off",
+   "milestone": "AM9",
+   "lane": "P2",
+   "deps": [
+    "A36",
+    "A32",
+    "A35",
+    "A56",
+    "A57",
+    "A71"
+   ],
+   "oracle": false,
+   "summary": "Scheme and SubFund vehicles with the hired RE entity, PDS and SPDS document types, TMD attached per listing, the AU-MIS-retail rule pack requiring a TMD result, ONB-07 target-market questionnaire and the G05 evaluator, reflection_period branch of SM-05 driven by a per-listing cooling-off parameter (default none, counsel to confirm), the outside-TMD report item with a 10-business-day clock, retail claim topic TMD_FIT, INV-R role, retail listing visibility. All behind offers.retail bound to the RE record.",
+   "screens": [
+    "ONB-07"
+   ],
+   "design_refs": [
+    "design-ext:ONB-07",
+    "design:onb ONB-06 card pattern"
+   ],
+   "journeys": [
+    "J16"
+   ],
+   "gates": [
+    "G05",
+    "G12",
+    "G21"
+   ],
+   "modules": [
+    "M04",
+    "M07",
+    "M19"
+   ],
+   "states": [
+    "SM-02",
+    "SM-05"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\scheme\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\retail\\",
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\target-market\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A91",
+   "title": "P2: resale board market module (SM-09)",
+   "milestone": "AM9",
+   "lane": "P2",
+   "deps": [
+    "A24",
+    "A28",
+    "A19",
+    "A20",
+    "A21",
+    "A18",
+    "A48"
+   ],
+   "oracle": true,
+   "summary": "Instrument per trust with venue mode bound to a licence or relief record (G21), reference valuation and band ±15% per listing (6E to set), lock-in G08 and holder cap G07 on asks and bids, price-time priority, partial freezes equal to the listed quantity, buyer eligibility identical to a primary purchase (G22 for agent-placed asks and bids within mandate caps), AUD and token settlement together through V2 then registry ack before 'registered', settlement retries up to 3 then busted (MKTO then CCO), halts through the halts module (manual, meeting, stale valuation, recon break, token pause) with published reopening criteria, circuit breaker (+10% in 1 h halts 30 min), surveillance scenarios feeding AML. Oracle: asks outside the band rejected with the allowed range; halt fires and lifts on time; nothing registered without the ack.",
+   "screens": [],
+   "design_refs": [
+    "design:sell PriceBand and checks (G08, G09, G10)"
+   ],
+   "journeys": [
+    "J07"
+   ],
+   "gates": [
+    "G07",
+    "G08",
+    "G09",
+    "G10",
+    "G14",
+    "G21",
+    "G22"
+   ],
+   "modules": [
+    "M14"
+   ],
+   "states": [
+    "SM-09",
+    "SM-07"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\market\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\market\\"
+   ],
+   "est_lo": 12,
+   "est_hi": 14
+  },
+  {
+   "id": "A92",
+   "title": "P2: resale board screens (sell, buy on the board, market tracker, board control)",
+   "milestone": "AM9",
+   "lane": "P2",
+   "deps": [
+    "A91",
+    "A52",
+    "A53",
+    "A50",
+    "A51",
+    "A58"
+   ],
+   "oracle": false,
+   "summary": "INV-05 sell as designed (unlocked vs locked, band, proceeds after fee, order-book preview, list partially freezes, cancel unfreezes; in P1 the preview banner stays and no order is created), INV-06 buy from the cheapest ask with the same GateRows and a resting bid inside the band, INV-07 public market tracker (last price vs valuation, 30-day volume, halt history), ADM-21 instruments with venue mode, halts and circuit breakers, surveillance alerts, trade blotter, 'halt all'.",
+   "screens": [
+    "INV-05",
+    "INV-06",
+    "INV-07",
+    "ADM-21"
+   ],
+   "design_refs": [
+    "design:sell",
+    "design:PreviewBanner",
+    "design-ext:INV-06",
+    "design-ext:INV-07",
+    "design-ext:ADM-21"
+   ],
+   "journeys": [
+    "J07"
+   ],
+   "gates": [
+    "G07",
+    "G08",
+    "G09",
+    "G10",
+    "G21"
+   ],
+   "modules": [
+    "M14"
+   ],
+   "states": [
+    "SM-09"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\resale\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\resale\\",
+    "<workspace>\\app\\apps\\console\\app\\(market)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\market\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A93",
+   "title": "P2: governance votes and meetings (SM-10) with screens",
+   "milestone": "AM9",
+   "lane": "P2",
+   "deps": [
+    "A18",
+    "A91",
+    "A14",
+    "A40",
+    "A52",
+    "A53",
+    "A50",
+    "A51"
+   ],
+   "oracle": false,
+   "summary": "Proposals and statutory notices (publish 4E with a record-date snapshot; publishing refused if silence defaults to the manager), resale halt linked to the vote through the halts module, signed ballots weighted by units at the snapshot (a mandate may cast a ballot only when its scope names governance), quorum and thresholds from the deed (75% any time, 50% at each 5-year anniversary), certification by scrutineer or RE (the proposer cannot), execution tracking and cooldown; GOV-01, GOV-02 with the halt banner and ThresholdMeter, SPN-13, ADM-23 proposal builder and ballot monitor. Exit waterfall and burn reuse the distributions and token operations services. P1 reduced mode records notices and results only.",
+   "screens": [
+    "GOV-01",
+    "GOV-02",
+    "SPN-13",
+    "ADM-23"
+   ],
+   "design_refs": [
+    "design-ext:GOV-01",
+    "design-ext:GOV-02",
+    "design-ext:SPN-13",
+    "design-ext:ADM-23",
+    "design:ProofBand (halt banner style)"
+   ],
+   "journeys": [
+    "J08"
+   ],
+   "gates": [
+    "G10",
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M17"
+   ],
+   "states": [
+    "SM-10"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\governance\\",
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\votes\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\governance\\",
+    "<workspace>\\app\\apps\\console\\app\\(governance)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\governance\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A94",
+   "title": "P2: end-to-end journeys and launch update",
+   "milestone": "AM9",
+   "lane": "P2",
+   "deps": [
+    "A90",
+    "A92",
+    "A93",
+    "A89"
+   ],
+   "oracle": false,
+   "summary": "Playwright for J07 (list, buy, settle, register, surveillance halt), J08 (5-year vote, halt and resume, exit, waterfall, burn, retired token), J16 (retail with TMD and configurable cooling-off), and negative tests (flag off refuses listing; halt blocks the board; vote weight from snapshot not live balance; an agent without a governance scope cannot vote). P1 regression re-run. Launch profile updated with the P2 flags still off by default and the licence-binding step documented as HG-LEGAL.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [
+    "J07",
+    "J08",
+    "J16"
+   ],
+   "gates": [
+    "G05",
+    "G08",
+    "G09",
+    "G10",
+    "G21",
+    "G22"
+   ],
+   "modules": [
+    "M14",
+    "M17"
+   ],
+   "states": [
+    "SM-09",
+    "SM-10"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\p2\\",
+    "<workspace>\\app\\infra\\launch-p2\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A95",
+   "title": "P3: Auto Invest and PayTo mandates",
+   "milestone": "AM10",
+   "lane": "P3",
+   "deps": [
+    "A37",
+    "A17",
+    "A57",
+    "A90"
+   ],
+   "oracle": false,
+   "summary": "PayTo mandate adapter and monthly runs that create orders through the ordinary order pipeline with every gate checked per purchase, cap reached pays cash, optional distribution reinvestment, INV-04 screen with the acknowledgement card and P3 banner. Ships behind a P3 flag only; not switched on before the advice and arranging review (HG-LEGAL).",
+   "screens": [
+    "INV-04"
+   ],
+   "design_refs": [
+    "design-ext:INV-04",
+    "design:AcknowledgeCard"
+   ],
+   "journeys": [
+    "J18"
+   ],
+   "gates": [
+    "G04",
+    "G05",
+    "G07"
+   ],
+   "modules": [
+    "M05"
+   ],
+   "states": [
+    "SM-05"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\autoinvest\\",
+    "<workspace>\\app\\packages\\adapters\\payto\\",
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\auto-invest\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\autoinvest\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A96",
+   "title": "P3: AUD stablecoin rail, V5/V6 vaults and travel rule (G15)",
+   "milestone": "AM10",
+   "lane": "P3",
+   "deps": [
+    "A39",
+    "A42",
+    "A15",
+    "A27",
+    "A94"
+   ],
+   "oracle": false,
+   "summary": "Stablecoin adapter (test ERC-20 on the local chain standing in for AUDM/AUDD-type coins), distribution and treasury vaults V5/V6 in the custody sandbox, KYT wallet screening and P7 policy rule, travel-rule data exchange and the G15 gate with its console panel, recon rule R9 for stablecoin payouts. Behind payouts.stablecoin bound to a licence record.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ADM-13 vaults card"
+   ],
+   "journeys": [],
+   "gates": [
+    "G14",
+    "G15",
+    "G21"
+   ],
+   "modules": [
+    "M16",
+    "M20"
+   ],
+   "states": [
+    "SM-08"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\adapters\\stablecoin\\",
+    "<workspace>\\app\\services\\api\\src\\modules\\travel-rule\\",
+    "<workspace>\\app\\apps\\console\\app\\(travel-rule)\\",
+    "<workspace>\\app\\apps\\console\\src\\features\\travel-rule\\"
+   ],
+   "est_lo": 10,
+   "est_hi": 14
+  },
+  {
+   "id": "A97",
+   "title": "P3: minors, development and debt vehicles, licensed-market venue mode",
+   "milestone": "AM10",
+   "lane": "P3",
+   "deps": [
+    "A30",
+    "A34",
+    "A91",
+    "A95"
+   ],
+   "oracle": false,
+   "summary": "Guardian-for-a-minor investor type (INV-M) with its own onboarding branch and claims, new vehicle_type values for development and debt trusts with their lifecycle differences and distribution rules, and the continuous licensed-market venue mode as an Instrument mode bound to a market licence record. All behind P3 flags; each carries its counsel question in the node spec.",
+   "screens": [],
+   "design_refs": [
+    "design:onb ONB-02 option cards"
+   ],
+   "journeys": [],
+   "gates": [
+    "G01",
+    "G03",
+    "G21"
+   ],
+   "modules": [
+    "M02",
+    "M03",
+    "M14"
+   ],
+   "states": [
+    "SM-01",
+    "SM-03",
+    "SM-09"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\p3-vehicles\\",
+    "<workspace>\\app\\apps\\web\\app\\(investor)\\p3\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\p3\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A98",
+   "title": "Partner principals: trustee/RE, valuer, property manager, auditor, regulator observer and licensee users",
+   "milestone": "AM3",
+   "lane": "Services",
+   "deps": [
+    "A11",
+    "A12",
+    "A33",
+    "A18",
+    "A34",
+    "A35"
+   ],
+   "oracle": false,
+   "summary": "D04 names every licensed-partner user who signs in as a token holder; no node owned them. PartnerUser rows of principal type PARTNER bound to an Entity (A33): valuers and property managers as limited sponsor-tenant roles (SP-VAL upload valuations, SP-PM upload rent rolls and property reports) so they sign in to the sponsor console and hold SPN-16 tokens; platform-level roles TP-RE (trustee/RE: certifies register versions with REGO as maker per A18, countersigns distribution runs and forced transfers where the policy names the trustee, reads its own vehicles' registers), TP-AUD and TP-OBS (time-boxed read-only data-room grants from A45), TP-LIC (read-only marketing review in A43). Invitation by a RealX PART user with identity verification, passkey sign-in, dormancy lock and access reviews as for staff; tenant and vehicle scoping by RLS; every action audited. The registry sandbox's trustee ack (A18) becomes an act of the TP-RE principal so the checker identity is real. Resolves product-map QA item 6: valuers and property managers are limited sponsor-console users in P1. Tests: a partner reads only its own vehicles or tenant; is never a checker outside the rows the policy names; a partner token cannot exceed the partner's cells.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:SPN-16 (valuer and property-manager members)",
+    "design-ext:partner sign-in"
+   ],
+   "journeys": [
+    "J13",
+    "J14",
+    "J06"
+   ],
+   "gates": [
+    "G13",
+    "G19",
+    "G20",
+    "G22"
+   ],
+   "modules": [
+    "M02",
+    "M24",
+    "M25"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\partners\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A99",
+   "title": "Developer surface: API versioning, reference docs, per-user sandbox and SDK/MCP packaging",
+   "milestone": "AM3",
+   "lane": "Platform",
+   "deps": [
+    "A09",
+    "A12",
+    "A104",
+    "A04",
+    "A06",
+    "A46"
+   ],
+   "oracle": false,
+   "summary": "The D04 surface items no node owned. Versioning: /v1 prefix, additive-only changes within a version, deprecation headers and a sunset calendar, the SDK pinned to the API version. Reference docs: the OpenAPI document rendered as a static page at /docs in the design language (each operation with required scopes, gates that may refuse it, idempotency and pagination notes, examples per user type), SDK README and examples, the MCP connection guide and an agent quickstart per user type (investor, sponsor member, partner, staff) linked from ACC-05, SPN-16 and ADM-35. Per-user sandbox: a token created in sandbox mode (prefix rx_sb_) acts on an isolated dataset generated on demand by packages/sim for that person under a sandbox partition enforced by RLS, through the same routes, gates and maker-checker, with the sandbox panels and the clock control available to the owner, never touching live rows, reset on demand, refused by every live route. Packaging: version-stamped npm tarballs for packages/sdk and packages/mcp published to a local registry in compose. Tests: a sandbox token cannot read or write a live row; the docs page lists every operation; a v1 client survives an additive change.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ACC-05 (sandbox and MCP snippet)",
+    "design-ext:ADM-35"
+   ],
+   "journeys": [
+    "J04",
+    "J20"
+   ],
+   "gates": [
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\developer\\",
+    "<workspace>\\app\\docs\\api\\",
+    "<workspace>\\app\\infra\\sandbox-env\\"
+   ],
+   "est_lo": 8,
+   "est_hi": 12
+  },
+  {
+   "id": "A100",
+   "title": "Agent-parity suite: every UI action has an API and MCP equivalent under the same gates",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A61",
+    "A65",
+    "A78",
+    "A12",
+    "A104",
+    "A99"
+   ],
+   "oracle": false,
+   "summary": "The proof D04 asks for. A generated parity matrix: every screen action in apps/web and apps/console is enumerated from the route and feature code (a lint rule forbids any fetch or mutation that bypasses packages/sdk, so the list is complete), mapped to its OpenAPI operation id and MCP tool, and checked into docs/parity with three columns that must all be green: reachable from the UI, from the API under a token with the matching scope, and from the MCP tool. For every operation the suite runs the same request under a passkey session and under a mandate token and asserts identical GateEvaluations, reason codes and audit events except actor and on_behalf_of; every refusal (out of scope, over a limit, non-delegable, revoked, kill switch) must name the missing scope or cap. Covers investor, sponsor, partner (A105) and staff screens. A missing row fails the node and becomes a fix item on the owning node; verify regenerates the matrix so no later node can add a UI-only action.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ACC-05",
+    "design-ext:SPN-16",
+    "design-ext:ADM-35"
+   ],
+   "journeys": [
+    "J04",
+    "J06",
+    "J15",
+    "J19",
+    "J20"
+   ],
+   "gates": [
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M25",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\parity\\",
+    "<workspace>\\app\\docs\\parity\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A101",
+   "title": "Agent guard: anomaly detection, sensitive-action notices and tiered kill switches",
+   "milestone": "AM3",
+   "lane": "Compliance core",
+   "deps": [
+    "A12",
+    "A13",
+    "A14",
+    "A42",
+    "A43",
+    "A48"
+   ],
+   "oracle": true,
+   "summary": "The runtime controls D04 lists that A12 does not own. Anomaly detection over token activity as versioned rules (burst against the token's own baseline, first use from a new IP or country, activity outside usual hours, repeated near-cap orders or withdrawals, many refusals in a row, calls after the person's session went dormant), each raising an AgentAnomaly that holds the token fail-closed until the person clears it with a passkey or ADM-35 clears it with a reason, plus an alert through A13; the agent-burst scenario also feeds AML monitoring (A42). Sensitive-action notices: a NoticePolicy per person (token created or widened, first use from a new IP, money-moving action above a threshold, mandate near its daily cap, anomaly hold, kill switch) delivered through A43 to the person's channels, never to the agent. Kill switches as tiers: per token (A12), per user ('pause all my agents', by the person with a passkey or staff with a reason), per tenant (SP-OWN or staff; also fired by tenant suspension), platform-wide (A48, SGL+R), each stopping exactly its tier within one request. Oracle: an anomaly hold stops the next call; a per-tenant switch stops only that tenant; every listed action writes a notice and none reaches the agent's channel; clearing a hold needs a passkey or a staff reason; rules replay.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ACC-05 (notices and anomaly)",
+    "design-ext:ADM-35 (anomaly queue and kill switches)"
+   ],
+   "journeys": [
+    "J20"
+   ],
+   "gates": [
+    "G13",
+    "G14",
+    "G22"
+   ],
+   "modules": [
+    "M20",
+    "M25",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\services\\api\\src\\modules\\agent-guard\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\agent-guard\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A102",
+   "title": "Backups, restore drill, data retention and erasure",
+   "milestone": "AM8",
+   "lane": "Platform",
+   "deps": [
+    "A79",
+    "A10",
+    "A04",
+    "A44",
+    "A48",
+    "A35"
+   ],
+   "oracle": false,
+   "summary": "Nothing owned backups or the privacy side of retention. Backups: nightly pg_dump plus WAL archive in compose including the keystore and storage volume, encrypted through the kms adapter, a restore script, and a restore drill into a fresh stack that proves the audit-chain head hash (A10), the latest RegisterVersion hash (A18), the ledger totals (A16) and the deployment manifests (A27) match pre-backup evidence; recovery-point and recovery-time targets measured. Retention as one policy table: seven years for audit events, documents, register versions, approvals, distributions and tax records; legal holds override; an erasure request (Privacy Act) pseudonymises the investor, revokes tokens and mandates and seals the wallet-to-person link while chain data and the hash chain stay intact; a retention job refuses deletes inside the window and logs the attempt; regulator and auditor exports stripped of PII beyond the request. Tests: restore reproduces the hashes; erasure leaves the chain verifiable and the investor unfindable by name; an in-window delete is refused and audited.",
+   "screens": [],
+   "design_refs": [],
+   "journeys": [
+    "J21"
+   ],
+   "gates": [
+    "G13",
+    "G14"
+   ],
+   "modules": [
+    "M25",
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\infra\\backup\\",
+    "<workspace>\\app\\services\\api\\src\\modules\\retention\\",
+    "<workspace>\\app\\services\\worker\\src\\jobs\\retention\\",
+    "<workspace>\\app\\docs\\backup\\"
+   ],
+   "est_lo": 5,
+   "est_hi": 8
+  },
+  {
+   "id": "A103",
+   "title": "Runbook drills R1-R9 executed on the stack",
+   "milestone": "AM8",
+   "lane": "Quality",
+   "deps": [
+    "A85",
+    "A81",
+    "A80",
+    "A48",
+    "A77",
+    "A15",
+    "A11"
+   ],
+   "oracle": false,
+   "summary": "Each runbook A85 wrote is run as a scripted drill on the compose stack with timings and evidence; the drill fails if a step cannot be executed as written. R1 inflow freeze and emergency pause (tokens paused, venues halted, inflows frozen, payout jobs stopped inside the 15-minute window, unpause only by 6E+Q, ratification timer proven); R2 agent-key compromise (agent removed and re-added through the owner multisig, sessions and tokens revoked); R3 contract migration rehearsal (snapshot, redeploy, mint on new, burn on old, register reconciling 1:1); R4 registry sync failure (no on-chain move without an ack, force re-sync 4E); R5 valuation failure (instruments halted); R6 payment-rail event (rail suspended, receipts and payouts queued); R7 sanctions hit on a large holder (freeze, no tipping-off); R8 court order or legal hold (distributions paused); R9 operator cessation (inflows frozen, register exported, retention flagged). Plus the key-rotation drill in the custody sandbox, the break-glass drill (2-of-3, 4 h expiry, review task) and the agent kill-switch drill across all tiers. Findings become fix items; the testnet re-run of R1 and R3 is recorded in A86's pack.",
+   "screens": [],
+   "design_refs": [
+    "design:adCmd emergency pause",
+    "design-ext:ADM-34 kill-switch banner"
+   ],
+   "journeys": [
+    "J20",
+    "J21"
+   ],
+   "gates": [
+    "G10",
+    "G13",
+    "G21",
+    "G22"
+   ],
+   "modules": [
+    "M01",
+    "M09",
+    "M25",
+    "M27"
+   ],
+   "states": [
+    "SM-00",
+    "SM-06"
+   ],
+   "owned_paths": [
+    "<workspace>\\app\\e2e\\drills\\",
+    "<workspace>\\app\\docs\\drills\\"
+   ],
+   "est_lo": 6,
+   "est_hi": 10
+  },
+  {
+   "id": "A104",
+   "title": "MCP server generated from the OpenAPI document",
+   "milestone": "AM1",
+   "lane": "Platform",
+   "deps": [
+    "A12",
+    "A09"
+   ],
+   "oracle": false,
+   "summary": "packages/mcp as its own deliverable (D04 names it): an MCP server generated from packages/sdk's OpenAPI document exposing every operation as a tool that carries the token and on_behalf_of; tool names and descriptions derived from operation ids and scope requirements as fixed strings (never user content, so nothing injectable); read and write tools separated, write tools declaring the gates that may refuse them and their idempotency key; a resources list for the person's own records; stdio and HTTP transports; regenerated whenever the SDK changes with a diff test in verify so the catalogue can never lag the API. The catalogue is what ADM-35 publishes and A100 reads. Runs in compose from A23. Tests: every operation has exactly one tool; a call without a token is refused; a revoked token fails within one request; descriptions contain no user text.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:ACC-05 (MCP connection snippet)",
+    "design-ext:ADM-35 (tool catalogue)"
+   ],
+   "journeys": [],
+   "gates": [
+    "G13",
+    "G22"
+   ],
+   "modules": [
+    "M26"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\packages\\mcp\\"
+   ],
+   "est_lo": 4,
+   "est_hi": 6
+  },
+  {
+   "id": "A105",
+   "title": "Partner portal: trustee/RE, auditor, regulator observer and licensee views",
+   "milestone": "AM6",
+   "lane": "Sponsor console",
+   "deps": [
+    "A52",
+    "A98",
+    "A50",
+    "A64",
+    "A60",
+    "A45"
+   ],
+   "oracle": false,
+   "summary": "The sign-in surface for the platform-level partner principals of A98 (valuers and property managers use the sponsor console). A (partner) route group in apps/web with the partner variant of the light sidebar (Trustee, Auditor, Regulator observer, Licensee), passkey sign-in from design extension A, and existing screens reused in read-only or checker mode rather than new codes: SPN-08 register and reconciliation for the trustee's own vehicles with signed extracts, the SPN-09 distribution chain with the trustee's countersign step, the forced-transfer countersign card where the policy names the trustee, the data-room reader for ADM-26 grants (time-boxed, watermarked, every open logged), the licensee's read-only marketing review list, PUB-08 and PUB-09 as signed-in views, and SPN-16 for the partner's own tokens. Every countersign is a WebAuthn assertion through the approvals engine, so a partner token can never countersign. Tests: a partner sees only its vehicles or grants; an expired grant is refused; a countersign by token is refused.",
+   "screens": [],
+   "design_refs": [
+    "design-ext:partner sign-in",
+    "design:SponsorSidebar",
+    "design:spRegister",
+    "design:spDist DistributionChain",
+    "design-ext:ACC-05"
+   ],
+   "journeys": [
+    "J06",
+    "J09",
+    "J20"
+   ],
+   "gates": [
+    "G13",
+    "G17",
+    "G22"
+   ],
+   "modules": [
+    "M11",
+    "M12",
+    "M19",
+    "M24"
+   ],
+   "states": [],
+   "owned_paths": [
+    "<workspace>\\app\\apps\\web\\app\\(partner)\\",
+    "<workspace>\\app\\apps\\web\\src\\features\\partner\\"
+   ],
+   "est_lo": 5,
+   "est_hi": 8
+  }
+ ],
+ "exclusions": [
+  {
+   "id": "M15",
+   "reason": "Lending and liquidity is P3 and outside the RealX model at launch (catalogue §1.1: 'must not be built'); it has no screens, journeys, gates or state machines, so nothing else depends on it. Reopen only by a founder decision."
+  }
+ ],
+ "rationale": "FINAL GRAPH (condensed from the 98-node version; the full original text is in graph-final.json). The 'risk' draft with every graft applied: risk-first milestones (AM0 foundations; AM1 UI-free risk core ending in the whole-stack Docker boot A23; AM2 token and wallet core; AM3 business services ending in the money-path smoke A49; AM4 design extensions under HG-REVIEW and shells; AM5 investor app and preview A61; AM6 sponsor console and journeys A65; AM7 operator console and J20 A78; AM8 journeys, agent e2e, security, performance, observability, testnet and audit pack, fidelity, regression A88 and launch A89; AM9 P2 and AM10 P3 behind licence-bound flags). D04 is a core capability: A12 in AM1 right after auth so every route inherits token auth with scopes from the role x module x action matrix; G22 is a code in A03, an evaluator in A12 registered in A19, enforced in A14, A15, A37, A39, A48, A91, A93; ACC-05 and SPN-16 drawn in A50 and built in A60, ADM-35 drawn in A51 and built in A77; A82 agent journey, A83 token-bypass tests, A88 requires G22 as pass and refusal. The five undrawn admin screens carry charter ids ADM-36..40 (A00) and are owned by A53, A67, A68, A69, A72. Four streams: Money, Register and chain, Compliance, Services in AM1-AM3; investor app, sponsor console and two halves of the operator console in AM5-AM7. Owned paths disjoint by construction (one module or route group per node). Main risks and mitigations: silent money errors (integer cents, oracles, recon with planted breaks); maker-checker only in the UI (A14, A15, A25 refuse server-side and on-chain); design drift (packages/ui token diff, canonical screen table, A87); toolchain drift (A01, A07, A23); legal unknowns as parameters and flags; schedule concentration on 10-14 h oracle nodes (split if one escalates); human review latency (backend streams continue).\n\nCOMPLETENESS CRITIC (pass 2, D04 first). Result: 106 nodes (A00-A105), 453 edges, 26 oracle nodes; validated by critic2.py (DAG, no node depends on a later milestone, owned paths pairwise disjoint, ids contiguous, all 91 screens, 21 journeys, 22 gates, 27 modules (M15 excluded) and 14 state machines covered, no unknown ids). Total 764-1,166 agent-hours; P1 (AM0-AM8) 688-1,060 h; critical path to A89 258 h upper (165 h lower) through A00 > A01 > A02 > A03 > A04 > A09 > A10 > A11 > A12 > A14 > A30 > A33 > A34 > A36 > A37 > A38 > A57 > A61 > A65 > A78 > A80 > A85 > A103 > A88 > A89 (up from 254 h because the drills A103 sit between the runbooks and the regression).\n\nD04 gaps closed. (1) Partner user types: D04 says every licensed-partner user who signs in gets token management, but no node had a principal, sign-in or surface for them (A11 named only investors, sponsor users and staff; QA item 6 had pushed valuers and property managers to upload links). New A98 (AM3) owns PARTNER principals (valuers and property managers as limited sponsor-console members so SPN-16 serves them; trustee/RE as certification and countersign checker; auditor and regulator observer as data-room readers; licensee as marketing reviewer) and new A105 (AM6) is their portal from reused screens, with A50 drawing the partner sign-in and sidebar variant; A03 adds the PARTNER rows, A11 the principal type, A12 partner tokens, A45 the data-room dependency, A62 the SPN-14 listing, A65/A80 journey coverage, A82 a valuer's and a trustee's agent. (2) Non-delegable acts were only prose: A03 carries a delegable flag per matrix cell, A12's G22 evaluator refuses them regardless of scope, A00 freezes the list and the four counsel questions D04 raises as HG-LEGAL parameters, and A35 ties delegated acknowledgement to a standing-consent record and the counsel parameter. (3) The on-chain rule (session keys, never the owner key) had no contract or service: A26 adds a SessionKeyModule with oracle cases and A29 registers and revokes session keys with the mandate (new dep A12, gate G22). (4) Surfaces nothing owned: per-user sandbox, API versioning, reference docs and SDK/MCP packaging are new A99 (AM3); cursor pagination and the /v1 hook go into A09. (5) Runtime controls A12 did not own: anomaly detection, sensitive-action notices and per-user and per-tenant kill switches are new A101 (AM3, oracle), delivered by A43, with A48 keeping the platform-wide tier and A60/A77 showing them. (6) Dedicated nodes D04 asks for: the MCP server is its own node A104 (AM1; packages/mcp leaves A12, which drops to 8-12 h); the agent-parity suite is new A100 (AM8, complete by construction through an SDK-only lint, feeding A88); agent security hardening stays A83's offensive pass plus A101's runtime controls. (7) Token details from D04 now stated in A12 (shown once, hashed, prefixed, named per agent, per-action and daily caps, allowed properties and actions, time windows, IP allow-list, joint and entity rules); A47/A58 put the 'by your agent' marker in the person's activity.\n\nOther capabilities no node owned. Backups, restore drill, retention policy and Privacy Act erasure: new A102 (AM8). The R1-R9 runbooks executed as drills plus key-rotation, break-glass and kill-switch drills: new A103 (AM8), which A88 waits for. The kms/secrets and storage adapters that A04, A15, A35 and every upload need: added to A08, with A04 now depending on A08. Login-passkey recovery and email verification: A11. An injectable clock so timelocks and business-day clocks are testable in minutes: A09. Dead-letter jobs and token-scoped webhooks: A46 (new dep A12). A deterministic PDF renderer: A35. Console empty and error states: A53. Release notes per milestone: A89. Dependency fixes: A23, A61, A77, A82, A83 now depend on A104; A60 and A77 on A99 and A101. Not changed: the five undrawn admin screens are already owned under charter ids ADM-36..40 and stay out of the screens arrays because the id list holds 91 screens; A19 is left whole (pure evaluators, split named if it escalates); every human gate (HG-LEGAL, HG-VENDOR/ACCOUNTS, HG-KEYS, HG-AUDIT, HG-PENTEST, HG-CAPITAL, HG-PROD, HG-REVIEW, HG-LAUNCH) is carried by at least one node and shown open on ADM-32. Streams unchanged at four (A98, A99, A101 join Services and Compliance in AM3; A100, A102, A103 the Quality stream in AM8).",
+ "critical_path": {
+  "lo": 183,
+  "hi": 284,
+  "path": [
+   "A00",
+   "A01",
+   "A02",
+   "A03",
+   "A04",
+   "A09",
+   "A10",
+   "A11",
+   "A12",
+   "A14",
+   "A30",
+   "A33",
+   "A34",
+   "A36",
+   "A37",
+   "A38",
+   "A57",
+   "A61",
+   "A65",
+   "A78",
+   "A80",
+   "A85",
+   "A103",
+   "A88",
+   "A89",
+   "A94",
+   "A96"
+  ]
+ }
+}

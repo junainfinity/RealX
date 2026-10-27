@@ -1,0 +1,110 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The id grammar contradicts the id generator. BODY is Crockford base32 [0-9A-HJKMNP-TV-Z]{3,20}, which has no hyphen, yet APR- and OP- ids are made as APR-YYYYMMDD-XXXXXX and OP-YYYYMMDD-XXXXXX (architecture brief line 337). Every dated id make() produces fails parse(). The 1,000,000-id round-trip test and the oracle property parse(format(id)) = id cannot both follow the spec.",
+   "fix": "Define the grammar for each prefix in the registry: dated kinds (APR, OP) use \\d{8}-[Crockford]{6}, with the date checked as a real calendar date; other kinds use [Crockford]{3,20}; digit-only legacy mock ids go through an explicit legacy form. Add fixed vectors for each form and one refusal vector per reason code."
+  },
+  {
+   "severity": "high",
+   "issue": "Some files have no owner and later domain nodes have no way to export. The spec writes src/index.ts (the barrel), scripts/gen-screens.ts, the lint-rule file and defaults.ts (folder not stated). None of these is a package root file or inside src/money, src/ids or src/screens. A01 maps @realx/domain to src/index.ts. So A03, A12 and A20 (which add src/codes, state-machines, permissions, agent-authority and recon) can only export by editing a file nobody owns. No node spec says how they do it, so the owned-path check fails at A03.",
+   "fix": "List the exact owned paths: packages\\domain\\src\\index.ts, packages\\domain\\scripts\\, packages\\domain\\eslint-rules\\, and put defaults.ts in src\\money\\. Make the barrel generated: gen-barrel re-exports every src/<area>/index.ts, and a test fails if the committed file is stale. Alternatively, pre-declare package.json subpath exports that later nodes fill in. Record the rule in README.md and in A03, A12 and A20."
+  },
+  {
+   "severity": "high",
+   "issue": "The package's float-money lint rule is never run by npm run verify. A01's verify runs `eslint .` from the repo root. ESLint 9 flat config uses the root config and ignores a nested packages/domain/eslint.config.js. A01's no-float-money rule exempts packages/domain. So no float guard applies inside the domain package, including A03, A12 and A20's folders. The 'planted float helpers fail lint' criterion can be met by running eslint only inside the package folder.",
+   "fix": "Register the rule through A01's script registration: a realx.verify lint step in packages/domain/package.json that runs eslint -c packages/domain/eslint.config.js packages/domain. Make the rule cover all of src/** except src/money and tests. Change the pass criterion so that npm run verify from the repo root fails with the planted helpers present."
+  },
+  {
+   "severity": "high",
+   "issue": "G16 rate selection is not specified well enough to test, and parts of it are wrong for Australian tax. There is no ordered decision table. A foreign resident with no TFN could be given the 47% no-TFN rate, although TFN withholding does not apply to non-residents. The 15% versus 30% MIT rate turns on whether the investor lives in an information-exchange (EOI) country, not a treaty country, so treatyCountry is the wrong input. A foreign investor in a trust that is not an MIT falls through to 'none'. The fund-payment portion is not separated from interest and dividend components. Fable and the builder would each invent a different table, and the oracle would freeze a wrong one.",
+   "fix": "Put an explicit ordered table in the spec, with a rate parameter and reason code per row: resident without TFN or ABN -> no_tfn; resident with TFN or ABN -> none; foreign + MIT + EOI -> foreign_mit_eoi; foreign + MIT + non-EOI -> foreign_mit_non_eoi; foreign + not an MIT -> foreign_non_mit (a parameter). Rename treatyCountry to eoiCountry. Add clean-building MIT and interest/dividend components as parameters or as explicit exclusions. Add these as HG-LEGAL tax-adviser questions. The pass criterion enumerates every row."
+  },
+  {
+   "severity": "high",
+   "issue": "scaleBack's refund formula (paid - allocated x price) ignores the 0.5% transaction fee that was escrowed with the subtotal. The fee on units that are not allocated is kept, or 'paid' is ambiguous, so the oracle's conservation property is undefined. Scale-back also never re-checks the holder cap, although ADM-12 'Allocate' lists G07.",
+   "fix": "Define refund = paidTotal - orderLines({qty: allocated, price, feeBp}).total, never negative, with the invariant Σ allocated totals + Σ refunds = Σ paid to the cent. Add fee-remainder and J05 (soft cap missed, full refund) vectors, and apply holderCapCheck at allocation."
+  },
+  {
+   "severity": "medium",
+   "issue": "The holder-cap denominator is not defined: units offered, units on issue now, or units on issue after the offer closes. If an offer closes below the hard cap (for example 7,500 units), a 500-unit holder holds 6.67%. G07 exists for landholder-duty thresholds. The HG-LEGAL list covers associates and 'at cap passes' but not the denominator.",
+   "fix": "State the rule (default: units on issue after the transaction; check at order time against the hard cap and re-check at allocation against the final units issued). Add a close-below-hard-cap vector and an HG-LEGAL question (4)."
+  },
+  {
+   "severity": "medium",
+   "issue": "The formatters cannot produce the design's whole-dollar strings: 'A$1,525,760 raised', 'soft cap A$1,788,000 (75%)', 'hard cap A$2,384,000', 'A$262,240' and property value via $(x,0). formatAud always prints two decimals.",
+   "fix": "Add formatAud(cents, {decimals: 0|2}) or formatAudWhole, with a stated rounding rule and a rule for which figures may drop cents. Add these strings to the snapshot test."
+  },
+  {
+   "severity": "medium",
+   "issue": "formatDiscount does not reproduce the prototype. The prototype (the RealX App.dc.html script block, not support.js) tests the exact d>0.05 and prints toFixed(1). The spec applies the dead band and rounding to already-rounded bp, so boundaries differ (0.052% gives 'At valuation' instead of '0.1% below'; 3.149% gives 3.2% instead of 3.1%). discountBp's rounding is not stated.",
+   "fix": "State that discountBp rounds half-up. Compute formatDiscount and the dead band from the exact rational (valuation-price)/valuation. Add ±5 bp and x.x5% boundary vectors. Correct the source reference."
+  },
+  {
+   "severity": "medium",
+   "issue": "The design-code mapping is restated wrongly and its lookup key is undefined. The prototype displays 'INV-02 · Buy', 'INV · Wallet', 'INV · Statements', 'INV-05 · P2' and 'SPN-03–06' (en dash). The line 'every other drawn screen maps to its own code' contradicts A00 (wallet -> POR-05, statements -> POR-07, PUB-05 and the partial rows). canonicalForDesignCode('INV-02') depends on normalisation the spec does not give.",
+   "fix": "Key the lookup on prototypeKey (canonicalForPrototypeKey), keep designCode as the exact displayed string from screens.json, and defer the whole mapping to screens.json. Test that all 26 keys resolve."
+  },
+  {
+   "severity": "medium",
+   "issue": "The surface union 'public'|'investor'|'sponsor'|'admin' omits 'partner', which A00's screens.json defines, although the spec claims the row shape mirrors screens.json column for column.",
+   "fix": "Generate the unions from the values in screens.json, include 'partner', and fail generation on any unknown value."
+  },
+  {
+   "severity": "medium",
+   "issue": "The magic-literal grep is wrong and easy to evade. The bp scale 10,000 is needed in mulBp, unitsShareBp and holderCapCheck, while defaults.ts is 'tests and seeds only'. A grep misses 10_000n, 4_700 and hex, so a hard-coded rate can pass.",
+   "fix": "Add BP_SCALE = 10_000n in src/money/bp.ts. Replace the grep with an AST lint rule on numeric and bigint literals in src/money. Add a parameter-sensitivity test: changing any rate or cap parameter changes the outputs."
+  },
+  {
+   "severity": "medium",
+   "issue": "No function converts a budget into whole units including the fee, which J04 'Enters $25,000', the retail step 'Chooses an amount' and Auto Invest 'Sets $500 a month' need. A01 forbids that arithmetic outside @realx/domain.",
+   "fix": "Add unitsForBudget({budgetCents, unitPriceCents, feeBp}) -> {units, total, leftoverCents}, with property tests (total <= budget; units+1 exceeds it) and the J04 vector."
+  },
+  {
+   "severity": "medium",
+   "issue": "The TOK- id and the charter's audit form disagree. A02 puts the TOK- record id in the audit line, but A00's agent-access.json freezes 'agent <token prefix id> on behalf of <person id>', and A12 stores a TOK- id plus a separate prefix. Non-investor persons (sponsor, partner, staff) have no branded id, although D04 requires the audit line for every user type.",
+   "fix": "Reconcile with A00 and A12: either state that the prefix id is the TOK- id, or add a TokenPrefixId type. Name the owner of person ids for non-investor principals, or add a prefix."
+  },
+  {
+   "severity": "medium",
+   "issue": "Graph gap. The spec says A05's format helpers and GateRow copy depend on A02, but A05 depends only on A01 in final-graph.json. A02 reads A00's screens.json and ids.json but depends on A00 only transitively.",
+   "fix": "Add A02 to A05's deps, or drop the claim. List A00 as an explicit dependency of A02."
+  },
+  {
+   "severity": "low",
+   "issue": "The journey references are wrong. J03 is 'Onboard an SMSF' and J04 is 'First investment in a primary offer', not 'buy' and 'buy under mandate'. J05 (refund) and J22 (agent buy) are missing.",
+   "fix": "Change to J04, J05, J06, J07, J08 and J22 with the correct names."
+  },
+  {
+   "severity": "low",
+   "issue": "The NAV vector does not say which input is which. The product map gives Debt $0 and Liabilities $6,200.",
+   "fix": "Spell the vector out field by field: debt 0, liabilities 620,000 cents -> 12,122 cents."
+  },
+  {
+   "severity": "low",
+   "issue": "bandMarkerPct maps the band to 0-100, but the design's track draws the band at 15-85% of its width, with out-of-band zones either side.",
+   "fix": "Define the track mapping, or return both band position and track position, with a vector."
+  },
+  {
+   "severity": "low",
+   "issue": "The rounding of holdingAfterBp is not stated. It could display '5.00%' on an order that fails the cap when totalUnits is not 10,000.",
+   "fix": "Round up in refusals, or return the exact rational. Add a 20,000-unit vector."
+  },
+  {
+   "severity": "low",
+   "issue": "The ERC-3643 max-balance export is named in the G07 'done' criterion, but no function or vector defines it. MaxBalanceModule works per identity and in token base units.",
+   "fix": "Add maxBalanceUnits(capBp, totalUnits) with a vector, and note the per-identity scope and token decimals."
+  },
+  {
+   "severity": "low",
+   "issue": "Some wikilinks do not resolve: [[A19 - Rules engine: ...]], [[A50 ...: ...]] and [[A51 ...: ...]] use colons, but the files are named with '- '.",
+   "fix": "Use the filename form."
+  },
+  {
+   "severity": "low",
+   "issue": "'AEST calendar day' is ambiguous (A12 uses Australia/Sydney days). The purity rule 'no source file imports fs' conflicts with scripts/gen-screens.ts and the regeneration test.",
+   "fix": "Say Australia/Sydney date supplied by the caller. Scope the purity rule to src/**, excluding tests and scripts."
+  }
+ ]
+}

@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The MCP check contradicts A104. A23 requires the `tools/list` names to equal the `/v1` operations minus stub routes. A104 also leaves out test_only, service_only, requires_human (the D04 personal acts), non_delegable_scope, pending_counsel and agent_never_checker operations, and filters `tools/list` by the token's scopes. Its HTTP transport also answers 401 MCP_TOKEN_MISSING to any request without a token, and `stack:check` runs before the smoke creates one. As written the check can never pass. Meeting it literally would mean publishing checker and non-delegable operations as agent tools, which breaks D04 and G22.",
+   "fix": "Change the check to: (a) the operation ids in catalogue.json plus excluded.json equal the operation ids in openapi.json, with no id repeated, and catalogue.meta.json generated_from_openapi_sha256 equals /v1/meta openapi_sha256; (b) tools/list with REALX_MCP_LIST=all and a valid token equals the names in catalogue.json; (c) tools/list with the smoke's single-scope rx_inv_ token returns only the tools that scope covers; (d) a tokenless request gets 401 MCP_TOKEN_MISSING. Move the MCP rows into stack:smoke, or give stack:check its own short-lived token that it revokes afterwards. Also assert that no checker cell or requires_human operation appears in tools/list."
+  },
+  {
+   "severity": "high",
+   "issue": "The live-override refusal criterion ('no container reaching a healthy state'; api and chain exit with A07's and A08's named errors) cannot be met. Postgres starts first and ignores these variables. The hardhat chain container does not read CHAIN_ID. A07's guard is active only when RUN_MODE is local, test or unset, so under RUN_MODE=production the chain goes healthy. CHAIN_RPC_NOT_LOCAL and CHAIN_ID_NOT_ALLOWED fire in Hardhat config loads (the deploy container), not in the api. A08 defines no error codes for a non-sandbox selector or an unknown run mode, so 'named error' cannot be measured.",
+   "fix": "Restate the outcome per override. ADAPTER_BANK and RUN_MODE: every container that loads A08's config (migrate, seed, api, worker, mcp) exits 1 in under 1 s, naming the variable and value. CHAIN_* overrides: api and worker exit 1, and deploy exits with CHAIN_RPC_NOT_LOCAL or CHAIN_ID_NOT_ALLOWED. In every case api /readyz never returns 200, no service that depends on the refusing one starts, and the report is red. Postgres and chain may be healthy. Either ask A08 for stable codes through a follow-up loop, or assert on the variable name plus exit code 1. Add a RUN_MODE=production probe against deploy and escalate if Hardhat accepts it."
+  },
+  {
+   "severity": "high",
+   "issue": "The RPC allow-lists in A07 and A08 differ: A07 allows loopback and `chain`; A08 allows localhost, 127.0.0.1, any docker service name and *.base.org. So A23's static test that 'the two allow-lists are the same two sets' fails against the upstream specs. Worse, https://mainnet.base.org matches A08's *.base.org, so the api would accept the exact mainnet RPC that A23's live probe expects it to refuse. A23 cannot fix this within its owned paths, and the spec never says so, which invites the builder to relax the test.",
+   "fix": "State the single expected allow-list in A23: CHAIN_ID in {31337, 84532}; RPC hosts localhost, 127.0.0.1, chain and sepolia.base.org, matched exactly with no wildcard. Name the defect against A08 (narrow the wildcard and add a mainnet.base.org plant to its no-production test) and against A07 (same set in TOOLCHAIN.md). Add an Escalate rule: if the lists differ or any list accepts mainnet.base.org, reopen the upstream node and never relax the A23 assertion."
+  },
+  {
+   "severity": "high",
+   "issue": "A restart on kept volumes contradicts the spec's own checks. After any smoke, or any use of the stack by A49 or A61, the database holds audit events, a revoked token and sessions dated after AS_OF. A06's seed:verify asserts 'no event after AS_OF', and stack:check requires the audit count to equal the seed's audit row count. So the next stack:up on kept volumes fails seed:verify and never prints SEED_PRESENT, and a reseed cannot remove append-only audit rows. The Challenge probe (down, then up on kept volumes, expecting keys: reused and SEED_PRESENT) and every downstream restart fail. The count equality is also fragile if boot itself audits something, such as A15's key creation.",
+   "fix": "Decide seed presence with a seed-manifest marker (A06's content hash and version), not a full seed:verify. Run the full seed:verify only on a fresh volume. In stack:check, require audit:verify = verified with count >= seed count, and require event #N (N = seed audit rows) to equal the seed head hash in the manifest. List which boot-time audit events are allowed and require exact equality only on a fresh volume. Add a pass criterion: up, smoke, down, up on kept volumes is green with keys: reused and SEED_PRESENT."
+  },
+  {
+   "severity": "medium",
+   "issue": "The token-refusal code does not match A12. A23 asserts exactly '401 token_revoked' and 'token_invalid'. A12 registers TOKEN_REVOKED and TOKEN_INVALID in upper case (A09 uses lower case, so the two upstream nodes disagree). The spec also does not warn that an SDK client that also carries the session cookie gets TOKEN_AMBIGUOUS_PRINCIPAL.",
+   "fix": "Assert against A12's exported error constants, not literal strings, and record the casing inconsistency between A09 and A12 for the orchestrator. Make the token calls from a fresh SDK client with no cookie jar, and add a probe that a request carrying both cookie and bearer is refused with TOKEN_AMBIGUOUS_PRINCIPAL."
+  },
+  {
+   "severity": "medium",
+   "issue": "The smoke uses interfaces no dependency defines. A11 has no '/__test/*'-mounted simulated authenticator; it ships a software WebAuthn authenticator library. `seed:design` is not A06's command; A06's is `npm run seed`. `CLOCK_AS_OF` is defined or read by no dependency, and A08's envSchema is the only env reader.",
+   "fix": "Run A11's software WebAuthn authenticator in the smoke process with Alex Morgan's sandbox login credential from A06's fixtures, against A11's normal login and step-up endpoints. Use `npm run seed` followed by `seed:verify`. Remove CLOCK_AS_OF or name the real clock mechanism and its owner. Raise any genuinely needed interface as an A11.x or A06.x follow-up loop."
+  },
+  {
+   "severity": "medium",
+   "issue": "A23 claims services and files that belong to other nodes. It defines its own `mcp` service, although A104 ships packages/mcp/compose.mcp.yml with service `mcp` for A23 to include; defining the same service in both files makes Compose fail to load. It also extends A01's scripts/playwright-smoke.ts, which is outside A23's owned paths.",
+   "fix": "Include packages/mcp/compose.mcp.yml and drop A23's own mcp definition, putting stack-specific settings in an A23-owned override file. Write the Playwright container smoke as infra/stack/playwright/stack-smoke.ts, reusing A01's script only by import or invocation."
+  },
+  {
+   "severity": "medium",
+   "issue": "The no-money check sums 'the bank sandbox's virtual-account balances'. In A17, virtual accounts are PayIDs that hold no balance. Balances live on the four seeded accounts, and realx-operating is not client money. The check is undefined, or passes trivially by summing zeros.",
+   "fix": "Require the sum of A17 state() balances on the client-money accounts (client-money-wallets, offer-escrow, distributions) to equal A16's ledger client-money total and A06's manifest figure to the cent. realx-operating equals its seeded balance, and no post-seed bank line exists after boot."
+  },
+  {
+   "severity": "medium",
+   "issue": "The Challenge step contradicts the pass criteria on keys. Challenge diffs 'public keys per boot' across the three stack:soak reports, but each cycle's stack:reset (down -v) deletes realx_kms, so the keys must differ. This produces a false failure, or pushes the builder toward deterministic key generation from a fixed seed.",
+   "fix": "Remove public keys from the three-reset diff. State that keys differ across resets, are identical on a kept realx_kms volume, and are never derived from a fixed seed."
+  },
+  {
+   "severity": "medium",
+   "issue": "Port binding and container needs are left open. By Docker's default, the sandbox panel, /sandbox/* money triggers, /__test/* clock routes and MCP HTTP would be published on 0.0.0.0, exposing them to the LAN. A104's 127.0.0.1 in-process binding is unreachable through a published port from inside a container. The .env.example list leaves out variables A08 requires (DATABASE_URL, STORAGE_SANDBOX_ROOT, KMS_SANDBOX_MASTER_KEY_FILE, POSTGRES_*). There is no volume-mount table, although seed, api and worker all need kms.",
+   "fix": "Publish every port as 127.0.0.1:<PORT>:<port> with each process listening on 0.0.0.0 inside its container, and add a resolved-config check that fails on any published port not bound to 127.0.0.1. List the full env set and a volume-mount table (realx_kms and the storage root in seed, api and worker), and name which process creates the master key."
+  },
+  {
+   "severity": "low",
+   "issue": "The owner of ADM-32 is stale. A23 names A69 as the staff sandbox panel on ADM-32. In the final graph ADM-32 belongs to A76, and A69's spec records this stale reference.",
+   "fix": "Replace A69 with A76 in the sandbox-panel paragraph, the design references and the Design-confusion challenge."
+  },
+  {
+   "severity": "low",
+   "issue": "The sandbox-panel check asks for 'exactly the four sandbox controls ... plus sanctions and kms'. A08 has every sandbox register a SandboxControl, so storage, and possibly echo, also appear. The wording is brittle and contradicts itself.",
+   "fix": "Assert one page per entry of sandboxControls(), a set that includes the six named adapters, and implementation = sandbox for every entry."
+  },
+  {
+   "severity": "low",
+   "issue": "The smoke's audit assertion is not filtered by token: the seed already holds agent events on behalf of Alex (alex-portfolio-bot). It also leaves out A12's third per-request record, api_token_activity, and does not say how the rows are read.",
+   "fix": "Filter by the smoke token_id. Also require exactly two api_token_activity rows. Name the read path: SQL as realx_readonly, or A12's /v1/agent-access/activity?token= and A10's /v1/me/activity."
+  }
+ ]
+}

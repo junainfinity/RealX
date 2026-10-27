@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "The V4 condition A31 inherits from A15 (frozen: 'the referenced KYC case is in state approved and unexpired', P1_NOT_APPROVED) makes most of A31's own V4 ops impossible. A31 moves the case approved -> whitelisted on first registration, so every later V4 op references a case in whitelisted, refresh_due or suspended. That covers wholesale claims after whitelisting (J17 renewal, A32), KYC refresh re-issue, the SANCTIONS_CLEAR re-stamp, updateCountry, deleteIdentity, revokeClaim on suspended investors, the sweep's revokeClaim, and registering a second wallet for a whitelisted investor (J09 recovery; A29 blocks with RECOVERY_NEW_WALLET_UNREGISTERED until A31 registers it). The oracle scope ('no chain call for a case that is not approved') repeats the defect, and the Escalate clause triggers on any change to A15's V4 condition, so the build is certain to fail or escalate.",
+   "fix": "Before Specify, agree a per-function V4 condition with A15 as a follow-up loop. (1) Register and addClaim: investor in approved, whitelisted or refresh_due, KYC unexpired, no restriction, source row re-read. (2) updateCountry, deleteIdentity and non-sweep revokeClaim: a bound 4E or SGL+R approval ID, no case-state condition. (3) Sweep revokeClaim: the hash of the expired IdentityClaim ids. Add an explicit path for registering an additional wallet to an existing ONCHAINID (J09, A29). Reword the oracle to match, and add a challenge that runs every V4 op for a whitelisted investor."
+  },
+  {
+   "severity": "critical",
+   "issue": "A31 and A32 both own the wholesale-claim lifecycle. A32 (frozen, depends on A31) calls A31's in-process issueClaim and revokeClaim in its own transactions, runs its own 05:00 expiry sweep (expiring -> expired, then revokeClaim), sends the 60/30-day reminders, creates the ADM-01 task, runs revocation as its own 4E classification.revoke and replaces claims on renewal. A31 exposes no such functions (only the outbox consumer and the A14 callback), drives SM-02 valid -> expiring and expiring -> expired from its own 02:00 sweep, emits claim.expiring for the ADM-01 task and defines a separate 'revoke claim' 4E row. Concrete failure: A31's 02:00 sweep revokes the claim, then A32's 05:00 sweep calls revokeClaim on an already-revoked claim. A31's pass criteria require that call to be refused, so A32's expiry transaction fails. ADM-01 also double-counts, and one revocation needs two 4E approvals.",
+   "fix": "Make A31 the claim executor only. Export idempotent issueClaim, revokeClaim and replaceClaim (issue new, then revoke old) from modules/claims/index.ts with A32's signatures; revoking an already revoked claim returns the prior result. Remove from A31 the SM-02 transitions, the 60/30-day events, the ADM-01 task source and the WHOLESALE_AU 4E row. Limit A31's sweep to KYC_VERIFIED, SANCTIONS_CLEAR and RESIDENCY_FIRB. Align the basis enum with A32 (accountant_certificate, ticket_500k, sophisticated_s761GA, professional_s9)."
+  },
+  {
+   "severity": "high",
+   "issue": "The ONCHAINID mechanics are wrong or unspecified. Factory createIdentity is missing from A15's V4 allow-list and is owner- or authorised-only on the factory. A claim is added with addClaim on the investor's Identity contract (by a key with CLAIM purpose), not on ClaimIssuer. The spec never says who holds the investor ONCHAINID's management key (passkey wallet or RealX) or how V4 gets a claim key on it. The allow-list will refuse these calls, or the builder will route around custody.",
+   "fix": "Specify the key layout: identity created through V4 via the factory with the smart wallet as management key and the V4 key added as CLAIM key; the ClaimIssuer signing key in its own kms slot; addClaim and removeClaim on Identity(investor), revokeClaim on ClaimIssuer. List every (contract kind, selector) pair V4 needs as an A15 allow-list follow-up before Specify. Add a challenge proving every call goes through A15's allow-list."
+  },
+  {
+   "severity": "high",
+   "issue": "The indexer events A31 relies on are not produced. A27 decodes IdentityRegistered, IdentityRemoved and CountryUpdated, but not ClaimAdded, ClaimRemoved or ClaimRevoked, and per-investor Identity contracts are not watched addresses. A31's mirror states (pending -> issued, issued -> revoked or expired) and R5 depend on those events. Separately, A31 'sets the holding rows ... eligible_empty', but A27 derives the Holding state itself from IdentityRegistered and IdentityRemoved, so A31 would write A27's read model outside its paths.",
+   "fix": "Either add claim-event decoding and a watched-address set (created identities plus the ClaimIssuer) to A27 as a follow-up, or have A31's worker read the logs through A27's transport and ABIs and confirm each op with getClaim or isClaimValid at the confirmed block. Replace 'sets holding rows' with 'asserts A27's Holding read model shows eligible_empty'."
+  },
+  {
+   "severity": "high",
+   "issue": "There is a missing dependency and there are path collisions. A31 uses A29's wallets module (Wallet rows, wallet.created, isRegisteredDestination, registry_status), but A29 is neither a direct nor a transitive dependency. A31 plans to put R4/R5 functions in packages/domain's recon slice, which A20 owns (app\\packages\\domain\\src\\recon\\); A20 already defines R4 and R5 with different semantics. A03's extensions.ts is only for state-machine transitions, not a general contribution point, and the domain claim slice and claim-topic table have no owner. A31 cannot meet 'only owned paths changed'.",
+   "fix": "Add A29 to deps (AM2, so milestone order holds). Leave R4/R5 with A20; A31 supplies only the IdentityReconSnapshot producer (claims.recon-snapshot in its worker path) that feeds A20's ChainSnapshotSource ir_members and claims fields. Record any semantic change as an A20 follow-up. Move the claim-topic table under an owned path (modules/claims/topics.ts) or add an owned domain path to the graph."
+  },
+  {
+   "severity": "high",
+   "issue": "The event contract with A30 does not match. A31 consumes kyc.case.approved, kyc.residency.confirmed, screening.clear, kyc.case.refresh_completed and kyc.case.suspended. A30 emits none of the last four, and kyc.case.approved is only an audit event. A30 actually offers an approved-and-unregistered query, investor.refreshed, investor.suspended and investor.residency.changed. A30 already runs residency change as its own 4E (KYCA -> CCO, with an impact preview) and emits an event for A31's updateCountry; A31 duplicates this with a second 4E via POST /identities/:id/country, so one change needs two approvals or runs twice. A30 also emits investor.freeze_requested and kyc.sanctions.true_match for 'A31/A36 to freeze wallets', but A31 never freezes, so the freeze is dropped.",
+   "fix": "Rewrite §2-§4 against A30's real interface and event names. Execute updateCountry from A30's approved investor.residency.change request, bound to its approval_id, and keep /v1/eligibility/preview as the impact preview A30 and A68 call. Name the consumer of freeze_requested and true_match (A28 via V2 or V3) and file the correction to A30 as a follow-up."
+  },
+  {
+   "severity": "high",
+   "issue": "A forged or stale classification.valid event can issue a wholesale claim. A31 re-reads the KYC case before registering, but it does not re-read the classification row before addClaim, and A15's P1 checks only the KYC case. The challenge depends on an 'outbox signature check' that no node defines (A09's outbox is unsigned). An inserted event, or one replayed after revocation, therefore passes G04 on chain.",
+   "fix": "Before every addClaim, re-read the source through its owner's interface (classification in valid or expiring via A32, stubbed until it lands; screening status via A30/A42). Put {source_kind, source_id, source_state_hash} in the CustodyOp reference so P1 re-checks it. Replace the signature check with a CLM_SOURCE_NOT_VALID refusal, and add an oracle case: a replayed event after revocation produces no claim on chain."
+  },
+  {
+   "severity": "high",
+   "issue": "The A$500k-in-this-offer (s708) claim is a topic-3 WHOLESALE_AU claim on the shared ONCHAINID, and every wholesale token requires topic 3. On chain the investor is verified for every wholesale-only token until settlement ends; only A19's order-time check enforces the offer scope. A direct transfer, forcedTransfer, recovery or mint of another wholesale token to that wallet passes isVerified. The spec defaults to this leaky shape.",
+   "fix": "Default ticket_500k to no standing WHOLESALE_AU claim. Use either a per-offer topic required only by that offer's token (with the token configuration noted for A28/A24), or an off-chain gate plus an allow-listed mint for that offer only. Keep the counsel question on the on-chain option. Add an oracle case: token B sent to a ticket investor of offer A by transfer, forcedTransfer and mint, each reverting."
+  },
+  {
+   "severity": "medium",
+   "issue": "The two-year expiry has three sources. A19 uses certificate_valid_days = 730; A31 and A32 both compute certificate date plus two calendar years. For a 30 Jun 2026 certificate, 730 days ends 29 Jun 2028 (leap year) while the design and A32 say valid to 30 Jun 2028, so G04 blocks a buy on a day the design calls valid. A31 also says 'AEST midnight' but tests across the AEDT change without saying whether that means UTC+10 or Sydney local time.",
+   "fix": "Make A32's valid_until the single source; A31 copies it and never computes it. Define expiry as the end of the valid_until date in Australia/Sydney local time. Record an A19 follow-up to use calendar years or read valid_until. Keep the leap-day and DST vectors."
+  },
+  {
+   "severity": "medium",
+   "issue": "On-chain expiry is not modelled. ONCHAINID claims have no validity field, and isVerified checks only signature and revocation. Between valid_until and the 02:00 sweep, or during a sweep outage, the chain still says verified, so 'revert on chain if A19 is bypassed' is false in that window. R5 is asked to compare on-chain validity that does not exist, and A20's claims[].valid_until cannot be filled from the chain.",
+   "fix": "State that validity lives off chain and is enforced by revocation. Add a sweep-lag alert through A13 when an expired claim is still valid on chain after N hours. R5 compares presence, issuer and revocation, with valid_until from the mirror. Assert the on-chain revert only after the sweep."
+  },
+  {
+   "severity": "medium",
+   "issue": "SANCTIONS_CLEAR has no producer. The rescreen belongs to A42 (03:00, aml.screening.run), which is not a dependency, and no per-investor clear event exists. A nightly revoke-and-reissue for every investor means thousands of V4 ops against a per-minute rate limit. A 7-day rescreen outage de-verifies every investor. The true-match revocation is described as 4E, but the product map's action is SGL+R.",
+   "fix": "Consume A42's result through a named, stubbed contract, or make A42 the caller. Re-issue only when valid_until is within the grace window. On rescreen failure raise an alert instead of mass de-verification. Execute the true-match revocation from the SGL+R approval ID."
+  },
+  {
+   "severity": "medium",
+   "issue": "Enums and hand-offs conflict with sibling nodes. A29's registry_status is {unregistered, eligible, registered, stale, deleted}; A31 uses registering and deregistered. A31's criterion 'offboarded only after deleteIdentity' contradicts SM-01 (suspended --> offboarded has no chain condition), A30 and A31's own §4, and it would block offboarding when holdings are frozen. The pass criteria cite a 'deleted -> offboarded' transition, but 'deleted' is not an SM-01 state.",
+   "fix": "Use A29's enum and emit identity.registered and identity.deleted outbox events for A29 to apply. Reword SM-01: 'A31 notifies A30; A30 applies suspended -> offboarded under its own conditions'. Fix the pass-criteria wording."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some checks cannot run at A31's gate or reach outside its paths. The G04 challenge needs a distribution line from A40, which is not a dependency. M07 'done' requires rows in A14's policy data, which are seeded from A03's 49-row baseline, and 'revoke claim' is not among them. Routes lack a /v1 prefix, although D04 requires versioning.",
+   "fix": "Assert the A18 register units and A27 Holding state instead, and move the distribution check to A79/A88. Reword M07 as 'A31 registers effectors for the A03/A14 rows by action_code', and record any new row as an A03 seed addition. Prefix routes with /v1/ and list the A12 scope for each."
+  },
+  {
+   "severity": "low",
+   "issue": "The design references are slightly off. CheckList, CheckRow and StatusPill are not names in RealX App.dc.html (the prototype uses chk()). The ONB-10 rows read 'DVS match, 2 sources · liveness pass' and 'No matches · Clear'. ADM-14's subtitle ('2-of-3 custody quorum') contradicts the V4 AUTO rows. A19 expects A31 to fill onchain_module_addresses, and A31 never mentions it.",
+   "fix": "Cite the chk() rows by exact text and name the components as A05's. Note that A51/A72 must word the ADM-14 subtitle to cover AUTO rows. Take on or disclaim onchain_module_addresses (A28/A27 is the likely owner)."
+  }
+ ]
+}

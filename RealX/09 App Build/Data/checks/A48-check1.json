@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "The global inflow freeze does nothing. No other spec reads platform.inflow_freeze: A17, A37, A39 and A36 do not mention it. The spec says 'A36 refuses awaiting_funds -> funded', but that is an SM-05 Order transition owned by A37. None of this is in the four Specify reconciliations, and the builder cannot edit A17 or A37. The pass criteria only check that setFlag was called, so a freeze that blocks no money would still pass.",
+   "fix": "Add A17 and A37 as dependencies. Add a fifth Specify reconciliation: A37 refuses new orders and awaiting_funds -> funded with a named code (e.g. ORD_INFLOW_FROZEN) while the flag is on, and A17 holds incoming receipts as unapplied. Correct the text from A36 to A37. Add pass criteria and a challenge that engage the freeze end to end: a sandbox PayID receipt stays unapplied, an order cannot reach funded, and withdrawals and distributions still run."
+  },
+  {
+   "severity": "high",
+   "issue": "The J21 path in 'Requirements covered' cannot run under SM-03. It goes distressed, then 'exit_approved through the P1 track'. But the P1 track starts with operating -> exit_proposed, and SM-03 has no distressed -> exit_proposed edge. A distressed vehicle can only return to operating, which lifts the halt and holds, or go to legal_hold -> exit_approved by court-directed sale.",
+   "fix": "State the J21 path explicitly: distressed -> legal_hold (court order, receiver or replacement-trustee appointment) -> exit_approved (property.court_directed_sale) -> under_sale -> sold -> wound_down. Keep the P1 exit track for the operating case and test it separately. If the founder wants a voluntary exit from distressed, record it as a founder-visible SM-03 change. Do not add the edge silently."
+  },
+  {
+   "severity": "high",
+   "issue": "Wind-down deadlocks on the distribution hold. The distress and legal-hold effects put A40's vehicle hold in place, and they are reverted only on a return to operating. Under that hold A40 refuses funding and executing with DST_LEGAL_HOLD. The spec never lifts or exempts the hold for the kind = exit run, so waterfall_closed can never happen and burn and wound_down are unreachable.",
+   "fix": "Specify what happens to the hold at exit_approved: the hold is lifted for kind = exit runs only, under the exit approval id (or A40's lift row LEGL -> CCO, opened pre-filled), and income runs stay held. Make this a Specify reconciliation with A40, and add a challenge that runs the exit waterfall on a vehicle that went through legal_hold."
+  },
+  {
+   "severity": "high",
+   "issue": "The on-chain HaltModule holds one halted flag and one cause per token (A24: halt(cause) / lift()), but this node allows several open halts per vehicle, one per cause. Clearing one halt runs halt_clear (lift) while another resale-scope halt is still open, so the chain becomes more open than the record. That breaks the spec's own invariant. The spec also does not say whether the platform halt (vehicle_id null, marketplace suspend) sets HaltModule on every active token.",
+   "fix": "Add a reference-count rule. halt_set is requested when the first resale- or all-scope halt opens on a vehicle, with a fixed cause priority when several apply. halt_clear is requested only when the last one clears. State whether the platform halt fans out a halt_set per active token or relies on off-chain G10 only. Add a pass criterion that clears one of two concurrent halts and asserts the chain still reads halted."
+  },
+  {
+   "severity": "high",
+   "issue": "Board ratification (24 h) is limited to P2 (PHASE=P2 and governance.votes). The product map gives it without any phase limit: J21, a P1 journey, says 'Board ratifies within 24 h' at step 2. N06 lists 'board ratification 24 h'. Admin extract row 56 gives inflow freeze / marketplace suspend 'Board ratification <= 24h'. A P1 build would pass J21 without the board clock.",
+   "fix": "Open the board_ratification clock (24 h, set_with_counsel) in P1 too, for halts and kill switches. In P1 the ratifying body is the trustee's board (TP-RE) or the RealX board; the phase decides which body, not whether the clock exists. Update the J21 done criterion, the timer pass criterion and the seed-equality test. If the founder wants P2-only, record that as a founder decision."
+  },
+  {
+   "severity": "high",
+   "issue": "The design reference 'adCmd emergency pause' makes ADM-01's 'Emergency pause' a halt confirm card (POST /halts with criteria and end date, CCO or MKTO). The product map defines ADM-01 Emergency pause as 'Pauses a token (deep link to Token operations)', CCO / SECO / pauser, SGL+R. A66 already builds it as a deep link to ADM-14 (A72) that performs no pause itself. The two nodes now fix conflicting payloads and actor sets.",
+   "fix": "Rewrite the design reference so Emergency pause is A28's token.pause deep link (A66 and A72 own it). Put the halt confirm card on the actions that really open halts: ADM-21 'Halt all' / halt instrument (A91) and the ADM-34 halt action (A69). Keep 'Declare incident' as specified."
+  },
+  {
+   "severity": "high",
+   "issue": "A43 (communications and notices) is not a dependency, direct or transitive, even though every halt notice, holders_notified, the J21 step 3 notice with the G17 lint, and the kill-switch tenant notices go through it. The pass criteria require A43 delivery. The scheduler can start A48 before A43 exists, which pushes the builder to stub or fake notices.",
+   "fix": "Add A43 to deps (AM3, no cycle). Also add A45 (filing.wind_down_report task), A23 (the Docker stack the J21 runs require) and A104 (the MCP catalogue pass criterion). None of these creates a cycle."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag is false, but the node carries platform-wide authority (three kill switches, including the platform agent-traffic tier), holds on money, and the full-supply burn request. D04 requires oracles where money or authority is involved, and A101, which runs the per-user and per-tenant tiers of the same kill-switch interface, is oracle: yes. The 'Oracle rule' paragraph describes hidden tests written before the build anyway, which contradicts oracle: no in the graph and frontmatter.",
+   "fix": "Set oracle: yes in final-graph.json and the frontmatter, and use the standard oracle-rule wording. Keep the listed hidden scope: the halt invariant, timers, the kill-switch matrix, wind-down ordering and burn sums, and retention."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec relies on interfaces its dependencies do not provide, and they are not in the four reconciliations. A36's internal route has only a 'halt' transition with no 'lift' direction (A36 makes resume a 4E offer.resume, CAPM -> CCO). A21's /perimeter/public has no marketplace_suspended field. The builder would have to edit outside the owned paths or fake these.",
+   "fix": "Add them as Specify reconciliations with the owners' tests re-run. A36 accepts an internal 'lift' from A48 only for pauses tagged with A48's reason, under a restorative 4E approval id (kill_switch.release, property.remediate); otherwise A48 opens offer.resume. A21 adds marketplace_suspended (and the inflow-freeze flag) to /perimeter/public."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some checker and actor sets differ from the product map, which the spec itself calls founder-visible. Marketplace suspend is 'CCO or SECO acts', but ADM-34 and admin extract row 56 say 'CCO or RE board delegate'. halt.clear is CCO -> CEO, but the ADM-21 'Resume' row and J07 give MKTO maker -> CCO checker. ADM-35 'Suspend all agent access' names SECO as the actor, and the spec widens it to CCO or SECO without recording why.",
+   "fix": "Align with the product map: marketplace suspend CCO or RE board delegate; resume/clear MKTO -> CCO (keep 6E for override); agents.traffic engage SECO, or record the widening as a decision. Then update the kill-switch role matrix pass criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G22 done criterion requires 'A100's parity suite finds an API and MCP equivalent', and a pass criterion needs the MCP tool catalogue. A100 is AM8 and a descendant of A48, and A104 is not an ancestor, so neither can be checked at this node's gate.",
+   "fix": "Change the criterion to something checkable at the gate: every route and its agent classification (read, maker draft, human-only act) is registered in the parity manifest and the OpenAPI extension, and A104's generator, as a dependency, produces the expected catalogue. Leave the A100 run to A100."
+  },
+  {
+   "severity": "medium",
+   "issue": "Halt lifecycle gaps. (a) 'ends_at at most halt.max_days from opened_at' plus 'extend: same limits' means any extension past day 30 is refused with HALT_END_DATE_TOO_FAR, which contradicts the challenge's third and fourth extensions. (b) The distress and legal_hold halts on a vehicle that goes on to exit_approved, sold and wound_down have no clear event: A34 clears only on remediate or discharge. They would stay open after wind-down, with review_due alerts and extensions forever.",
+   "fix": "Measure the extension limit from the extension's decision time. Specify that at wound_down (or exit_approved) the vehicle's system-cause halts close by system with criterion 'vehicle wound down' under the wind-down event, and are audited. Add both cases to the transition coverage pass criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "The estimate of 6-10 agent-hours is too low for the scope. The node covers four subsystems (halts with a chain mirror, three kill switches with the platform tier, SM-03 effects plus a nine-step wind-down pipeline with retention, and runbooks and incidents), more than 30 routes, and three J21 runs on the Docker stack. Its peers are A34 at 8-12 and A40 at 10-14.",
+   "fix": "Raise it to 10-14, or split runbooks, incidents and drills (section 5) into their own node feeding A66 and A103."
+  },
+  {
+   "severity": "low",
+   "issue": "ADM-34's action 'Global inflow freeze or marketplace suspend' carries 'Optional token pause; runbook R1 or R9', but the engage payload has no option to pause tokens at the same time.",
+   "fix": "Add an optional pause_tokens: vehicleIds[] | 'all' to the engage request. It opens one A28 token.pause SGL+R act per token with its own approval id, and each is shown in the response."
+  }
+ ]
+}

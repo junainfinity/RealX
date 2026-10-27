@@ -1,0 +1,55 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The spec says every matrix owner is taken from app-graph.json and that the matrix must have no gaps. But final-graph.json gives no owner to J22: A82 lists only J04, J06, J15 and J20. No node lists ADM-36 to ADM-40, not even A51, A53, A67, A68, A69 or A72, whose titles name those screens. A100 lists only 2 of the 22 gates, although the spec requires every G01-G22 row to name A100. So the builder must either invent owners by hand, which lets a wrong build pass, or the matrix fails and escalates.",
+   "fix": "Fix the graph before the plan is frozen. Add J22 to A82.journeys, with A12, A60, A100 and A104 as supporting nodes. Add ADM-36 to A53, ADM-37 to A67, ADM-38 to A68, ADM-39 to A69 and ADM-40 to A72, and add all five to A51.screens. Add G01-G22 to A100.gates. In the A00 spec, name these expected owners under Requirements covered, and add a checker rule that fails when any of these rows has no owner in app-graph.json."
+  },
+  {
+   "severity": "high",
+   "issue": "check_charter.py must fail when a screen's owning node's owned paths do not contain its route prefix. But no source gives a route for each screen: screens.json has no route column, app-graph.json has no routes and no named input has them. 59 screens are listed by 2-3 nodes (the A50/A51 design node plus the UI node, A61 e2e, A89), so 'owning node' is ambiguous. The check cannot be tested, and node-specific challenge 1 (ACC-05 mapped to A12) cannot be caught.",
+   "fix": "Add a route column to screens.json and name its source: the conventions route table, or the UI node's owned paths under apps/web/app/ or apps/console/app/. Set the rule that the owner is the single node whose owned_paths contain the route. Design nodes (A50, A51), e2e nodes (A61, A82) and any others go in supportingNodes. The checker fails when a route has zero owners or more than one."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec gives ids.json 51 roles and fixes the counts at 91/21/22/27/14/51. But requirements-lists.json holds 52 roles, including the D04 role AGT-U ('A user's own agent'). agent-access.json then defines AGNT as 'an agent acting for a named human' and leaves out AGT-U. This merges the staff AI agent principal (AGNT: prepare only, maker but never checker, per the requirements catalogue) with users' own agents. A build that drops AGT-U, a D04 requirement ID, would pass.",
+   "fix": "State 52 roles. Add AGT-U to principalTypes with distinct rules: AGNT is the RealX staff AI agent (prepare or act as maker only, within its human's staff role); AGT-U is any user's own agent acting through a token for a named INVESTOR, SPONSOR, PARTNER or STAFF person. The checker asserts a role count of 52 and that AGNT and AGT-U both appear with different rules."
+  },
+  {
+   "severity": "medium",
+   "issue": "The canonical ID source, requirements-lists.json, exists only in a temporary session scratchpad, and the Specify inputs name it without a path. At build time the file may be gone. The builder would then fall back to the product map, dropping G22, ACC-05, SPN-16, ADM-35, J22 and AGT-U.",
+   "fix": "During plan assembly, copy it to <workspace>/RealX/09 App Build/Data/requirements-lists.json. Cite that absolute path in the Specify inputs, and record the file's SHA-256 so Fable can check the copy."
+  },
+  {
+   "severity": "medium",
+   "issue": "The checker must fail when a non-delegable action code appears in the scope catalogue. But agent-access.json defines no scope catalogue block (only blocks a-d). The spec's own challenge case, a scope named account:bank.write that changes the withdrawal account, cannot be caught by matching code names.",
+   "fix": "Add a block (e) scopeFamilies to agent-access.json. Each scope lists the action ids it may authorise, taken from a frozen action-id vocabulary, and the nonDelegable entries use the same action ids. The checker fails if any scope's action list includes a non-delegable action id. Require A12 to import this file, and keep verify:charter running against A12's catalogue."
+  },
+  {
+   "severity": "medium",
+   "issue": "The four kill-switch levels are frozen as 'each SGL+R', with no difference between switching one on and lifting it. The G22 definition also does not stop an agent (for example a staff agent acting as a single maker) from lifting a kill switch. G22 also leaves out environment binding: nothing stops rx_sbx_ or rx_test_ tokens being accepted on live, or rx_live_ tokens in the sandbox.",
+   "fix": "Freeze two rules. Switching a kill switch on is SGL+R, by an authorised human or automatically by the agent guard. Lifting one is 4E by two humans and is never done by any agent principal. Add to the G22 definition that a token is refused outside the environment its prefix names."
+  },
+  {
+   "severity": "medium",
+   "issue": "The wikilinks [[A50 - Design extension A: ...]] and [[A51 - Design extension B: ...]] in Unlocks and Design references do not match the node files on disk. Those files are named 'A50 - Design extension A- investor and sponsor screens not in the prototype.md' and 'A51 - Design extension B- operator console screens not in the prototype.md', so the links are broken. The plan uses both forms inconsistently.",
+   "fix": "Use the file-name form, with '-' in place of ':', or an alias link such as [[A50 - Design extension A- investor and sponsor screens not in the prototype|A50]]. Use it the same way across all node notes."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec says the builder never writes outside app/docs/charter/, and that artifactHashes lists only files under it. Yet the same spec requires the node to write app/evidence/A00.json.",
+   "fix": "State that app/evidence/A00.json is the standard evidence file every node writes (per conventions) and that it is excluded from the owned-path rule and from the artifactHashes restriction."
+  },
+  {
+   "severity": "low",
+   "issue": "The prototype displays 'SPN-03–06' with an en dash (U+2013), but the spec writes 'SPN-03-06' with a hyphen. Fable's check of each displayed code against the design-code column would either mismatch or be waved through.",
+   "fix": "Record the displayed code exactly, with U+2013, in the design-code column, and state that comparisons use the exact string."
+  },
+  {
+   "severity": "low",
+   "issue": "The custody policy rules are called 'P1-P10', which clashes with the P1/P2/P3 phase names the charter freezes. Also, decision row 5 of the requirements catalogue still numbers the supplementary screens ADM-35 to ADM-39, the old draft that clashes with ADM-35 'Agent and API access'.",
+   "fix": "Rename the custody rules (for example CP01-CP10) in the charter vocabulary and the swap table. Record in charter.md that the catalogue's ADM-35 to ADM-39 numbering is replaced by ADM-36 to ADM-40, and have the checker flag ADM-35 used with any other title."
+  }
+ ]
+}

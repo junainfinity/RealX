@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Restart-resume and 'your exploration survives' contradict A23. A23 recreates the chain on every boot (realx_chain holds nothing), and `deploy` is a one-shot with restart \"no\". After a Docker Desktop restart under unless-stopped, `chain` comes back empty while `deploy` and the seed chain import do not re-run: there are no contracts, and register and Postgres no longer match the chain. On launch:down/up the user's on-chain changes are lost while Postgres keeps them, which breaks reconciliation. Also, `docker kill` counts as a manual stop, and unless-stopped does not restart such a container after a daemon restart, so the 'docker kill api/worker then restart Docker Desktop' probe fails on a correct build.",
+   "fix": "Resume goes through `launch:up`. On a kept volume it re-runs `deploy` and rebuilds chain state from the register and ledger through the owning node's documented replay (fix item on A23/A07/A27 if none exists), then asserts clean three-way reconciliation, including units minted after the seed. Simulate the crash with `docker exec <c> kill 1`, and restart Docker Desktop separately. The pass criterion adds register = chain = bank Δ 0 after resume. Drop the claim that unless-stopped alone restores the stack."
+  },
+  {
+   "severity": "high",
+   "issue": "The J04 checkpoints conflict with A79's J04, whose tests the smoke runs by name. (a) 'Escrow released by exactly the order amount' is wrong: A79 releases the whole allocation, 10,000 × A$238.40 = A$2,384,000.00 plus fees, and escrow ends at A$0.00. (b) '6,400 before, 6,500 after funding' ignores alex-portfolio-bot's parity order inside A79's J04 (6,510) and market.ts filling KST01 to 10,050. (c) The J05 probe 'KST01 under soft-cap-missed' is wrong: A06's soft-cap-missed scenario is ANN01 at 28%.",
+   "fix": "Take the checkpoint rows from A79's table: 6,400 → 6,500 → 6,510 (agent) → 10,050 (market). Allocation 10,000, with the scale-back refund of A$11,979.60. Release = A$2,384,000.00 plus A37's fees, with escrow at A$0.00. Have checkpoints.ts import A79's expected values, and Fable re-derives independently. Change the J05 probe to ANN01. Update the Pass criteria."
+  },
+  {
+   "severity": "high",
+   "issue": "The LAUNCH_REGRESSION_STALE pre-flight (any path outside the owned paths changed since A88's buildCommit) cannot be met in the graph. A90, A91, A92 and A93 (AM9) do not depend on A89 and may commit code in parallel or during the sign-off, and A94 starts on the software gate, so the gauntlet run and the user's own launch:up fail. A89's own evidence files and status.json are outside the allow-list. Sign-off fixes land on other nodes' code, so 'this node is re-run afterwards' always fails STALE unless A88 re-runs, which the note never requires.",
+   "fix": "The orchestrator tags a release point `launch-p1` (A88's commit plus A89's owned paths), and launch:up builds from that tag or a worktree of it. Exclude app/evidence/** and status.json from the diff. A sign-off fix on another node requires re-running A88 (at least the affected journeys) and moving the tag before A89 re-runs. STALE compares the checked-out tree with the tag."
+  },
+  {
+   "severity": "high",
+   "issue": "verify:launch (the gauntlet command) does not include launch:tokens, yet the pass criteria and the evidence need tokens for every persona type and tokens intact after the restart probe. If launch:tokens is added, its 'print each secret once in the terminal' behaviour writes every live secret into the orchestrator's captured transcript and logs, which contradicts 'never written to a file or log'. The order relative to launch:reset, which revokes every token, is undefined.",
+   "fix": "Put launch:tokens in verify:launch at defined points: after launch:up, before smoke run 1, and before the restart probe. Add a non-TTY or --no-print mode that keeps secrets in memory and prints only the prefix and last four characters. Show the full secret only on an interactive TTY. The secret scan requires zero occurrences in the verify:launch transcript. The restart probe uses tokens created after the last reset, with ids and status unchanged."
+  },
+  {
+   "severity": "medium",
+   "issue": "J20 'one distinct persona per step' cannot be met: the steps use CCO five times and ENGO twice. The staff persona list omits roles the smoke needs, CLSR (J02 ADM-11), TAXO (J06 AMMA, J20 ADM-20), PART (J20 ADM-29, and the fallback token approver), PROP and IRCM (J21 probe), and the other staff roles D04 covers (INVM, ASTM, VALO, MKTO, MKTG, CMPH). The canonical D04 type list behind LAUNCH_PERSONA_MISSING is never pinned.",
+   "fix": "Rewrite J20 as 'each step as the persona holding that step's product-map role'. Pin the D04 type list to requirements-lists.json human roles (INV-W, INV-S, INV-R, INV-J, INV-E, INV-F, INV-M, the sponsor roles, TP-* and every ADM-35 staff role). Add the missing staff personas, or make them a Specify check on A06."
+  },
+  {
+   "severity": "medium",
+   "issue": "The token outcomes ignore A12's issue rules. Mia Chen's own token needs a second SP-OWN or PART/SECO, but the note makes her the approver for everyone at Harbour & Co. Northline Capital's members have no approver. A joint account with 'both to sign' needs both assertions or expires (TOKEN_COSIGN_EXPIRED). SMSF, company and trust tokens need a verified signatory (TOKEN_SIGNATORY_REQUIRED). The expected INV-R outcome is undefined, since A12 issues INV-R tokens. So the expected create-or-refuse table cannot be derived.",
+   "fix": "Add a per-type expected-outcome table derived from A12: sponsor approvers (a second SP-OWN, otherwise PART or SECO, for Mia and for Northline's owner), the joint both-sign flow, the entity signatory, an explicit INV-R result, INV-M PHASE_NOT_ENABLED, SUPER money cell SOD_HARD_CONFLICT, counsel cells SCOPE_PENDING_COUNSEL."
+  },
+  {
+   "severity": "medium",
+   "issue": "ADM-01 and ADM-32 are checked only as rendered views. ADM-01 misses the SP-OWN sponsor-filtered view, the environment badge (it must never read PROD; it must show local and chain 31337), Break-glass for CCO and SECO only, and every action (acknowledge or assign an alert, declare an incident, pause deep link SGL+R, board-pack export audited). ADM-32 is checked only as ENGO (its roles are ENGO, SECO and PART), omits the e-sign connector, the API keys by sponsor, MCP tool scopes and the sponsor sandboxes, and has no test that an RPC or network switch away from 31337 is refused (G21, G13).",
+   "fix": "Extend §5 with the SP-OWN filtered view, a badge check for every persona, Break-glass visibility, and A66's action tests by name (acknowledge an alert, audited export). For ADM-32 add SECO and PART views, e-sign, the key and MCP scope tables, and A76's refused-RPC-switch test with SECO as checker, all recorded in the evidence."
+  },
+  {
+   "severity": "medium",
+   "issue": "No rule makes the published ports bind to localhost. The launch stays running (unless-stopped) and exposes the /__test simulated authenticator (sign in as any staff persona, SECO or SUPER included), the API, MCP, the sandbox bank panel and the unauthenticated launch-home inbox. Docker Desktop publishes on 0.0.0.0 by default, so all of this reaches the local network.",
+   "fix": "Add a launch:check line and a static test that every published port has host_ip 127.0.0.1 (LAUNCH_PORT_NOT_LOCAL naming the service). A violation in a fragment is a fix item on its owner. Add a Fable probe from the LAN IP."
+  },
+  {
+   "severity": "medium",
+   "issue": "launch-home reads integrations/summary, the sandbox inbox, /v1/meta and a count of active tokens across users (an ADM-35 oversight read), but the note never says with which principal or credential. The likely shortcuts are a stored persona token, which breaks the secret rule, or a new unauthenticated route in another node's paths.",
+   "fix": "launch-home either reads only the files launch:* writes (smoke report, human-gates JSON, a token count with no secrets), or calls a named local-only route that A11 or A23 mounts only in RUN_MODE local or test. Add a static check that home/ holds no bearer token."
+  },
+  {
+   "severity": "medium",
+   "issue": "HG-LAUNCH means different things in different plan documents. A00's charter defines it as go-live. A89 and A88 use it for the local software sign-off 'not go-live', and A94 calls it the P2 go-live sign-off. A humanApproval recorded as HG-LAUNCH could later be read as go-live approval.",
+   "fix": "Rename this step (for example HG-LAUNCH-P1-LOCAL or 'P1 software sign-off') and keep HG-LAUNCH for go-live, or fix A00, A88 and A94 to use the same names. SIGNOFF.md and HUMAN-GATES.md state that go-live stays open."
+  },
+  {
+   "severity": "medium",
+   "issue": "The challenge 'humanApproval filled by an agent must be rejected' has no mechanism to tell an agent-written value from the orchestrator's. It is either unimplementable or faked, for example by rejecting every non-null value, which would also reject the real sign-off.",
+   "fix": "Require a matching orchestrator entry in status.json humanApprovals[] (the user's message id and a SHA-256 of the approval object). The generator rejects a humanApproval with no match or a hash mismatch (RELEASE_NOTES_EVIDENCE_MISMATCH A89), and Fable plants both cases."
+  },
+  {
+   "severity": "medium",
+   "issue": "The journey steps have gaps. J01 skips PUB-02 yet claims all nine steps. J04 puts the CFO's approval of the manual match on ADM-18 (it is ADM-30). J04 never names the escrow-release maker-checker (FINA maker, CFO and CCO 6E) or the mint's (TOKO maker, 6E+Q, two V2 signers other than the maker). No checkpoint asserts register-first ordering, and the end-state register = chain cannot catch a mint that came before the register entry.",
+   "fix": "Add PUB-02 to J01. Correct J04 to TRSY on ADM-18 and CFO on ADM-30, and name the back-office personas and codes as A79 does. Add checkpoints: the register entry precedes the mint transaction, the mint approval ID binds the allocation-file hash, and the signers differ from the maker and from each other."
+  },
+  {
+   "severity": "low",
+   "issue": "The clock on resume is undefined. Re-anchoring to 23 Sep 2026 on every boot of a kept volume moves time backwards past recorded events. When LAUNCH_CLOCK_PAST_CLOSE fires is not defined.",
+   "fix": "Persist the DbClock offset so it resumes monotonically on a kept volume. The as-of anchor applies only after a reset. PAST_CLOSE fires when the clock is past KST01's closes_at on a volume where KST01 is still open, and tells the user to run launch:reset."
+  },
+  {
+   "severity": "low",
+   "issue": "J22 (a P1 journey) is not named in Tier 1 or Tier 2. The J09 and J10 suites are A81's e2e/risk, which the manifest omits. It is unclear whether the Tier 2 probes are A88 tests run by name or new code.",
+   "fix": "Name J22, mapped to §3 plus A82's titles. Add A81's e2e/risk to the manifest. Each probe is either a named A88 or A81 test or read-only code in smoke/probes/ with its expected state taken from A06's scenario expect block."
+  },
+  {
+   "severity": "low",
+   "issue": "The exact refusal codes may differ from the owners' evaluation order. offers.retail may also return G21_PHASE_NOT_REACHED. The never-checker call may also return G22_SCOPE_MISSING or SCOPE_AGENT_NEVER_CHECKER.",
+   "fix": "Assert that reason_codes contain the named code, cite the owner's pinning test, and make the unchanged flag or request the primary assertion."
+  }
+ ]
+}

@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Boundary contradiction: the node adds POST /v1/security/csp-report, but A09's openapi:check fails verify unless the committed packages/sdk/openapi.json (A09-owned) and the regenerated SDK are updated. A104's catalogue.json/excluded.json and A100's exemptions.json (A100-owned) must also list the operation. The spec says no file outside its three folders is edited and the pass criterion says only the three owned paths change, so the build either fails verify or breaks its own boundary rule.",
+   "fix": "Either drop the API route (the CSP report sink becomes a fix item on A52/A53, or a log-only collector used only in e2e/security tests), or state explicitly that registering the route raises fix items on A09 (openapi.json and SDK regeneration), A104 (excluded.json row, reason 'browser-generated') and A100 (exempt row declared by A83), with the order stated and those generated files excluded from the 'only three owned paths' check."
+  },
+  {
+   "severity": "high",
+   "issue": "Missing dependencies. The spec re-runs A82's agent journey with the CSP enforced (sections 6 and 14, requirements, pass criteria), attacks A100's parity matrix (summary and intro), and diffs against A87's fidelity baseline (design references, Challenge). A82, A100 and A87 are AM8 siblings, not ancestors of A83 in final-graph.json, so their suites and baselines may not exist when A83 builds.",
+   "fix": "Add A82, A87 and A100 to A83's deps in final-graph.json and the Depends on line (no cycle: none of them depends on A83, and all are AM8). Otherwise remove the A82 re-run, the A100 attack and the A87 baseline diff from the spec and the pass criteria."
+  },
+  {
+   "severity": "high",
+   "issue": "The oracle flag is false, but the node relies on Fable's hidden suites written before the build: token and mandate bypass, cross-tenant probes, webhook vectors, secret and PII canaries, and the deny list. D04 asks for oracles on the agent security hardening node where money or authority is involved. If the orchestrator schedules the Oracle stage from the flag, it skips it, and '100 percent of hidden tests pass' and 'every canary detected' then pass trivially with an empty folder.",
+   "fix": "Set oracle: true in final-graph.json and oracle: yes in the frontmatter, and use the standard Oracle rule wording. Add a pass criterion: hiddenCasesHash is recorded, the hidden folder is non-empty, and minimum counts are met (at least one canary per secret pattern and per PII field, and at least one vector per bullet of sections 4, 5 and 8). An empty or missing hidden set fails the gate."
+  },
+  {
+   "severity": "high",
+   "issue": "The CSP style policy cannot be met as written. `style-src 'self' 'nonce-...'` with no style-src-attr allowance blocks every server-rendered style attribute, because nonces do not cover attributes. The design prototype has 379 inline style attributes. No upstream node (A05, A52, A53) forbids style props or requires class-only styling; A52 and A53 only set script-src. The zero-CSP-violation criterion and the unchanged A87 fidelity criterion will therefore fail late in AM8 across many UI nodes, or push Fable to loosen the policy.",
+   "fix": "Decide the style policy now in section 6. Either (a) explicitly allow `style-src-attr 'unsafe-inline'` in headers.json, with an accepted threat-model row (script execution stays locked), or (b) raise upstream fix items now so that A05 components and all UI nodes emit no style attributes, enforced by a lint rule in A05/A52/A53 from AM4. State which option applies so the zero-violation criterion can be met."
+  },
+  {
+   "severity": "medium",
+   "issue": "The kill-switch code does not match. A83 asserts `423 AGENTS_PAUSED`. A09, which owns the kill-switch slot and the error registry, and A52/A53/A57 use `423 agents_paused`; A12, A101 and A104 use the upper-case form. An exact-code refusal-parity test will fail, or the builder will have to guess.",
+   "fix": "Assert the code by importing it from A09's errors.ts registry, not as a literal, and raise a plan-level fix item so that A09, A12 and A101 agree on one spelling."
+  },
+  {
+   "severity": "medium",
+   "issue": "The cookie requirements contradict A11's frozen spec. A83 requires the `__Host-` prefix and `SameSite=Strict` on the console. A11 specifies SameSite=Lax for all sessions and no prefix. This is a guaranteed failure that lands as an AM8 change to an oracle core node on an authority path, which the node cannot pass with the finding open.",
+   "fix": "Raise it now as an upstream spec change on A11 and A53 and state it in their specs, or treat it at A83's Specify stage under the escalation rule for A11 changes. Do not leave it as a guaranteed late surprise."
+  },
+  {
+   "severity": "medium",
+   "issue": "Non-delegable acts are tested only as derived from A03's delegable.ts. If delegable.ts wrongly marks a D04 personal act as delegable (identity or liveness, first passkey or wallet, creating or widening tokens, changing the withdrawal bank account, recovery or guardian changes, closing the account), the generated sweep expects 'allowed' and passes. The counsel question on personal declarations (wholesale-status truthfulness, target-market answers) is never exercised.",
+   "fix": "Add an independently written list to Fable's hidden suite that maps each D04 non-delegable act to its operations. Assert AGNT_NOT_ALLOWED on the API and MCP, and that each act is absent from the MCP catalogue or listed in excluded.json, whatever delegable.ts says. Also assert that the counsel-flagged declarations are marked `counsel` in delegable.ts, not silently delegable or blocked."
+  },
+  {
+   "severity": "medium",
+   "issue": "Two parts of G22 and M25 are named but never attacked. G22's rule that the person is notified of sensitive actions (A101 notices) has no evasion test, for example an agent changing notification settings or contact details to suppress notices, or a sensitive action completing with no notice. M25's break-glass (2-of-3 sealed credentials, at most 4 hours) is not attacked: activation by one person, by an agent or token, or use after expiry.",
+   "fix": "Add cases to section 4: every sensitive agent action produces A101's notice to the owner, and the agent cannot change the owner's contact channel or notice settings. Add cases to section 3: break-glass activation by a single human, by any AGNT or token, and use after 4 hours are all refused and audited. Add both to the pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "The secret-scan token pattern `rx_[a-z]+_[A-Z2-7]{12}_[A-Z2-7]{32}` is hard-coded upper-case, but A12 only says 'base32' and never fixes the case. If A12 emits lower-case base32, the scanner misses every real token while still catching hand-typed upper-case canaries, so a wrong build passes.",
+   "fix": "Derive the regex from A12's exported token-format constant, and require at least one canary to be a real token minted through A12's create endpoint on the stack."
+  },
+  {
+   "severity": "medium",
+   "issue": "An estimate of 8-12 agent-hours does not fit the scope: thirteen attack areas, five sub-agents, Slither, SBOM, git-history and image-layer scans, an RBAC sweep of every operation x 104 principals x 3 paths, enforced-CSP re-runs of 18 journeys, three seeded hidden runs, and blocking fix-item round trips.",
+   "fix": "Raise the estimate to about 16-24 agent-hours, or split the node (for example: authorisation, agents and tenancy; browser, webhooks and rate limits; static, PII, hostile input and deny list). State that time spent waiting on owners' fix items is outside the estimate."
+  },
+  {
+   "severity": "low",
+   "issue": "The database RLS sweep covers only realx_app and realx_worker. It omits A04's realx_readonly role (exports and reporting), which can read tenant tables.",
+   "fix": "Include realx_readonly in the database sweep and the tenancy pass criterion."
+  },
+  {
+   "severity": "low",
+   "issue": "The constant-time token test (Welch test at p > 0.01) must pass on three consecutive runs, so a correct build has about a 3 percent false-failure rate.",
+   "fix": "Use a repeat-on-fail rule (fail only if two of three runs reject), or assert an effect-size bound instead of a p-value."
+  },
+  {
+   "severity": "low",
+   "issue": "A88 reuses 'A83's secrets and PII scanner in read-only mode', but A83 defines no such entry point; the scanner exists only as a verify script.",
+   "fix": "Name a CLI contract in e2e/security/static (for example `scan --read-only --paths <...>`) with exit codes, for A88 to call."
+  }
+ ]
+}

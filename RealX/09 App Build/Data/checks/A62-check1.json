@@ -1,0 +1,90 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "SPN-14 has no way to engage a partner firm, and the invitation it sends for valuers and property managers is missing required fields. A98 says 'A62 lists them on SPN-14'. A98 defines the sponsor routes GET /v1/sponsor/partners, POST /v1/sponsor/partners/engagements and POST .../engagements/{eid}/end, and an SP-VAL or SP-PM invitation must carry a firm id and the vehicles (checked by validatePartnerInvitation, with refusals PARTNER_NOT_INDEPENDENT (G20), PARTNER_SCOPE_OUTSIDE_TENANT and PARTNER_NOT_PANEL). A62's Invite card asks only for an email and a role. No other node renders the engagement routes. So a sponsor cannot invite a valuer or property manager from the console, the M24 done criterion cannot be met, and parity.json has no rows for these actions.",
+   "fix": "In section 4, add a 'Partners working in this console' block. It lists engaged firms from GET /v1/sponsor/partners and has 'Engage a firm' (onboarded-firm picker, vehicle and property multi-select) and 'End engagement' for SP-OWN. The Invite card shows firm and vehicle fields for SP-VAL and SP-PM. Add the A98 refusal codes to the error-sentence list, add the actions to parity.json (the valuer independence upload is 'counsel'), and add matrix states plus a challenge that invites a related valuer firm and expects PARTNER_NOT_INDEPENDENT with its sentence."
+  },
+  {
+   "severity": "high",
+   "issue": "A sponsor's passkey decision on an approval will be refused by A14 as written. A14's approval_decisions.credential_kind allows only 'webauthn_hardware' (a check constraint) and verifies through A11's hardware-attested verifier. A11 lets sponsor users make fresh assertions with any login passkey. A62's 'Waiting for you' Approve and Reject (owner grants, tightening rules) call POST /v1/approvals/{id}/decide with a sponsor passkey. The G13 pass criterion, self-approval challenge step (iv) and J11 step 6 therefore cannot pass against a correct A14. A63 and A64 have the same exposure.",
+   "fix": "Add a Specify point (e): A14 accepts a non-hardware passkey credential kind (for example webauthn_passkey) for checkers whose policy slot is a tenant role (SP-OWN), and keeps webauthn_hardware mandatory for staff. Raise it as a reopen loop on A14 (and A11) before Fable writes the hidden tests, and list it under Escalate until it is settled."
+  },
+  {
+   "severity": "high",
+   "issue": "The 'Needs-you and listing flag' challenge contradicts A34 and A43, so a correct build would fail it. A43 marks a task overdue at due_at. A34 moves an attestation to overdue and sets offers-paused only after grace_until (its own test uses 11 days after the due date). A34 lifts the pause only when PROP has REVIEWED every overdue attestation, not when the sponsor signs. The challenge expects the red task, 'Reporting overdue' pill, public sub-line and pause reason together 'past 30 Sep', and expects all four to clear after signing. The sub-line 'until the report is attested' gives the wrong lifting condition.",
+   "fix": "Split the challenge by clock position. At due_at plus 1 day: task red, no pause or flag. After grace_until: pill, pause reason and sub-line, all from A34's fact. After signing: the task closes but the pause and flag remain until PROP reviews through the SDK. Render the sub-line from A34's text, or reword it to 'until RealX has reviewed the report', and fix the SPN-02 done criterion to match."
+  },
+  {
+   "severity": "high",
+   "issue": "The challenge personas do not exist in the A06 seed and contradict A33's rules. (1) In A06, 'Tom H.' is Tom Hargreaves, a platform staff CAPM; Harbour & Co's SP-OPS is Ravi Nair and its SP-IR is Sofia Reyes. (2) A33 lets only an active SP-OWN invite, so 'Tom H.'s agent drafts an invitation' (an SP-OPS agent) must get FORBIDDEN or G22_SCOPE_MISSING, not a 428 draft. (3) A06 seeds only one SP-OWN at Harbour & Co. With one owner the grant_owner checker is RealX PART, so self-approval steps (iii) and (iv) (a second SP-OWN and their agent) cannot run, and 'Waiting for you' never shows the request.",
+   "fix": "Use A06's personas (Ravi Nair SP-OPS, Sofia Reyes SP-IR) and record the A50 'Tom H.' name as a design finding. Make Mia Chen's agent draft the invitation. For the self-approval challenge, name a fixture tenant with two SP-OWNs or ask A06 for a second owner. Add the single-owner branch: the request routes to PART, is absent from 'Waiting for you', and shows 'Owner role pending RealX approval · APR-...'."
+  },
+  {
+   "severity": "high",
+   "issue": "The applicant's agent access (D04) is planned in this node but has no token path upstream. Section 7 marks SPN-01 actions as delegable to the applicant's agent, and the D04 challenge has the applicant's agent save the Track record section. An applicant is a HUMAN with only own-application self-scope and no tenant. A12 has no applicant issue path and A60 has no surface to create the token (ACC-05 is the investor app; SPN-16 needs a tenant). The challenge cannot be run, and D04 ('every user type') has a gap for applicants.",
+   "fix": "Add a Specify point: A12 adds an applicant issue path (own-application cells only, with 'counsel' cells refused), and A60 or A52 provides a creation surface, for example an 'API tokens' card on the /s/apply status page mounted from A60's TokenListPage. If the founder declines, remove the applicant-agent claims from section 7 and the challenge, and record a documented D04 exception."
+  },
+  {
+   "severity": "medium",
+   "issue": "SPN-01's page folder is still unowned in the graph. A52 creates only app\\(sponsor)\\layout.tsx, and /s/apply needs app\\(sponsor)\\s\\apply\\page.tsx, which no node owns. A62 defers this to Specify, so final-graph.json does not include the folder in A62's owned_paths. The 'only owned paths changed' check would fail a correct build.",
+   "fix": "Add <workspace>\\app\\apps\\web\\app\\(sponsor)\\s\\apply\\ to A62's owned_paths in the graph data now (as A63 did for offers\\ in loop A63.0), and list it under Owned paths rather than Proposed."
+  },
+  {
+   "severity": "medium",
+   "issue": "The dependencies do not cover every interface the spec reads. A36 (sponsor offerings read, status labels, raised_cents), A40 (next distribution run), A47 (distinct investors) and A104 (MCP tool names) are neither dependencies nor ancestors. The seed (A06) and Docker stack (A23) are used by the pass criteria but are not ancestors. placedByLabel is defined in A58's features/portfolio: A58 is not a dependency, and the re-export breaks A62's own no-cross-feature-import lint.",
+   "fix": "Add A36, A40, A47 and A104 to deps, and name A06 and A23 in the Specify contract list. Move placedByLabel into a shared package (packages/ui or A52's src/shell) through a loop on A58 or A52, or add A58 as a dependency and allow that single import explicitly."
+  },
+  {
+   "severity": "medium",
+   "issue": "The billing pause boundary contradicts itself and is not testable as written. Point (d) defines pause_on as the date new listings pause. The challenge and pass criteria expect New listing ENABLED at 23:59:59 'on the pause date'. A33's issued-to-overdue transition runs from an unnamed job with no stated cadence, so 'the first load after Sydney midnight' is not deterministic.",
+   "fix": "Define pause_on as the first Sydney day on which the pause is in effect. Test at 23:59:59 on the day before pause_on and at 00:00:01 on pause_on. The test advances the injectable clock and then triggers A33's overdue sweep (or A33 evaluates the state on read). Record the job name and trigger in point (d)."
+  },
+  {
+   "severity": "medium",
+   "issue": "'Waiting for you' filters on tenant.approval_rule.change, but A33 makes the RealX CCO its checker, so a sponsor can never decide it. The tightening approval ('a second SP-OWN') has no action code in A33, so the rule editor's 'Waiting for {name} to approve' has nothing to list.",
+   "fix": "Filter on tenant.user.grant_owner and a new tightening code (for example tenant.approval_rule.tighten, with an SP-OWN checker) requested from A33 at Specify. Show weakening requests only as read-only 'Sent to RealX · APR-...' rows."
+  },
+  {
+   "severity": "medium",
+   "issue": "'Mark all read' contradicts A43. A43 skips protected agent and security notices only under a token. A person with a session clears everything. The SPN-02 done criterion ('mark read without clearing protected notices') cannot be met by a correct build in a human session.",
+   "fix": "State that a person's read-all clears all rows as A43 defines. Assert skipped_protected > 0, with the protected rows still unread on the next load, only for the same call made with the person's token through the SDK or MCP."
+  },
+  {
+   "severity": "medium",
+   "issue": "The product map says a declined application gets 'reason given; can reapply after 6 months', and A33 stores a mandatory reason code. A62 hides every reason, including non-AML declines such as licence, background or track record, without recording this as a decision. Tipping-off justifies hiding only KYB and sanctions outcomes.",
+   "fix": "Show a reason class only when A33 marks it disclosable, and keep the neutral sentence plus the DOM scan for kyb_failed and any screening outcome. Or record 'no reason for any decline' as a founder or counsel question under HG-LEGAL. Add both cases to the state matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "The screens call routes and fields that A33 does not define, and only points (a) to (d) are listed for Specify. Missing: GET /v1/sponsor-applications/me, the withdraw route, the information-request answer route, GET /v1/sponsor/team, the approval-rule read and write routes, invoice lookup by display number (the URL uses INV-1002, while A33's detail takes an INVC id), and the applicant-facing per-person state mapping invited/verifying/verified, which the tipping-off guarantee depends on.",
+   "fix": "Add Specify point (f), listing each item as a follow-up to A33 (and A30 for the per-person state mapping, which must never expose a raw A30 state), pinned by Fable in the manifest. Or use the INVC id in the invoice URL."
+  },
+  {
+   "severity": "medium",
+   "issue": "The agent-drafted invitation mechanism is not defined upstream. A12's 428 CONFIRMATION_REQUIRED applies to confirmable money actions above mandate caps (confirmed through A12's confirmations route and rendered by A60). A33 says only 'prepare an invitation draft'. A50 marks SPN-14 invites 'agent-draft', meaning a second human approves. No read lists pending drafts for SPN-14.",
+   "fix": "Settle one model at Specify with A33, A12 and A50: (a) an owner-confirmed action, using A12's confirmations read and confirm routes filtered by object type, or (b) an A14 4E request with another SP-OWN as checker. Name the routes in section 4 and align parity.json's delegability."
+  },
+  {
+   "severity": "low",
+   "issue": "Product-map gates are not all carried through: G02 on the SPN-01 submit and G01 on the SPN-14 invite (and J11 step 6) are missing from the node's gates and done criteria.",
+   "fix": "Add G01 and G02 as display-only gates with done criteria (an invitee stays pending_identity with no reason shown; the applicant sees the neutral 'verifying' state during screening), or record in the graph data which node covers them."
+  },
+  {
+   "severity": "low",
+   "issue": "The rule-weakening challenge assumes a two-approver Listings rule. The default rule ('Operator submits, owner approves') is one approver, which equals the platform minimum.",
+   "fix": "State the precondition: tighten Listings to two approvers first, then lower it to one and expect 'sent to RealX'. Or use a fixture tenant that starts at two."
+  },
+  {
+   "severity": "low",
+   "issue": "The invoice detail page has no Australian tax-invoice fields: no GST lines, no RealX ABN and no 'Tax invoice' label, and A33's contract does not provide them either.",
+   "fix": "Raise a follow-up to A33 so the invoice read returns the GST amount, the supplier ABN and tax-invoice labelling. Render them as returned and add a matrix state for an invoice with GST."
+  },
+  {
+   "severity": "low",
+   "issue": "Section 1 says A52 404s any principal who is not an 'active' sponsor_user, which would block the pending_identity 'Verify your identity' page. The tenant-leak probe /s/northline/billing/INV-1002 may legitimately hit Northline's own per-tenant INV-1002.",
+   "fix": "Reword to 'a sponsor_user membership of [tenant] in any state; A33 decides what renders'. In the probe, use Harbour & Co's INVC id from Northline's session, and assert that Northline's own INV-1002 (if seeded) shows only Northline's figures."
+  }
+ ]
+}

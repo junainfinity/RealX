@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Graph fit: the spec calls interfaces of nodes that are not in its dependency closure. A45 (recordOutsideTmdDealing, the filing lifecycle, the outside_tmd clock) and A98 (the TP-RE partner principal that consents to sub-funds, checks tmd.publish and go-live) are neither deps nor ancestors of A90. Also used but unreachable: A76 (ADM-26), A60 (ACC-05 confirmation), A54 (listing visibility), A43, A101, A48, A46, A104 and A100 (a pass criterion). The scheduler orders by deps only, so A90 can start before these nodes pass.",
+   "fix": "Add A45, A98, A60, A54, A76, A101 and A104 to A90's deps in final-graph.json and in the Depends on line. All are in earlier milestones. For A100 (AM8), either add it as a dep or reword the pass criterion so it only needs A90's routes to appear in the parity manifest."
+  },
+  {
+   "severity": "high",
+   "issue": "The G05 contract contradicts A32. A32's evaluateG05 reads the latest tmd_response for the offering's own questionnaire version and returns only pass, NO_TMD_ANSWERS, OUTSIDE_MARKET, OUTSIDE_MARKET_FLAGGED and PHASE_OFF. A90 uses one platform standard answer set (offering_id null, version = bank version) and needs G05_ANSWERS_EXPIRED and G05_TMD_REVIEW_OVERDUE. Yet A90 says it does not re-implement the evaluator and makes any change to A32's evaluator an escalation. As written, every standard-set investor gets G05_NO_TMD_ANSWERS, and nothing produces the two new codes. A19's own G05 stub also conflicts.",
+   "fix": "Add spec point (f) with loop A32.2. The evaluateG05 input becomes {regime, flag, answer_set{answers, bank_version, expires_at}|null, listing{questionnaire_version, criteria, outside_market_action, tmd_review_overdue}, now}, and it returns the full code list with a stated precedence. Retire A19's stub under (d). Exempt this loop from the escalation trigger."
+  },
+  {
+   "severity": "high",
+   "issue": "The rule that an agent's outside-market order needs the person has no mechanism and no owner. Under A12, a mandate signing key satisfies passkey confirmations within caps. A37 owns placement, GateResult has no 'person must confirm' field, and A90 owns neither file and lists no data diff for them. Nothing turns warn G05_OUTSIDE_MARKET_FLAGGED under an AGNT principal into a 428 that the signing key cannot satisfy. A32 also emits tmd.outside_market_dealing on the warn, which contradicts 'no dealing row until the person confirms'. A UI-only check or a special case in A90's consumer could pass while the API still accepts the signed order.",
+   "fix": "Add spec point (g) with recorded loops. A19 GateResult gains person_confirmation_required{reason}. A37 placement returns 428 when that field is set for an AGNT principal. A12's confirmation record carries person_only=true, and a mandate signature is refused with CONFIRMATION_PERSON_ONLY. A32 emits the dealing event only after the placement commits. Add a hidden probe: post a correctly signed payload directly and assert zero order, dealing and filing rows before the person confirms."
+  },
+  {
+   "severity": "medium",
+   "issue": "Route authority is not frozen. No per-route scope id or role cell is named, and there is no A03 matrix data diff. A09 rejects unknown scope ids, and the route x principal pass criterion becomes self-referential. TP-RE stop-distribution uses A36 offer.pause, which only CAPM and CCO hold. The readers of the outside-tmd-dealings, sub-fund-requests and retail-terms reads are not named, and neither is the SGL+R ratifier.",
+   "fix": "Add a route table: path, scope id, roles, requiresHuman, agent behaviour and policy code. List the new A03 cells as a data diff, including offerings:pause for TP-RE scoped to its scheme, and name CCO as the ratifier."
+  },
+  {
+   "severity": "medium",
+   "issue": "The outside-TMD assess route is both requiresHuman (agents refused with AGNT_NOT_ALLOWED before scope evaluation) and meant to return 428 to a CCO or LEGL agent's draft. The challenge expects the 428.",
+   "fix": "Split it: an assessment-drafts route (delegable, maker) and an /assess route (requiresHuman, CCO only, fresh assertion). Update the challenge and the MCP expectations to match."
+  },
+  {
+   "severity": "medium",
+   "issue": "G11_RETAIL_ORDER_WINDOW_CLOSED is a new G11 reason code, but G11's evaluator is A19's. A fact provider cannot add a verdict, and only A19 gate-set and fix-it rows are listed as diffs. The rule that a cooling-off period is never cut short therefore has no evaluator.",
+   "fix": "Record loop A19.x: G11 reads an optional retail.last_order_at fact and fails with a named date. Or fold the check into the new G05 result. Define last_order_at for fund_at=confirm."
+  },
+  {
+   "severity": "medium",
+   "issue": "A mid-raise TMD or SPDS: A36 offer.material_change is a manual 4E request, but the spec says publishing 'therefore' opens it and gives no mechanism. A36's re-confirmation set (funded, awaiting_funds, submitted) excludes reflection_period orders, which are exactly the ones the challenge seeds.",
+   "fix": "Choose one: the tmd.publish effector (and an SPDS publish for a live retail offering) opens offer.material_change automatically, or a precheck TMD_MATERIAL_CHANGE_REQUIRED blocks publish until CAPM opens it. Add reflection_period to A36's re-confirmation states as a data diff, with a defined outcome at the deadline."
+  },
+  {
+   "severity": "medium",
+   "issue": "TMD_FIT as a required claim topic breaks the sponsor retained-stake mint. A36 mints default 1,000 bps to the sponsor's investor record, which never answers the questions, so the on-chain mint fails for every retail sub-fund and the J16 pass fails. A wholesale buyer who skipped ONB-07 has no default either.",
+   "fix": "Set defaults: A31 issues TMD_FIT with basis issuer_retained to the retained-stake record under the tmd.publish approval, and G05 applies to every buyer of an au_mis_retail offering until counsel says otherwise. Add both cases to the J16 run."
+  },
+  {
+   "severity": "medium",
+   "issue": "The /target-market route relies on an OnboardingStepLayout export that A56 does not promise. A56 reserves /onboarding/target-market inside its own folder, and re-pointing its stepsFor slot row is an A56 edit that is not in the data-diff list.",
+   "fix": "Record loop A56.x (export the layout; the slot row takes its route from A90's index) and add it to the data diffs. Otherwise compose the layout from A05 primitives."
+  },
+  {
+   "severity": "medium",
+   "issue": "Copy conflicts. The P1 banner text 'Retail offers open with the retail launch, from about 8 April 2027.' is said to come from A21 retail_launch_label, whose seeded value is 'Wholesale investors · retail from 2027'. The question-bank options (e.g. HORIZON <2 / 2-5 / 5+ years) differ from A50's ONB-07 extension (under 3 / 3-7 / over 7 years). Screenshot comparison against the extension then either fails or depends on which text the builder picks.",
+   "fix": "Name a dedicated A21 field with its seeded string, or use retail_launch_label verbatim. Declare one canonical option set (the bank or A50) and reconcile the other before Specify."
+  },
+  {
+   "severity": "medium",
+   "issue": "The challenges exercise joint, SMSF, company and trust accounts, but the spec never says whose declaration the answers are: one signatory or both under the joint signing rule, and whether the answer set, INV-R and TMD_FIT attach to the account or to the person.",
+   "fix": "Specify it. The answer set belongs to the account. An individual declares their own. A joint account follows its signing rule. An entity uses an authorised KYB signatory, with a declaration_id per signer. Add hidden vectors for each."
+  },
+  {
+   "severity": "medium",
+   "issue": "'Counsel's answers change rows, not code' is false if counsel says cooling-off runs after issue (a statutory-style right to return). SM-05 has no post-settled return path (burn, register removal, refund), so fund_at cannot express that answer.",
+   "fix": "Qualify the sentence and add a post-issue cooling-off answer to the escalation triggers, as a new SM-05 requirement touching A37, A28 and A18."
+  },
+  {
+   "severity": "medium",
+   "issue": "The estimate does not match the scope: 7 tables, about 25 routes, 4 A14 action codes, 5 jobs, 2 fact providers, the pack draft, the claim lifecycle, a consumer, 6 web components with 7 states, and 10,000-case properties, all for 10-14 agent-hours.",
+   "fix": "Raise the estimate to about 18-26 h, or split the node into A90a (scheme, sub-funds, TMD records, retail terms, go-live) and A90b (G05, answers, ONB-07, cooling-off UI, outside-TMD, INV-R). Regenerate the graph numbers."
+  },
+  {
+   "severity": "medium",
+   "issue": "The node is flagged oracle:no, yet it decides who may buy retail units, carries the agent-authority rule and a full refund under fund_at=confirm, and its pass criteria depend on hidden tests. An orchestrator that branches on the flag skips the Oracle stage. D04 asks for oracles where money or authority is involved.",
+   "fix": "Set oracle:true in final-graph.json and the frontmatter, and use the standard oracle paragraph. Or have App Gauntlet state that any node declaring a hidden set runs the Oracle stage."
+  },
+  {
+   "severity": "low",
+   "issue": "Minor inconsistencies: the flag owner is A21 here but A08 in A32; G05_PHASE_OFF is missing from the result list; the statement template ignores the count basis; sub-fund requests have no sponsor-owner second approval; J16's 'hidden' path is only a default filter.",
+   "fix": "Name A21 as flag owner; add G05_PHASE_OFF; add a {{cooling_off_basis}} token; state whether subfund.request needs SP-OWN approval under the tenant guardrail; keep hide-or-flag under HG-LEGAL."
+  }
+ ]
+}

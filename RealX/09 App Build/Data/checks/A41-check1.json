@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The withholding interface does not match A40, which is already specified. A40 calls a per-line `WithholdingProvider`, applies the rate to gross + carry_in with A02 `mulBp(..., 'half_up')`, stores `withholding_basis` in (tfn_quoted, no_tfn, foreign_resident, exempt), and zeroes withholding on dust-carried lines. A41 defines a batch `computeWithholding` over `gross_cents` only, rounds `down` on a fund-payment base, returns `rate_reason` values that do not map onto A40's enum, and stores a WithholdingCalc for lines A40 later carries with zero withholding. The R8 check (A40 withholding_cents = Σ WithholdingCalc) then fails on .5 rounding boundaries, carry_in and dust-carried lines. Also: `run_kind=exit` is not in the signature, A40's proposal has no component declaration although A41 says components travel inside it, and A40 never says it keeps a run in `calculating` on TAX_NO_RATE_FOR_CLASS.",
+   "fix": "Make one contract, either A41 implementing A40's WithholdingProvider or an A40 follow-up adopting A41's batch signature. It must: have A41 compute the amount and A40 copy it; use one rounding parameter (A02 default down), with A40 dropping half_up; add carry_in_cents and run_kind to the input; either exclude dust-carried lines or mark their calc carried and leave them out of R8; map rate_reason to withholding_basis explicitly; put the component declaration in A40's distribution.propose payload; and document the `calculating` error state in A40."
+  },
+  {
+   "severity": "high",
+   "issue": "The dependencies leave out nodes whose interfaces the spec calls directly. The graph deps are only A40 and A30. Missing: A35 (AMMA rendering, document_id/sha256, CRS file storage), A43 (notices and the re-certification task), A46 (scheduler for the four jobs), A101 (sensitive-action notice on agent self-certification), A17 (the bank fact that settles the remittance), A37 (the allotment that recordLot records), A06 (the design-fidelity seed), A20 (the recon break on remittance mismatch) and A104 (the MCP probes). None of these depends on A41, so adding them creates no cycle.",
+   "fix": "Add A35, A43, A46, A101, A17, A37 and A06 to A41's deps in final-graph.json and in the Depends-on line. Add A20 and A104 too, or reword those checks as interface fakes with the real probes moved to A100. Regenerate the graph and the canvas."
+  },
+  {
+   "severity": "high",
+   "issue": "Agent signing of the FATCA/CRS self-certification contradicts A03, A12 and A100. A03's delegable.ts marks the ONB-05 self-certification as \"counsel\", treated as non-delegable until counsel answers, and A12 refuses it with SCOPE_PENDING_COUNSEL. A41 makes it delegable by default, adds its own config key tax.self_cert.person_only and error TAX_SELF_CERT_PERSON_ONLY, and its challenge asserts that the agent call succeeds. The same cell cannot pass both A41's QA and the upstream oracles. The no-TFN acknowledgement and the residency declaration are personal declarations of the same kind and are not classified at all.",
+   "fix": "Drop the config key and the error code. The route reads A03's delegable.ts cell, and an agent gets A12's SCOPE_PENDING_COUNSEL until Decisions records counsel's answer; the flip is a one-line A03 change with a decision id. Invert the challenge: refused now, succeeds with a sensitive-action notice after a scratch flip. Classify the no-TFN acknowledgement and the residency/TIN declaration as counsel cells in A03 and list them under HG-LEGAL. Align A56 lines 104 and 123."
+  },
+  {
+   "severity": "high",
+   "issue": "The financial-year attribution contradicts the design seed that the challenge asserts. A41 attributes income by fy(period_end). A06 fixes FY27 to date A$576.96 as 3 × 192.32 paid 10 Jul, 10 Aug and 10 Sep 2026, and the 10 July payment is for the June (FY26) income period. So me/tax/summary?fy=FY27 cannot return 57696. The spec also never says whether distributions_cents is gross, net or cash paid, although POR-01's KPI and A47's fy_to_date_net_cents must equal it.",
+   "fix": "Split the fields: distributions_paid_cents (net cash by paid_at, which is the design KPI) and income_attributed_cents (gross by fy(period_end), used for the AMMA). Map the design figure explicitly. Add a vector: a June run paid in July counts in FY27 paid and in FY26 AMMA. Recheck the FY26 figure A$1,944.20 against the same definition."
+  },
+  {
+   "severity": "high",
+   "issue": "The year-end component true-up is referenced as 'below' but never specified. There is no route, actor, approval code or supersede rule for append-only TaxComponent rows, and no treatment of MIT withholding already computed on an estimated fund-payment base. Yet the AMMA oracle and the 'reissue after a component true-up' challenge depend on it, and every run defaults to a 100 % rental estimate.",
+   "fix": "Add a true-up subsection. Cover: a PUT for FY components by SP-FIN (agent allowed as maker) under a named 4E policy (recorded as a tax-adviser question); a new TaxComponentVersion superseding the estimates, never an edit; the AMMA uses the trued-up split; stored withholding is never recomputed and any difference becomes a TAXO exception; the batch refuses TAX_COMPONENTS_ESTIMATED while estimates remain. Add error codes, an audit event and oracle vectors."
+  },
+  {
+   "severity": "high",
+   "issue": "The Australian withholding rules for foreign residents are wrong or incomplete, and the oracle would freeze them. 'no_tfn beats foreign_mit' withholds 47 % on gross from a foreign resident without a TFN, but non-residents are generally outside TFN withholding and fall under non-resident/MIT withholding; the spec's own exemption list has a 'non-resident' code. Only fund-payment components attract withholding, so the interest and unfranked dividend components paid to foreign residents get zero withholding, although non-resident interest and dividend withholding applies to them. The 10,000-line oracle over every reason code would lock in both behaviours.",
+   "fix": "Route residency_status=foreign_resident to the non-resident branch with the non-resident TFN exemption applied automatically and recorded; keep no_tfn for Australian and temporary residents. Add rate-set fields nr_interest_bp and nr_unfranked_dividend_bp (treaty overrides as data), applied per component, with reason codes foreign_interest and foreign_dividend. Label the seeds unverified, record tax-adviser questions under HG-LEGAL, and extend A02's reason codes through a follow-up."
+  },
+  {
+   "severity": "high",
+   "issue": "POR-07 has two owners for the same data. A47 owns GET /v1/me/statements (the POR-07 KPIs, tfn_status limited to on_file|not_provided, and items including annual_statement) and generates the annual statement; A40 owns /me/distributions/summary. A41 adds me/tax/summary and me/tax/statements, and its challenge requires me/tax/statements to list an annual statement. A41 does not depend on A47 and cannot list A47's document, and A47 does not depend on A41 and cannot read AMMA issued_at or the five-value tfn_status. The challenge cannot pass as written.",
+   "fix": "Make A47's me/statements the single screen contract. A41 publishes tax.amma.issued and tax.profile.status_changed outbox events that A47 consumes (an A47 follow-up widens its tfn_status enum). A41's me/tax/statements lists AMMA documents only. Remove 'annual statement' from A41's challenge and design references, and move the cross-module equality check to A49."
+  },
+  {
+   "severity": "medium",
+   "issue": "Upstream catalogue rows are known to be missing today, not just possibly at Specify. A16's catalogue has no withholding.remit row. A04 has no Vehicle.tax_class. A04 already owns the tax_profile and tax_component tables, which duplicate A41's tax_profiles, tax_profile_versions and tax_components. A04 encrypts the ABN in _enc columns, while A41 stores it in clear. R8 belongs to A20, not A16.",
+   "fix": "Raise A16.1 (withholding.remit: withholding_payable/payout_clearing, 4E TRSY→CFO) and an A04 follow-up (vehicle.tax_class, and either retire A04's tax tables in favour of A41's registerModuleSchema tables or define them as extensions) before Build. Make ABN storage consistent (_enc plus a display column, or amend A04 with a decision). Correct the R8 attribution to A20."
+  },
+  {
+   "severity": "medium",
+   "issue": "The owned paths are incomplete, so 'only the owned path changed' will fail. The four worker jobs need services\\worker\\src\\jobs\\tax\\ (A40 and A42 own their job folders). The tax_authority adapter is not in A08's adapter list and needs packages\\adapters\\tax-authority\\. Seed fixtures would land in A06's packages\\db\\seed\\.",
+   "fix": "Add <workspace>\\app\\services\\worker\\src\\jobs\\tax\\ and <workspace>\\app\\packages\\adapters\\tax-authority\\ (with an A08 conformance suite and the swap point recorded in Decisions) to owned_paths in the spec and the graph. Route tax seeds through an A06 follow-up or a documented A06 extension hook."
+  },
+  {
+   "severity": "medium",
+   "issue": "Staff read routes that A74 already needs from A41 (its 'A41.1' request) are missing: GET /v1/tax/amma/batches?fy=, /tax/remittances, /tax/crs-fatca/reports, /tax/withholding/exceptions and /tax/lots. A41 defines only POSTs for batches, remittances and reports, so ADM-20 cannot show state and A100 cannot pair each list with an API read.",
+   "fix": "Fold the five routes, with scopes, masking, pagination and allowed_actions[], into A41's contract and pass criteria now, and tell A74 that A41.1 is no longer needed."
+  },
+  {
+   "severity": "medium",
+   "issue": "The action codes and scopes are not grounded in A03. tax.amma.reissue and tax.profile.staff_override are not product-map maker-checker rows and so are absent from A03's 49-row baseline that A14 resolves. The ids use tax.* rather than A03 cell ids. Scope names tax:read, tax:write, sponsor:tax:* and tax:operate are invented, although A03 says scopeId === actionId and A12 invents no names. The Specify step says 'five action codes' while the pass criteria test six.",
+   "fix": "Raise an A03 follow-up adding the two approval rows with policies justified against D08. Map every A41 action and route to an A03 cell id and use those ids as x-realx-scope. Fix 'five' to 'six'."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'Foreign resident on a non-MIT vehicle' challenge requires that the run 'cannot be closed' until TAXO records an override. No such mechanism exists in the body, in SM-08 (reconciling→closed: paid equals approved) or in A40. trustee_assessed_review is also not an A02 reason code, although the spec says A02's selectRateBp produces the rate.",
+   "fix": "Either specify it: export openTaxExceptions(run_id), used as a precheck on A40's approve transition through an A40 follow-up (before money moves, not at close), with the override clearing the exception and the reason code added to A02. Or drop the close-blocking sentence and keep only the flag and the TAXO queue."
+  },
+  {
+   "severity": "medium",
+   "issue": "The approval timing rule for rate sets is incomplete. If CCO and CFO approve after effective_from has passed, runs calculated between effective_from and approval used the old version while the row claims to be effective, which breaks 'version selected by calculation time' and replay reproducibility.",
+   "fix": "On approval, refuse with TAX_RATE_SET_EFFECTIVE_PASSED if effective_from is at or before now, or move it to the next Sydney day with an audit event. Select versions by max(effective_from, approved_at). Add an oracle vector."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G16 result is not total. pass/refer/fail do not cover tfn_status=not_provided without an acknowledgement, or a foreign residency with neither a TIN nor a reason, so the builder must guess whether to block, which risks blocking investing against D08.",
+   "fix": "Give a full decision table (residency, self-cert state, TIN or reason, tfn_status, acknowledgement, reasonableness flags) → pass/refer/fail plus withholding_applies. not_provided means pass with withholding, with the acknowledgement enforced at save (TAX_NO_TFN_ACK_REQUIRED); a missing TIN means refer. The oracle enumerates the table."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 8-12 hour estimate is below A40 and A37 (10-14 each), although A41's scope is larger: profiles with encryption, the engine with a 10,000-line oracle, AMMA over 200 FYs, lots, remittance, CRS/FATCA, four jobs, more than 20 routes and a PII scan. A41 also gates A49, the AM3 exit.",
+   "fix": "Raise the estimate to 12-16, or split it into A41 (profiles, G16, rate sets, engine, read contracts; oracle, unlocks A49) and A41b (AMMA, true-up, lots, remittance, calendar, CRS/FATCA; oracle, unlocks A45 and A74)."
+  },
+  {
+   "severity": "low",
+   "issue": "Minor inconsistencies: the job tax.amma_due is not among the 'four jobs'; the CRS balance 'from A18's register' gives units with no valuation basis; mit_foreign_treaty_bp is really an EOI rate; nothing triggers AMMA generated→delivered; the AIIR has no builder and no out-of-scope statement; the Retroactive TFN challenge uses Alex Morgan, whose seed has TFN on file; the wikilinks to A50, A51 and A74 use ':' while the filenames use '-'.",
+   "fix": "Merge tax.amma_due into the listed jobs. Define the CRS balance as units × the A34 NAV per unit at 31 Dec. Rename the fields to eoi/non_eoi. Deliver AMMAs on batch completion through A35/A43. State AIIR scope. Use a dedicated no-TFN fixture investor. Fix the link targets."
+  }
+ ]
+}

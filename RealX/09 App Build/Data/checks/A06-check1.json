@@ -1,0 +1,100 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Agent token material contradicts A12 and A12 is not a dependency. A06 seeds tokens as SHA-256 hash + prefix 'rxk_sbx_' + last four. A12 (lines 40-41) fixes the format rx_<type>_<lookup>_<secret>: per-owner prefixes rx_inv_/rx_spn_/rx_ptr_/rx_stf_ (sandbox rx_sb_), a clear 12-character lookup column, and Argon2id with a per-row salt, with the prefixes checked by A04. Seeded tokens would fail A04's constraint or A12's verification. A06 (AM0, depends on A04 only) would also be inventing the scope vocabulary, mandate hash and session-key policy that A12 and A29 own.",
+   "fix": "Add A12 (and A11 for passkey credential rows) as dependencies and move A06 to AM1. There is no cycle: A06 only unlocks A23, A49, A61 and A99, and A23 already depends on A12. Alternatively, split agent and passkey seeding into a follow-on node after A12. Either way, create seeded tokens through A12's issue function in sandbox mode, with A12's format, hashing, scope catalogue and mandate canonicaliser. Store session keys as mandate records only; installing them on-chain stays with A29."
+  },
+  {
+   "severity": "high",
+   "issue": "The audit chain interface is wrong. The spec writes audit rows 'through A04's append-only API' and verifies them with 'the pure R18 function'. A04 (line 76) says audit hashing and chain verification belong to A10 (AM1, not a dependency), and R18 is A20's rule that calls A10's verifyChain(). A10 (line 45) already expects A06 to hash differently and need a follow-up loop.",
+   "fix": "Either add A10 as a dependency and write every seeded event through A10's record(), or have A06 carry a byte-identical copy of A10's canonicaliser (event_sha256 = sha256(prev || canonical(event)), genesis sha256('realx-audit-genesis:live'), canonical_version), checked against golden vectors from A10's spec. Change the pass criterion to 'A10's verifyChain() verifies the seeded chain'."
+  },
+  {
+   "severity": "high",
+   "issue": "The approvals are called 'role-correct', but 5 of them break the product-map policy table (data_admin.py lines 736-777). APR-2291 is a distribution approval with a TRSY maker; the policy is FINA -> CFO (4E), and FINA and CFO must be separate people. APR-2290 (listing publication) uses CCO + LEGL (6E); the policy is CAPM -> CCO (4E+Q). APR-2285 (rule pack change) has maker LEGL and checkers CCO + TOKO; the policy is maker CCO, checker LEGL (4E+Q). APR-2288 (forced transfer) has a REGO maker; the policy is maker LEGL, checkers CCO + CFO (+ trustee), 6E+Q. APR-2286 has an SVCA maker; the policy is TRSY -> CFO. The resolution row misquotes the table. The only authority invariant is 'maker not among checkers', so a wrong role mapping would still pass seed:verify.",
+   "fix": "Take every seeded approval's maker role, checker roles and code from A03's policy data. Make Priya N. FINA (display label 'Treasury ops'), or make the APR-2291 maker a FINA user's agent. Correct APR-2290, APR-2285, APR-2288 and APR-2286. Add the invariant 'each approval's (action, maker role, checker roles, code) equals its A03 policy row', plus a Fable challenge that mutates one role."
+  },
+  {
+   "severity": "high",
+   "issue": "The agent principals do not cover every persona type, although the spec promises 'one agent principal per persona type' and 'agent tokens for every persona type' for J22. Only 5 owners are seeded (Alex, SP-FIN, TRSY, TP-RE, TP-VAL). Missing are SP-OWN, SP-OPS, SP-IR, TP-PM, TP-AUD, TP-OBS and TP-LIC (no licensee user is seeded at all), the INV-E, INV-J, INV-S, INV-F and INV-R investor types, and every staff role except TRSY. The valuer and property manager are placed at the platform tenant, but A12 (rx_spn_ prefix) and D04 (SPN-16 is used by valuers and property managers) make them members of a sponsor tenant.",
+   "fix": "Seed one AGT-U token per owner type: every P1 INV-* sub-type, all four SP-* roles, TP-RE, TP-VAL, TP-PM, TP-AUD, TP-OBS and TP-LIC, and at least CCO, REGO, FINA, KYCA and SECO. Add a TP-LIC user. Make TP-VAL and TP-PM members of HCO's tenant. Add an invariant that every owner type has an active token and that every ADM-35 row state (active, revoked, expired, anomaly-flagged, killed) is present."
+  },
+  {
+   "severity": "high",
+   "issue": "The sponsor 'retained stake >= 10%' contradicts the 5% holder cap and the fully offered 10,000 units. Hard cap = 10,000 x price, and 'no holder > 5%' and 'largest holder 4.8%' are both locked. A sponsor holding 10% would break G07 and the locked figures, and the spec does not say where the stake is held.",
+   "fix": "State that the retained stake is a sponsor-admission attribute held outside the tokenised units (a separate class, or equity outside the trust) and appears in no register lot, token balance or holder count. Record an open question for A33/A36 on how the 10% proposal coexists with G07."
+  },
+  {
+   "severity": "high",
+   "issue": "The escrow invariant is ambiguous in two ways. First, Alex's funded order total of A$2,395.92 includes the A$11.92 fee held 'in offer escrow', yet escrow is locked at A$3,513,200.00, which is the sum of subtotals only; with fees included it would be A$3,530,766.00. Second, UNL01 orders are 'allocated', not 'funded', so a literal 'sum of funded orders' is A$2,544,960.00. Two builds could each pass on a different reading.",
+   "fix": "Say where the 0.5% fee sits between funding and mint. One option: the fee stays in escrow until finalise, so escrow = sum of order totals in states funded + allocated = A$3,530,766.00. The other: the fee moves to a fee-suspense account at funding, so escrow = sum of subtotals = A$3,513,200.00. Apply the same rule to Alex's awaiting-investment line and lock the fee account's balance as well."
+  },
+  {
+   "severity": "medium",
+   "issue": "The distribution timeline is inconsistent in four places. (a) 'Paid on the 10th business day' conflicts with the locked dates 10 Jul, 10 Aug and 10 Sep 2026; the 10th business days are 14 Jul, 14 Aug and 14 Sep. (b) The September runs are calculated on 23 Sep, before the period ends, with no record date, while 'no event after AS_OF' rules out a 30 Sep snapshot. (c) Mint dates for BAY01, MRN01 and GYM01 and admission dates for NLC and YBP are missing. (d) The design's FY26 total of A$1,944.20 is not addressed and cannot be reached with flat runs and a March 2026 start.",
+   "fix": "Reword to 'paid on the 10th calendar day (within the 10-business-day standard)'. Give the September runs a record date on or before AS_OF, or relabel them as the August period. List all mint and admission dates, with every mint except HAW01 before 23 Jun 2026. Add a resolution row: FY26 is derived from the generated history and A$1,944.20 is not reproduced."
+  },
+  {
+   "severity": "medium",
+   "issue": "emitFixtures() has no consumer. No other node references registry-extract.csv, bank-statement.csv, identity-scenarios.json, chain-state.json or agent-activity.jsonl. Sandbox outcomes are driven by A08's magic inputs (' REFER', 'SIM-DRIFT-<n>', cents ending .99 or .13). A18 writes its own extract with -DRIFT, A17 seeds its own accounts, and A22 uses an exact-name persona table. The GYM01 break, the Okafor referral and the AML deposits may therefore not reproduce once the real sandboxes run.",
+   "fix": "Drive the sandboxes through A08's scenarioOf() markers and A22's persona table (GYM01 instruction -DRIFT-2, Okafor as REFER, A17 markers for cash-delta and third-party deposits), and drop any emitter file that has no named consumer. Add a pass criterion that the booted A23 stack reproduces the break, the referral and the alerts from the seed alone."
+  },
+  {
+   "severity": "medium",
+   "issue": "The loader conflicts with A04's role model and the append-only audit table. load() writes as the migrator role, but A04 (line 62) reserves realx_migrator for db:migrate, and as table owner it bypasses RLS, so a wrong tenant_id would go unnoticed. Also, 'drops and reloads seed-owned rows' cannot delete insert-only audit_event rows.",
+   "fix": "Load through realx_app with SET LOCAL tenant context, or through a seed role that A04 defines. Make npm run seed require a freshly migrated empty database, and refuse with a named reason when the database is not empty."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several deviations from the design are missing from the resolutions table. APR-2288 leaves the inbox and APR-2292 is added. APR-2286 changes from INV-00841 A$62,000.00 to Ridgeline A$61,000.00. Escrow changes from A$3,048,880.00 to the derived figure. OP-7730 goes from 2 signatures to 1. OP-7728 moves from 11:30 to 17:04. APR-2291 moves from Bay Road to MRN01. A10 (line 91) still expects 'Distribution run · Bay Road · APR-2291' and '22 Sep 17:04 OP-7726 mint · APR-2270', which contradicts A06.",
+   "fix": "Add a resolution row for each deviation, giving the old design string and the new one. List the five audit rows verbatim. Raise a cross-node fix for A10 (line 91) and A66."
+  },
+  {
+   "severity": "medium",
+   "issue": "The D04 authority scenarios are missing: an agent attempting a non-delegable act (changing the bank account, creating or widening a token, changing a guardian, closing the account, identity verification); a staff agent that is not the maker's own acting as checker or custody signer; a sponsor agent attempting the sponsor-owner approval. J21 (wind-down) is claimed as covered but has no fixture. J16 is mapped to p2-preview, which contains no TMD, PDS or retail fixture.",
+   "fix": "Add an agent-authority scenario whose expect block lists each refusal (G22/G13). Add a wind-down scenario (for example a GYM01 tenant default with a G10 halt). Add TMD, PDS and retail-investor fixtures to p2-preview, or drop J16 from the claim."
+  },
+  {
+   "severity": "medium",
+   "issue": "Property value and NAV are underspecified and contradict each other. There is no property value or debt per trust. MPA01's valuation of A$1,924,000 equals val x 10,000, even though its LVR is 30%, which clashes with the 'property value is stored separately from NAV' resolution. G09's valuation reference (NAV or property value) is not defined.",
+   "fix": "Lock property value, debt and cash per trust so that NAV/unit = val and debt / property value = LVR, or state that val is property value per unit. Make the MPA01 figure consistent with that choice, and state that G09 uses NAV per unit."
+  },
+  {
+   "severity": "medium",
+   "issue": "The staff personas lack several P1 roles that the policy table and modules need: VALO, CLSR, CMPH, MKTG, PART, TAXO, IRCM, PROP, INVM and ASTM. TP-SIGN is the custody signing provider (a vendor), not an independent V1 signer.",
+   "fix": "Add one fictional persona for each missing P1 staff role, with assignments that pass segregation of duties. Give the independent V1 signer a valid role rather than TP-SIGN."
+  },
+  {
+   "severity": "medium",
+   "issue": "The wallet truncation rule contradicts itself. 0x4b…19, 0x9e…a2 and 0x2c…7f are first 4 + last 2 characters, so no address can reproduce them under a 'first 6 + last 4' rule.",
+   "fix": "State that these three design strings are not reproduced (the 6+4 rule gives forms like 0x4bxx…xx19), and add a resolution row for it."
+  },
+  {
+   "severity": "medium",
+   "issue": "INV-F 'holds ANN01 only', but ANN01 is a live offer that is not yet issued: register 0, supply 0.",
+   "fix": "Make INV-F hold units in MRN01 or GYM01 and have a funded ANN01 application. Add the invariant 'no lot exists in an unminted trust'."
+  },
+  {
+   "severity": "low",
+   "issue": "The IDs are not in time order. APR-2270 and OP-7726 are dated 25 Jun 2026, while the lower-numbered APR-2261 and APR-2268 are dated September, and the spec says new IDs continue the sequence. With a 72-hour expiry, a strictly time-ordered sequence breaks.",
+   "fix": "Declare that design-named IDs are not time-ordered and allocate generated history IDs below APR-2200 and OP-7700, or renumber the HAW01 mint and record the change as a resolution."
+  },
+  {
+   "severity": "low",
+   "issue": "Relative ages depend on unstated created_at times and an unstated rounding rule. APR-2291 is 1h43m old at AS_OF, but the design shows '2h'. The break is 4h28m old and must show '4h'.",
+   "fix": "Give created_at for each pending approval and lock the rounding rule in an A02 helper, so the design's 2h, 5h, 1d, 2d and 4h all come out."
+  },
+  {
+   "severity": "low",
+   "issue": "It is unclear whether J. Whitford's refunded application counts in '128 applications' and in 'HCO investors 314'.",
+   "fix": "Define both counts explicitly and add the list of named applicants to the invariant."
+  },
+  {
+   "severity": "low",
+   "issue": "The oracle rule differs from sibling non-oracle nodes: Fable's independent derivation script and planted faults are not written to the hidden folder before the build.",
+   "fix": "State that Fable writes the locked-figure derivation script and the planted-fault list to <workspace>\\gauntlet\\hidden\\A06\\ from this note alone, before the build starts."
+  }
+ ]
+}

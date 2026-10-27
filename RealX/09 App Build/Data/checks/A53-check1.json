@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The signing contract conflicts with A14. A53 section 4 asks A11 for a fresh-assertion challenge (sha256(server_nonce||payload_sha256||purpose)) and posts an 'assertion reference' to /v1/approvals/{id}/decide. A14 says decide takes the raw WebAuthn assertion, and that assertion's challenge must equal the request's payload_sha256. A14 never mentions fresh-assertion, and it defines the bulk challenge as sha256(sorted hash list) with no A11 nonce. A53 also sends payload_sha256 to /auth/fresh-assertion/options while saying the client 'never supplies the hash'. The builder cannot satisfy both A11 and A14, and the hash-tamper challenge's expected codes depend on which contract wins.",
+   "fix": "Pin one contract before Specify, as an upstream spec-defect loop on A11 and A14. Recommended: /auth/fresh-assertion/options takes {approval_id | approval_ids[] | break_glass_id, purpose}, and the server looks up the canonical hash itself. decide, ratify, veto and bulk-decide then take fresh_assertion_id, and A14 verifies it through A11's requireFreshAssertion. Update A53 section 4, A14's decide and bulk-decide text, and the challenge's accepted codes (add FRESH_ASSERTION_REQUIRED)."
+  },
+  {
+   "severity": "high",
+   "issue": "The shell depends on routes and fields that no dependency defines. (a) There are no routes to extend or end 'view as tenant': A11 has only POST /iam/view-as-tenant. (b) A11's GET /iam/me shape has no active view-as grant, no break_glass_id or expires_at, and no on-call ENGO marker, yet the banners and the break-glass button are read from it. (c) GET /iam/break-glass/{id} is needed for the pending state that lists which holders have activated, but it arrives only in A11.1, which A67 requests at AM7. (d) There is no approvals count endpoint. A09 lists return {items, next_cursor} with no total, and the spec itself forbids counting from list pages, yet the inbox badge is 'the count of GET /v1/approvals?...'. (e) A09's /v1/meta has no per-adapter environment; that data is only on /internal/health/adapters. (f) The spec relies on 'A33's tenant list endpoint' without naming it.",
+   "fix": "Add a 'Requested from upstream' subsection naming the exact routes and response fields: POST /iam/view-as-tenant/{id}/extend and /end; /iam/me fields view_as{tenant_id,reason,expires_at,extended}, break_glass{id,runbook,expires_at,activations} and on_call_engo; GET /iam/break-glass/{id}; GET /v1/approvals/summary {checker_pending}; an adapters[] {name, environment} block on /v1/meta or a staff-readable adapters route; and the A33 route (for example GET /v1/admin/tenants). Land them as follow-up loops (A11.2, A14.x, A09.x) before A53 Build, or remove the UI that needs them."
+  },
+  {
+   "severity": "high",
+   "issue": "Nobody clearly owns the shared console blocks, and they may land in the wrong place. A51 says A53 codes the extension-B blocks in packages/ui/src/ext/admin/. That path is inside A05's owned path in final-graph.json, and A05's text says A50 and A51 own ext/. A67 and A69 import the blocks from packages/ui/src/ext/. A53 instead builds them in apps/console/src/shell/blocks/. As written, downstream console nodes import from a folder that will not exist, and the web app cannot import MandateTable from inside the console app. TextArea is attributed to 'A50's block set', but A50 is design-only, is not an ancestor, and no node is named as coding it.",
+   "fix": "Decide at plan level. Either carve packages/ui/src/ext/admin/ out of A05's owned paths and assign it to A53 in final-graph.json, dropping A53's fallback, or keep src/shell/blocks/ and update A51, A67, A69, A72, A74 and A77 to import from A53's src/shell/index.ts. Name the node that codes TextArea (A05 catalogue or A53 blocks/) and the node that codes MandateTable for the web app."
+  },
+  {
+   "severity": "medium",
+   "issue": "Graph dependencies miss interfaces the spec uses. It uses A06 (seeded staff personas and requests, and the badge counts 5 and 3 in the pass criteria), A33 (the tenant list for the view-as dialog), A35 (the evidence document library) and A104 (the pass criteria and challenges call every 'never' row through the MCP server). None of these is an ancestor of A53.",
+   "fix": "Add A06, A33, A35 and A104 to A53's deps in final-graph.json and to the 'Depends on' line, or remove those uses from the spec and the pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "The reserved route-group list in section 1 does not match the graph. (onboarding) and (markets) do not exist. The graph uses (investors) for A68, (offerings) for A71, (token) for A72, (register) for A73, (reporting) for A76, (market) for A92, (governance) for A93 and (travel-rule) for A96. nav.ts routes and the 'owned by A7x' placeholders would point to the wrong groups.",
+   "fix": "Replace the list with the graph's route groups and owners, and give each of the 39 nav items its route under the owning node's group, generated from A51's screens.json and checked against final-graph.json owned_paths."
+  },
+  {
+   "severity": "medium",
+   "issue": "A96 owns the console paths app/(travel-rule)/ and src/features/travel-rule/, but it neither depends on A53 nor appears in A53's Unlocks list, and it has no nav item. It could build a console page without the shell.",
+   "fix": "Add A53 to A96's deps and to A53's Unlocks list, with a nav or route entry for travel-rule, or record that A96 adds no console page."
+  },
+  {
+   "severity": "medium",
+   "issue": "The rule that 'a production build fails if any nav.ts route has no page' breaks the console production build from AM4 until AM9. The P2 pages of A92 and A93 land only in AM9, and A66 to A77 land in AM7. That breaks the Dockerfile production image, any e2e or production-mode check in between, and possibly 'npm run verify from a clean clone'.",
+   "fix": "Make it a release gate (HG-PROD or AM9 exit), or apply it only to nav items whose owning node is 'passed' in app/evidence/status.json. Until then production renders a 'Not available' state behind the phase flag. State which build mode npm run verify uses."
+  },
+  {
+   "severity": "medium",
+   "issue": "Parts of the product map's M01 and M25 are not covered. The ADM-01 header requires global search over 'investor, wallet, tx hash, property, case' and a 'network pill'. The spec routes only id prefixes (no 0x wallet address, no tx hash, no property) and has no network pill. The ADM-30 detail requires 'Custody binding: which vault signs and on what condition' and the file hash (J06 step 4, 'bound to the file hash'). The modal and flow show only the payload hash and a '+Q' line.",
+   "fix": "Add search routing for 0x plus 40 hex characters (wallet), 0x plus 64 hex characters (tx hash) and property or trust codes, with tests. Add a network pill read from /v1/meta chain id. Add vault code (V1 to V7), signing condition, custody op state and file hash rows to HardwareKeyConfirm and the Diff step, read from A14's detail and custody_ops, with a pass criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "The origin, cookie and relying-party mechanics are partly invalid. The WebAuthn rpId must be a registrable suffix of the origin's host, so a literal 'console' fails on console.localhost. The SDK's cookie auth from console.localhost to a separate API origin, using A11's SameSite=Lax cookie, is cross-site, so the cookie is not sent. The spec does not say how web and console sessions stay separate on one API host, so the cross-origin cookie challenge has no defined mechanism to pass.",
+   "fix": "Specify that the console proxies the API under its own origin (a Next.js rewrite of /api/* to the api service), so the session cookies are host-only on the console origin, and connect-src is 'self'. Set rpId to the console host (console.localhost locally) from packages/config. The API binds each session to its surface (web or console) and refuses a cookie from the other surface. Add a test for each."
+  },
+  {
+   "severity": "low",
+   "issue": "The bulk challenge is mis-specified. 'Fifty low-risk ids plus one' is 51 ids, above A14's 50 cap. A 'A$1.2m 4E+Q distribution run' also contradicts A14 and journey J06: above A$1M the policy is 6E, adding the CEO.",
+   "fix": "Use 49 low-risk ids plus one 6E A$1.2m distribution, expecting APR_BULK_NOT_LOW_RISK. Add a separate 51-id case that the UI blocks and the API refuses."
+  },
+  {
+   "severity": "low",
+   "issue": "The journey mapping is wrong for J20. Steps 1, 2 and 6 are reviews (queues, chain alerts, audit events), not hardware-key decisions. J20 step 8 (LEGL publishes a disclosure, G13) and J09 step 5 (the CCO compliance approval) are missing.",
+   "fix": "Change the list to J05 step 3, J06 step 4, J09 steps 5 and 7, J13 step 3, J15 step 3, J20 step 8, and the J10 step 3 ratification."
+  },
+  {
+   "severity": "low",
+   "issue": "The modal's state count and refusal list are inconsistent. A51 counts ratify as the seventh state, but A53 says 'seven states plus the ratify variant'. Section 4's refusal list also omits codes the flow can hit: APR_POLICY_NOT_FOUND, APR_AUTO_CONDITION_MISMATCH, SM00_ILLEGAL_TRANSITION and A09's idempotency_key_reused.",
+   "fix": "Say six states plus ratify (seven) plus the bulk variant, consistently. Add the missing codes to section 4 and the generated error-catalogue test."
+  },
+  {
+   "severity": "low",
+   "issue": "The oracle flag, template and estimate do not fit the node. oracle is 'no', yet an 'Oracle rule' paragraph is present (the template allows it only for oracle yes) and Fable writes hidden tests anyway. The node is the only UI path to approvals and break-glass, which is authority. The 6 to 10 hour estimate is low for its scope (new app, CSP and origin, sign-in, sidebar, modal, five-step flow, tables, break-glass, nine blocks, parity) next to A66 at 10 to 14.",
+   "fix": "Set oracle to yes in the graph and frontmatter, or rename the paragraph 'Hidden tests'. Raise the estimate to 10 to 14, or split the blocks/ work into its own node."
+  },
+  {
+   "severity": "low",
+   "issue": "The root layout 'mounts the shell for every route except the (auth) group', but a server root layout in the App Router cannot tell which route group is rendering. The kitchen-sink route under (auth) therefore renders without the shell it is meant to exercise.",
+   "fix": "Specify the mechanism. Either each feature group's layout.tsx renders ConsoleShell from src/shell/index.ts (a documented contract for A66 to A96), or a client wrapper decides by pathname. Give the kitchen sink its own layout that mounts the shell."
+  }
+ ]
+}

@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The spec says no button is decided in the client and every action comes only from allowed_actions[]. That holds for SM-08 transitions, Release escrow and the other controls. But the follow-up loops only add allowed_actions[] to A39 routes and to A40.1's run INDEX. A40's run detail (GET /v1/distributions/runs/{id}), A17's receipts (Match, Return) and every A41 route (Generate, Reissue, Edit rule, Remit, File, Staff override) do not return it. A40 also has no chain[] on the staff run detail for ApprovalsChain, and no payment-file download route, yet the spec uses 'A40's file route'. The builder must either decide buttons in the browser or stall.",
+   "fix": "Extend A40.1 with allowed_actions[] on GET /runs/{id}, a staff chain[] (sponsor propose, sponsor owner, FINA, CFO, CEO, TP-RE stages with status and AgentMarker data), and an audited GET /v1/distributions/runs/{id}/payment-file route. Extend A41.1 with allowed_actions[] on the centre, batches, rate sets, profiles, remittances and reports. Add an A17.1 loop giving allowed_actions[] on receipts. List all three in section 1 and in the Specify frozen inputs."
+  },
+  {
+   "severity": "high",
+   "issue": "The agent 428 CONFIRMATION_REQUIRED rule covers a manual match below the threshold, a withdrawal reject and a run exception-code change. It is proposed only in this UI node, and no upstream node or follow-up loop enforces it on the server. A17's own challenge expects a match under A$10,000 to post with no request. The threshold-edge challenge and the D04 pass criterion still assert a 428 for TRSY's agent, so either the test fails or the builder fakes the rule in the page.",
+   "fix": "Make the rule policy data enforced by the API: add it to A12's confirmable-action list or A03 policy rows, and put route flags on A17 match, A39 reject and A40 exceptions through named follow-up loops (A12.x/A17.1/A39.1/A40.1). Until the founder decides at Specify, make the hidden-test expectation read the policy data instead of hard-coding 428."
+  },
+  {
+   "severity": "high",
+   "issue": "The graph misses interfaces the spec and its challenges depend on. A06: the cash-delta and aml-third-party-deposits scenarios, a new bay01-in-review scenario, and the TAXO and ASTM personas. A20: the R10 results and closing breaks. A42: the AML restriction that creates aml_restricted and aml_hold (A39 uses a no_alerts stub until A42 lands). A37/A38: finalised offerings and refund batches. A104: agent challenges run through the MCP server, and the manifest test checks MCP exposure. A98: the TP-OBS principal. None of these is an ancestor of A74, and conventions say a later-milestone node can start before earlier nodes finish.",
+   "fix": "Add A06, A20, A42, A37 (or A38), A104 and A98 to A74's deps in final-graph.json and to the Depends on line. Name the A06 follow-up loop (bay01-in-review, persona additions) alongside A39.1/A40.1/A41.1."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'A cent of Δ' challenge cannot pass as written. KST01's offer is live (closes 14 Oct), so A39's ordered preconditions refuse escrow release with ESC_OFFERING_NOT_FINALISED before ESC_RECON_NOT_CLEAR is ever reached. The MRN01 run is already approved (at funding), so Approve is not applicable. DST_CLIENT_MONEY_DELTA is raised by the funding_check job, not by POST fund, which only creates a 4E request. A40's approval precheck uses assertBankLedgerClear (TRSY_BANK_LEDGER_NOT_CLEAR).",
+   "fix": "Use a finalised offering (e.g. UNL01, or a scenario that finalises one) for the escrow case. Use HAW01 (in_review) for Approve-blocked, with the code A40's precheck actually returns. For MRN01, assert Fund creates the request and the run then shows DST_CLIENT_MONEY_DELTA from funding_check and stays in funding."
+  },
+  {
+   "severity": "medium",
+   "issue": "The manual-match boundary conflicts with upstream. A74 says 'at or above' A$10,000 goes to the CFO and tests A$10,000.00 -> APR. A17 and the product map say 'above A$10,000'. The threshold-edge withdrawals also ignore A16's same-day-sum rule (three withdrawals by one investor change each other's policy code).",
+   "fix": "Take inclusivity from A14's ApprovalPolicy comparator, settled with A17 at Specify, and derive the expected results from the policy row. Create the A$25,000.00 / A$25,000.01 / A$50,000.00 withdrawals for three different investors with no same-day history."
+  },
+  {
+   "severity": "medium",
+   "issue": "The seed cannot demonstrate required positive paths. bank_authoriser is TRSY and CFO by default, and the only TRSY persona (Priya) is the maker, so no valid pair of two distinct authorisers exists. That leaves unproven the G13 'two distinct human bank authorisers' criterion and a completed transfer or fee sweep. There are no TAXO, ASTM or board-member personas (the 6E zero or reduced declaration needs a board checker). A06's aml-third-party-deposits scenario only plants six deposits to INV-00377; it creates no withdrawal held aml_restricted and no BAY01 aml_hold line, which the tipping-off challenge assumes.",
+   "fix": "Add to the A06 follow-up loop: a second bank_authoriser (a second TRSY persona), TAXO, ASTM and board-member personas, and an extension of aml-third-party-deposits (or a new scenario) that yields an aml_restricted withdrawal and an aml_hold line on a BAY01 run. Add a positive dual-authorisation challenge that ends in settlement."
+  },
+  {
+   "severity": "medium",
+   "issue": "Dual bank authorisation has no component contract. A53's HardwareKeyConfirm posts to /v1/approvals/{id}/decide, and its purposes do not include bank_authorisation. A11's fresh-assertion purposes do not list it either. A39 names no authorisation route; the spec only says 'if A39 has not named it'. The spec builds its own authorisations/ panel, which risks a second signing path and clashes with the pass criterion 'no SDK decision operation outside A53's shell folders'.",
+   "fix": "Request an A53.x loop so HardwareKeyConfirm supports purpose bank_authorisation with a target route, and an A11 purpose registration. Make POST /v1/treasury/transfers/{id}/authorisations (and the fee-sweep equivalent) mandatory in A39.1. State that authorisations/ only composes A53's modal and never calls the fresh-assertion or authorisation APIs directly."
+  },
+  {
+   "severity": "medium",
+   "issue": "Tipping-off on pay-ins is inconsistent. The spec hides AML receipt reasons only from SUPP and TP-OBS, so TRSY would see them. That contradicts the G14 criterion and challenge, where treasury roles see only 'held · compliance'. The spec also offers 'Return to payer' on any held receipt, including AML-held ones, which could tip off the payer while an SMR is being considered.",
+   "fix": "Render AML receipt reasons as 'held · compliance' for TRSY, CFO and FINA and in full only for MLRO and CCO, as the API shapes them. State that Return to payer is absent on AML-held receipts unless allowed_actions[] (A17/A42 policy) allows it after MLRO clearance. Add the case to the tipping-off challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "Refund batch pay is listed as an agent-maker act. A39's POST /refund-batches/{id}/pay submits payouts directly under an already-approved batch, which makes it a single-person money movement. The spec's own rule sends such acts to CONFIRMATION_REQUIRED or human-only, and the manifest delegability will be wrong.",
+   "fix": "Classify refund-batch pay as agent-confirm (or human-only) in actions.ts and in section 6, and cover it in the agent-parity table and the gate-enforcement pass criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "Partner roles are placed on the wrong surface. TP-OBS signs into A105's partner portal, not the hardware-key operator console, yet the spec gives TP-OBS sidebar access and the tipping-off challenge 'signs in as TP-OBS' on ADM-18. TP-RE is a product-map ADM-19 role (exit waterfall 'CFO + LEGL (+ trustee)'), but the spec does not say where TP-RE reviews and countersigns.",
+   "fix": "Drop TP-OBS from the console sidebar roles. Test TP-OBS through A105's portal and API reads for the same data. State that TP-RE's ADM-19 review and countersign are A105's PTR-06 and approvals list, with A74's chain showing the TP-RE stage read-only."
+  },
+  {
+   "severity": "low",
+   "issue": "Some tones and badges are decided in the client from threshold literals: the receipt age pill (amber at 24 h, red at 48 h), variance pills (amber at or above the reason threshold), and tax.attention 'due within 30 days'. This contradicts 'no hard-coded threshold' and the lint and grep pass criterion.",
+   "fix": "Ask A17.1, A40.1 and A41.1 for API-supplied tone or flag fields (age_band, variance_flag, due_band). The page maps them through toneFor, and the grep adds 24, 48 and 30-day literals."
+  },
+  {
+   "severity": "low",
+   "issue": "DF-A74-01 assumes the API returns an account count of 3, but A39's design-fidelity challenge requires GET /v1/treasury/kpis to reproduce 'A$18,420,316.44 (4 accounts)'.",
+   "fix": "Render whatever count the API returns, and raise DF-A74-01 against A39's contract (A39.1) rather than asserting 3 in A74's tests."
+  },
+  {
+   "severity": "low",
+   "issue": "The tax challenge expects TAX_RATE_SET_NOT_EFFECTIVE for a rate set dated today. A41 uses that code for 'a caller passes a version that is not the effective one' and defines no code for an effective_from earlier than the next Sydney day.",
+   "fix": "Have A41.1 name the refusal code for an invalid effective_from and use that code in the challenge and copy.ts."
+  },
+  {
+   "severity": "low",
+   "issue": "The design references say the prototype's APR-2291 is 'the same run' as the BAY01 ADM-19 run. A06's fix table makes APR-2291 MRN01's funding step, as A74's own Specify seed does.",
+   "fix": "Reword: APR-2291 is MRN01's funding request (A06 fix). The design's APR-2291 checks are used for layout only, and the BAY01 run's approval is the bay01-in-review scenario's request."
+  },
+  {
+   "severity": "low",
+   "issue": "The tipping-off pass criterion sweeps 'every agent persona' for AML words, including MLRO and CCO agents who may legitimately see reasons. A DOM grep for 'AML' would also hit shell nav labels such as 'AML cases'.",
+   "fix": "Limit the sweep to non-need-to-know personas and their agents. Scope it to the money route group's content and network responses, excluding shell nav labels, or list the allowed shell strings."
+  },
+  {
+   "severity": "low",
+   "issue": "The SM-08 criterion lists 'cancel' as a transition the page can start, but section 4's action list has no Cancel. A40 allows draft -> cancelled by the maker or any checker.",
+   "fix": "Add a Cancel action (draft only, from allowed_actions[]) to section 4 and the action manifest, or remove cancel from the SM-08 criterion."
+  }
+ ]
+}

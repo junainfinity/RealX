@@ -1,0 +1,105 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Mint approval contradicts A28's frozen catalogue. A86 session 2 runs the locked-allocation mint as `4E+Q` with CFO as the only checker and TOKO's agent as maker. A28's row for mint/batch_mint from a locked Allocation file is 'CFO + CCO, `6E+Q`, A38's `allocation.mint`', and J04 step 11 says CFO + CCO. Either A28 refuses the request and the run fails, or Fable QA checks for the wrong code and a mint missing the CCO approval passes.",
+   "fix": "Rewrite the session 2 mint and the D04 parity bullet as A38's `allocation.mint` approval (`6E+Q`, CFO + CCO in person, maker as A38/A28 define it), with 2-of-3 V2 signers under the same approval ID. Add a pass check that the report's mint approval has action_code 6E+Q and checker roles {CFO, CCO}, read from A28's catalogue."
+  },
+  {
+   "severity": "high",
+   "issue": "The fallback freeze uses the wrong route. A86 freezes INV-J's old wallet at once through V3 `SGL+R`, before the recovery approval. A28 allows V3 SGL+R only for a sanctions freeze. A standard freeze is CCO -> LEGL `4E+Q` through V2, and a recovery freeze follows `checker_approval -> old_wallet_frozen -> timelock`. As written, one person can freeze a non-sanctions wallet (a G13 downgrade), and A28 refuses to enter the timelock.",
+   "fix": "Record the recovery checker approval first. Then submit the old-wallet freeze through A28's recovery-chain V2 route, and only then start the 48 h timelock. Add a challenge: a V3 SGL+R freeze with a non-sanctions reason code must be refused."
+  },
+  {
+   "severity": "high",
+   "issue": "The makers named for unpause, forced transfer and recovery conflict with the product map and A28, and they give a staff agent a maker role its human lacks (G22). Section 6 says TOKO's agent is maker of the deploy, unpause, mint and forced-transfer requests. Unpause is CCO -> SECO + CFO, forced transfer is LEGL -> CCO + CFO (+ trustee), and A86's own session 2 names LEGL as the forced-transfer maker. The recovery chain is 'LEGL, CCO, CFO + trustee', but A28's row is 'SUPP intake -> KYCA -> CCO + custody quorum'. A build that lets TOKO's agent draft an unpause or a forced transfer would pass.",
+   "fix": "Name the maker per A28's catalogue on every leg: deploy TOKO, unpause CCO (or CCO's agent), forced transfer LEGL (or LEGL's agent), recovery SUPP -> KYCA with the re-verification record and the old-channel notice. Add challenges: TOKO's agent drafting an unpause and a forced transfer must be refused, with the G22 or RBAC code in the report."
+  },
+  {
+   "severity": "high",
+   "issue": "The recovery leg does not check that the new wallet ends up usable, and it conflicts with vendored T-REX recoveryAddress. That call requires the new wallet as a management key on the investor's ONCHAINID and calls registerIdentity itself (an earlier registration makes it revert). It also deletes the lost wallet's identity and copies the lost wallet's frozen flag and frozen tokens to the new wallet. Because the old wallet is frozen first, a vanilla build leaves INV-J's tokens frozen in the new wallet. The pass criteria check only 'old wallet frozen at balance 0', so that wrong build passes.",
+   "fix": "Add session 3 and pass checks: the new wallet has isFrozen=false and frozenTokens=0 (or A24's override clears the copied freeze), the new balance equals the old, the lost wallet's identity is deleted, and the new wallet's ONCHAINID management key was added by a named node before the call. State whether registration happens inside recoveryAddress or before it. Escalate to A24 if the copied freeze is not handled."
+  },
+  {
+   "severity": "medium",
+   "issue": "The first unpause does not fit SM-06 or A28's prechecks. A86 runs a first `unpause` (6E+Q) while the row is `configured`. A28 allows unpause only from SM-06 `paused`, refuses mint while paused, and makes issuing -> active the go-live transition. The step fails with TOP_SM06_STATE or is forced outside the frozen table.",
+   "fix": "Mint while the row is `configured` (A28 treats the token's initial on-chain paused flag as configured/issuing), then unpause as the issuing -> active go-live. Or request an A28.1 or A03 loop before the build. List the exact transitions and audit events in the pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "The pause leg leaves out the SGL+R ratification within 2 h (SM-06: 'pauser then ratified'). Session 3 says only 'V3 pause runs', so an unratified pause could pass.",
+   "fix": "Name the pauser, the V3 signer who is not the actor, and a second-person ratification within 2 h. Add 'zero approval.ratification_missed alerts' to the pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "The planted drift sets a G10 halt, but the spec never says whether it is on-chain (HaltModule.setHalt via V3, clear via V2). If it is, halt_set and halt_clear are restrictive events missing from the G13 four-way match set, and the halt is never lifted with an approval ID.",
+   "fix": "State whether the recon-break halt is on-chain. If it is, add halt_set/halt_clear to the G13 event set, name A48's lift approval rows, and require the lift through V2 with an approval ID before session 3's forced transfer."
+  },
+  {
+   "severity": "medium",
+   "issue": "Refusing clock advance needs an unrequested A09 change. The testnet profile runs under RUN_MODE local/test, where A09 serves POST /__test/clock/advance with DbClock offsets. An advanced platform clock opens A28's off-chain 48 h forced-transfer and recovery timelocks early, and T-REX forcedTransfer has no on-chain timelock. 'Platform clock was never advanced' has no stated measurement.",
+   "fix": "Request an A09.1 loop that refuses clock advance whenever CHAIN_ID != 31337. Measure the criterion as a system_clock offset of 0 at each session start and end, plus zero clock.advanced outbox events in the run window. Add a Fable challenge that calls the endpoint."
+  },
+  {
+   "severity": "medium",
+   "issue": "SM-06 sandbox_deployed 'by reference' is a foreseeable blocker left to mid-run escalation. A27 refuses sandbox-deploy on 84532 (SANDBOX_DEPLOY_LOCAL_ONLY), and the spec would find out in session 1, after faucet funding and inside a five-day timelocked schedule.",
+   "fix": "Request an A27.1 (or A03) loop before the build for a sandbox_deployed-by-reference transition to a 31337 control row with the same vehicle, commit and test-report hash. Add it to the Specify freeze list and the upstream-loops pass criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "The sessions have lower time bounds but no upper bounds. A25 V1 proposals and A26 recovery proposals expire at executableAt + 7 days (ProposalExpired), and delays from usage limits or human steps can push the sessions past expiry with no re-propose path.",
+   "fix": "Add a latest start per session, have preflight refuse with a named error when a proposal would be expired, and document the re-propose path in RUNBOOK.md (a new approval ID, never a reused one)."
+  },
+  {
+   "severity": "medium",
+   "issue": "The session-key challenge order clashes with recovery. A26's executeRecovery revokes all session keys, and INV-W's recovery executes in session 2, so the 'after expiry' and 'after revoke' cases on INV-W fail for the wrong reason and a broken expiry check passes. The allowed session-key UserOp is also unspecified.",
+   "fix": "Run the session-key cases before INV-W's recovery or on INV-E, give the expiry-test key an expiry that falls between sessions, name the allowed target and selector, and require each refused case's specific revert reason."
+  },
+  {
+   "severity": "medium",
+   "issue": "The key funding plan may leave some senders with no gas. Only deployer, broadcaster and stranger are funded, but an EOA V4 identity agent must send its own registerIdentity transactions (msg.sender check), as must any V1 owner that calls approve(id) directly. The claim that 'broadcaster pays gas for the V4 identity agent' does not hold for msg.sender-checked calls.",
+   "fix": "List every 84532 sender (including V4 and the V1 owners if needed) in testnet:keys' funding list and the per-session gas estimate, and have preflight check each balance by name. Or state the relayer path that A31 and A25 support."
+  },
+  {
+   "severity": "medium",
+   "issue": "Graph fit: A54 and A55 (PUB-04/PUB-08), A76 (ADM-32), A23 (compose stack and refusal tests) and A06 (the fixture) are used by the spec but are not ancestors of A86 in final-graph.json. The spec also says A82 and A100 replay A86's trace, but neither depends on A86.",
+   "fix": "Add A54, A55, A76, A23 and A06 (or deps that carry them) to A86's deps. Drop the A82/A100 replay claim, or route the trace to A88 only."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some changes fall outside the owned paths, which contradicts the pass criterion. The spec edits the root .gitignore and A01's secrets scanner. The wallet file contracts/deploy/wallet/out/84532.wallet.json is in A26's path, and the pass criterion's wording places it under packages/contracts/deployments/.",
+   "fix": "Use a nested contracts/deploy/testnet/.gitignore, request an A01.1 loop for the scanner pattern (or drop the claim), and list every out-of-path file and upstream loop (A07.1, A08.1, A09.1, A27.1) explicitly in the pass criterion, with the correct wallet-file path."
+  },
+  {
+   "severity": "medium",
+   "issue": "The estimate and schedule do not model elapsed time. The run needs at least five wall-clock days of timelocks plus human steps, but the graph carries 6-10 agent-hours and A88 depends on A86, so the critical path and the AM8 finish are wrong (the OddX BQA-01 class). 6-10 h is also light for the scope.",
+   "fix": "Add an elapsed-time or soak field (about 5 days plus human lead time) to the graph data and App Build Plan section 4, or take A86 off A88's blocking path. Raise the estimate to about 10-16 h."
+  },
+  {
+   "severity": "low",
+   "issue": "Wikilinks [[A50 - Design extension A: ...]] and [[A51 - Design extension B: ...]] use ':' but the files are named 'A50 - Design extension A- ...' and 'A51 - Design extension B- ...', so the links break.",
+   "fix": "Use the hyphen filenames in both links."
+  },
+  {
+   "severity": "low",
+   "issue": "The ProofBand red drift state is not in the prototype. The prop proof band has only a green MATCHED pill, and its sub-line is 'Trustee register {n} units = {n} tokens on-chain · checked ...'.",
+   "fix": "Point the break state to its design-extension or A20 entry and quote the prototype sub-line exactly."
+  },
+  {
+   "severity": "low",
+   "issue": "The '*.base.org' host allow-list admits mainnet.base.org, and the env-var names (CHAIN_RPC_URL, .env.testnet keys) differ from A07's BASE_SEPOLIA_RPC_URL and TESTNET_DEPLOYER_KEY.",
+   "fix": "Pin the host to sepolia.base.org plus the named providers, and settle one set of variable names in A07.1."
+  },
+  {
+   "severity": "low",
+   "issue": "The J04 fixture is undefined. 'A06's J04 scenario (WLG01 ...)' does not exist in A06, only INV-W's order is described while allocations are 100/40/60, and the hard-cap and scale-back terms are missing.",
+   "fix": "Define the testnet offering fixture (caps, each order in units and A$, the scale-back rule) or cite its owning node."
+  },
+  {
+   "severity": "low",
+   "issue": "M09 coverage on 84532 leaves out burn, a supply-changing ADM-14 action.",
+   "fix": "Add a 1-unit burn (TOKO -> CFO 4E+Q, recon clean) to session 3, or state that burn stays proven only on 31337 by A28 and A81."
+  }
+ ]
+}

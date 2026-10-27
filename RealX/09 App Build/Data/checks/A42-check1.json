@@ -1,0 +1,65 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The SMR, TTR and IFTI business-day clocks use A13's day-0 rule: when the trigger day is not a business day, day 0 becomes the next business day. That is one business day later than the statute, which counts business days 'after the day' of suspicion or transaction. The spec's vector (suspicion formed Saturday 3 Oct 2026, due Friday 9 Oct) should be Thursday 8 Oct. The seeded AML-118 (formed Saturday 19 Sep, due Thursday 24 Sep) is statutorily due Wednesday 23 Sep. NPP weekend credits make TTR and IFTI items a day late in the same way. Separately, a breach at 17:01 on the due day reports a breach the statute (end of day) has not yet produced.",
+   "fix": "Add an A13 policy parameter (day0_rule = day_after_trigger) for smr_3bd, ttr_10bd and ifti_10bd, raised upstream against A13. Correct the vector to Thu 8 Oct 2026 17:00 AEDT (06:00 UTC). Re-seed AML-118 so it is not already breached, for example suspicion recorded Mon 21 Sep with due date Thu 24 Sep. Keep 17:00 as the internal target and pre-warning, but set the breach and aml_reportable_breach to the statutory end of day, both as set-with-counsel rows. Add the weekend-trigger and end-of-day vectors to the oracle."
+  },
+  {
+   "severity": "high",
+   "issue": "The account_restricted model contradicts itself. The only way from account_restricted back to investigating is lift-restriction, but rfi_customer and smr_decision can only be entered from investigating. A restricted case (seeded AML-118, any sanctions case) can reach the SMR decision or an RFI only by unfreezing wallets first, which tips off the customer. The true-match case opens in investigating with a restriction already live. The spec does not say whether a case can be closed while a restriction is active, or from which states restrict is allowed.",
+   "fix": "Define account_restricted -> investigating as an explicit MLRO 'resume investigation' act that keeps the aml_restriction row in force. Make lift an act on the restriction row, valid in any non-terminal case state. Restrict only from investigating, or raise the extra source states against A03. Refuse case_closed while a restriction is active unless reached via exit_relationship. Name AML-118's seed state. Add oracle cases for each."
+  },
+  {
+   "severity": "high",
+   "issue": "The approval and token-operation contracts are not owned and conflict. The action codes aml.account.restrict, aml.account.lift, aml.alert.close_false_positive and aml.relationship.exit exist in no A03 or A14 list. A14 accepts SGL+R only for protective codes ('freeze on sanctions match' and so on), so restricting non-sanctions case AML-118 would be refused with APR_SGLR_NOT_PROTECTIVE. A28 allows an SGL+R V3 freeze only for sanctions (otherwise CCO -> LEGL 4E+Q on V2), yet A42 sends every AML freeze as the V3 sanctions variant. OP-7729 disagrees three ways: A28 has V2 4E+Q, 2 of 3, waiting; A06 has V3 SGL+R, confirmed 22 Sep; the design shows 2 of 3 with Broadcast pending. A42's rule ('Wallet frozen' only when every freeze is confirmed) cannot reproduce both adAml and adToken.",
+   "fix": "Register the four aml.* action codes, their policy rows and actor sets, and the protective flag on aml.account.restrict in A03 and A14 through their extension lists, and record them in A42's evidence. Add an A28 'AML restriction' freeze variant (MLRO or CCO SGL+R) that names its vault. Reconcile OP-7729 across A06, A28 and A42 to one version (SGL+R, APR-2283, the waiting state the design shows). Change the 'Wallet frozen' rule to 'full restriction effective and freeze op submitted'."
+  },
+  {
+   "severity": "high",
+   "issue": "The G02 and G14 evaluators conflict with A19 and A30. A19's G02 requires person, owners and wallet screening to be 'clear' within aml.rescreen_max_age_days, failing with SCREENING_HIT_OPEN, and A30 exports screeningStatus for that hook. A42 registers a second G02 evaluator with screening_max_age_h and AML_SCREENING_REVIEW, and stores wallet screening as not_applicable_in_phase, which never counts as clear. Under A19's rule every P1 payout would fail, or the two G02 evaluators would disagree. A19's G14 also fails on an open Sev1 case, while A42's checks only the restriction.",
+   "fix": "Make A19 the single owner of the G02 and G14 verdicts, with A42 supplying facts through index.ts (freshest screening result, restriction status). Use one parameter name and unit and one reason code. State explicitly that not_applicable_in_phase counts as neutral in P1 and P2. Align the G14 fail condition in both specs. Add oracle vectors that go through A19's simulator."
+  },
+  {
+   "severity": "high",
+   "issue": "The oracle, challenges and pass criteria use nodes outside A42's dependency closure. The whole-API tipping-off diff (/orders, /payouts, /distributions/me, /activity, /notifications, A44's Investor 360 and ADM-09) needs A37, A39, A40, A43, A44 and A47. The restriction-before-signature challenge needs a withdrawal, a distribution payout and an order (A39, A40, A37). The SMR challenge needs A45's calendar and A101's anomaly event. The OpenAPI criterion needs the parity suite (A100). A44, A45 and A101 depend on A42, so none of this exists at the gate: the builder fakes it, or the gate cannot run. A35 (templates) and A43 (delivery) are used directly but are not dependencies.",
+   "fix": "Limit the A42 oracle and challenges to interfaces that exist at the gate: A19 simulator verdicts for payout, withdrawal, order and distribution-line actions; A17 receipts and payouts; A30's /investors/me; typed outbox rows checked for schema and absence of AML fields. Move the whole-API diff, the A45 calendar, A101 anomaly and parity checks into the gates of A44, A45, A101, A81 and A100 as named re-runs of A42's comparer. Add A35 and A43 as dependencies (acyclic), or store the RFI template_code for later validation by A43 and A75."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec says it adds no state or actor, but it does. aml_alert.state includes 'escalated', which is not an SM-11 state. The true-match path records alert_new -> triage -> case_open -> investigating as system transitions, although A03 gives those transitions to KYCA and MLRO. This clashes with the pass criterion that refuses any listed transition attempted by a principal outside its actor list.",
+   "fix": "Model escalation as a pointer column (escalated_case_id) and keep the alert in triage, or add the state through A03's extension list. For the true-match path, add SVCA with the A30 approval id to those actor lists via A03, or open the case in case_open and require the MLRO's take. Update the state-coverage criterion to match."
+  },
+  {
+   "severity": "medium",
+   "issue": "The D04 staff-agent boundary is ambiguous. Tokens are refused on 'restrict, lift, close-false-positive decisions ... exit', but D04 allows agents as maker, so it is unclear whether a KYCA token may submit the close-false-positive maker request, or an MLRO token the lift or exit maker request. The parity suite must find an MCP equivalent for every ADM-25 action while the decision tools are excluded, which contradicts itself. The parity suite is named A104 (that is the MCP server; the parity suite is A100). Segregation of duties that counts the agent as its human is not stated for the 4E rows.",
+   "fix": "Add a per-action table (token as maker yes or no; token as checker never; non-delegable reason code). Register the non-delegable acts in A100's exception list with the counsel-question reference. Correct A104 to A100. Require the checker to be a different human from the maker, counting any agent as its human, and add an oracle case where an MLRO's token drafts and the same MLRO tries to check."
+  },
+  {
+   "severity": "medium",
+   "issue": "'Exactly one audit event per transition' conflicts with the event list: escalate emits alert.escalated, case.opened and clock.opened; take with suspicion emits case.taken, suspicion_recorded and clock.opened. The count formula cannot be computed without a mapping, so the oracle and the build can legitimately disagree.",
+   "fix": "Add an act-to-events table listing the exact aml.* events each API act writes, plus the A14 and A28 events it causes. Restate the oracle and pass criterion as 'each act writes exactly its listed events once'."
+  },
+  {
+   "severity": "medium",
+   "issue": "M20's purpose and ADM-25's components include 'Business-wide risk assessment' and 'Regulatory orders'. No node owns them (A75 says so explicitly), yet A42 declares M20 done without them.",
+   "fix": "Add a minimal versioned risk-assessment record (MLRO -> CCO 4E, review-due clock) and a regulatory-orders register with due clocks to A42, or assign both explicitly to another node such as A45 and cite that under Requirements covered."
+  },
+  {
+   "severity": "medium",
+   "issue": "Re-screening of sponsor directors and owners (G02 in J11) is deferred to 'A33 once it lands'. A33 is not a dependency, A33 does not reference A42, and no node owns the wiring, so sponsor persons are never re-screened.",
+   "fix": "Define a registerScreeningSubjects provider interface in A42, tested with a fixture provider. Add to A33's spec, or a later integration node, the obligation to register sponsor persons, with a check that nightly subjects_screened includes them."
+  },
+  {
+   "severity": "medium",
+   "issue": "The tipping-off latency criteria cannot be measured: 'latency within noise' and 'the same latency as an unknown id' have no threshold or method.",
+   "fix": "Use a concrete statistic, for example 1,000 interleaved requests per route under the injectable clock, a p95 difference below 5 ms, and a two-sample KS test with p > 0.01. Apply it to restricted vs unrestricted investors and to ACL-hidden vs unknown case ids."
+  },
+  {
+   "severity": "low",
+   "issue": "Small inconsistencies. The access matrix says '51-role list plus AGNT, SVCA', but requirements-lists.json has 52 roles, including AGNT, SVCA and AGT-U. The APR-2286 precheck queries alert state=open, which does not exist. IFTI terminology under the AML/CTF Amendment Act 2024 (international value transfer reporting) is not listed as a counsel question.",
+   "fix": "Iterate over the 52 listed roles. Define 'open' as {alert_new, triage} plus alerts linked to a non-closed case. Add the IFTI and international value transfer reporting basis to the HG-LEGAL counsel questions as a data row."
+  }
+ ]
+}

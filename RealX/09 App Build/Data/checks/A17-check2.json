@@ -1,0 +1,89 @@
+{
+ "node": "A17",
+ "check": 2,
+ "auditor": "Opus 5.5 independent third-party reviewer (ultracode)",
+ "date": "2026-09-24",
+ "pass": false,
+ "check1_followup": {
+  "critical_held_receipts_post_no_journal": "fixed: every hold posts one deposit.unmatched journal; invariant 1, the challenge and pass criteria updated",
+  "high_missing_deps": "fixed: A10, A11, A12, A13, A14, A19 and A22 are in app-graph.json and the Depends-on line",
+  "high_investor_facts_interfaces": "partly fixed: the six provider interfaces and fakes are defined, but no node that registers the real implementations (A30, A33, A40, A42) mentions them or depends on A17 (see finding 4)",
+  "high_nominated_account_route": "fixed in substance, but it uses an action id that conflicts with A03's ACC.bank.change (finding 3), and its name rule rejects joint and entity accounts (finding 5)",
+  "high_manual_match_vs_A16": "NOT fixed: A17 says the rule is 'agreed with A16', but A16's current catalogue differs on deposit.matched at or above the threshold, on aml_hold placement and on the threshold's source (finding 1)",
+  "high_payout_primitive": "mostly fixed (internal only, per-purpose table, escrow_settlement, internal_transfer, authorisations[]), but there is no purpose for distribution line payouts, which A40 relies on (finding 6)",
+  "high_markers_not_in_A08": "fixed: A08 now has the manifest markers extension and names A17's four markers",
+  "high_non_investor_receipt_classes": "fixed: classify.ts has five classes, and the distribution, interest and transfer paths are specified"
+ },
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "A17's deposit-matching and threshold rules contradict A16's current catalogue, which the ledger will enforce. (a) A16's deposit.matched row requires a 4E TRSY->CFO approval on bank_transaction:<id> at or above the manual-match threshold. Until that approval exists, the receipt sits in suspense via deposit.unmatched and moves by suspense.resolve. A17 auto-posts deposit.matched at any amount, and its first Money challenge expects an exact-name A$25,125.00 receipt to auto-match with no approval. A16 will refuse that post with LDG_APPROVAL_REQUIRED. (b) A16 says an aml_hold is placed only by an explicit reserve() from A42 bound to a restriction approval, and that 'the ledger never places one on its own'. A17 relies on A16 placing an aml_hold on deposit.matched at or above the threshold. The payment.credited available_now:false logic, the payment.available event and the challenge's expectation all depend on that. (c) A17 reads the threshold from a config key, ledger.deposit.manual_review_cents, that it calls 'A16's'. A16 says 'No approval threshold is config'; the threshold lives in A14's approval_policies row. The key exists in no owning spec, and A14 has no suspense.resolve or suspense.return policy row. (d) A17 uses '4E_SECOND_APPROVAL' as a policy code, but in A14 that is a tier_label and the policy is 6E. Fable will encode A17's version in the hidden oracle, so a correct build against A16 fails, and a build that bends A16 would pass.",
+   "fix": "Settle one rule across A16, A14 and A17, and write it identically in all three. Recommended: an exact-name receipt below A14's manual-match row auto-posts deposit.matched. At or above it, the receipt posts deposit.unmatched with hold reason 'large_receipt_review' and needs suspense.resolve under a 4E TRSY->CFO request (this reading of J04 step 6 is 'manual above $10k -> CFO'). Remove every reference to A16 placing an aml_hold, and set available_now only from A42 holds that already exist. Replace ledger.deposit.manual_review_cents with 'the threshold from A14's policy resolver for the suspense.resolve/deposit.matched action code' (no config key, no literal). Replace '4E_SECOND_APPROVAL' with A14's policy code (6E, tier label 4E_SECOND_APPROVAL). Add a Specify precondition: if A03 or A14 lack the suspense.resolve, suspense.return or deposit manual-match rows, open A03.x or A14.x before Build. Rewrite the first Money challenge and the CFO-route challenge to match."
+  },
+  {
+   "severity": "high",
+   "issue": "The returned-credit and failed-payout handling uses ledger operations that A16 forbids or does not have. A17 reverses deposit.unmatched and deposit.matched with reverseJournal, and on a failed payout 'reverses the caller's journal through A16'. A16's catalogue says a reversal always needs at least a 4E TRSY->CFO approval, and that 'bank-originated undo uses its own rows (deposit.returned, withdrawal.failed, withdrawal.return), never reversal'. So an automatic bank return would be refused (LDG_APPROVAL_REQUIRED). A16 also has no row for a bank return of a held (suspense) receipt, which would be suspense_unmatched / bank_mirror. A17 expects LDG_REVERSAL_WOULD_OVERDRAW for an uncovered matched return, but A16's deposit.returned row refuses with LDG_INSUFFICIENT_AVAILABLE. A17's import list omits deposit.returned and withdrawal.failed. Invariant 2 ('returns net to zero') and the held-and-returned challenge cannot pass against the real A16.",
+   "fix": "Change A17 to post A16's deposit.returned for a bank recall of a matched credit, and to park it as reversal_pending on LDG_INSUFFICIENT_AVAILABLE. Post withdrawal.failed for a payout rejected before settlement, and withdrawal.return for a settled payout that comes back. Add deposit.returned and withdrawal.failed to the imported A16 contracts. For a bank return of a held receipt, request a new A16 row (e.g. 'suspense.bank_returned': suspense_unmatched / bank_mirror, approval none, poster A17) as an A16.x loop before Build, and state that reverseJournal is never used for bank facts. State which failure row applies to non-withdrawal purposes (escrow_settlement, return_to_payer, internal_transfer), or request those rows too."
+  },
+  {
+   "severity": "high",
+   "issue": "The route table invents A03 action ids that break A03's grammar and duplicate existing actions, and A17 cannot edit A03. A03's grammar prefixes investor-screen actions with the screen family (ONB, POR, ACC), and it already defines ACC.bank.change (delegable:false) for changing the withdrawal account. A17 uses M16.nominated_account.change, M16.payid.read, M16.receipt.read_own and others. A03's action set is frozen from 433 product-map references, and ADM-18 has no 'match receipt' action (J04's 'TRSY matches' is a journey step, not an action source), so M16.receipt.match very likely does not exist. A09 refuses to register a route without a resolvable scope. A17 also declares requiresHuman by hand, while A11 derives it from A03's delegable.ts. And A17 gives POST /v1/payments/payto-mandates the agent rule 'per A95', although A03 marks setting up a PayTo mandate delegable:false.",
+   "fix": "Replace the invented ids with A03's spellings: ACC.bank.change for the nominated account, and A03's ONB/POR ids for the PayID and deposit reads. Add the rule A16 uses: 'A03's spelling wins; a missing cell (e.g. the receipt match and return actions) is requested from A03 as a follow-up loop before Build, never invented here', plus a registration test that every x-realx-scope resolves in A03. Say that requiresHuman comes from A03's delegable.ts through A11. Mark the PayTo route non-delegable per A03 section 7."
+  },
+  {
+   "severity": "high",
+   "issue": "No node wires the real implementations of A17's six providers, so the integrated system keeps running on fakes. A17 says A30 registers InvestorFactsProvider, A42 registers RestrictionProvider and AmlClearanceProvider, A40 registers DistributionFundingProvider, and A33 registers VehicleSettlementProvider and OperatingReceiptSink. None of the A30, A33, A40 or A42 specs mentions these providers (only A39 mentions VehicleSettlementProvider). A30, A33 and A40 do not depend on A17, so they cannot import its interfaces. The payer-name rule, the core money-safety control, could therefore pass every gate while it reads fake verified names in the assembled stack.",
+   "fix": "For each provider, name the registering node, which must depend on A17 (A39 or A42 for the investor facts and restriction, A39 for the vehicle settlement and operating sink, A42 for clearance, A39 or A49 for distribution funding), and add a matching 'registers A17's X' line to those specs as follow-up loops. Add a pass criterion and a start-up check: outside RUN_MODE=test, a provider still bound to its in-repo fake fails start-up (PROVIDER_FAKE_IN_RUNTIME) once the owning node is marked built, and A23 and A49 assert that no fake is bound."
+  },
+  {
+   "severity": "high",
+   "issue": "The exact-equality name rule is undefined for joint, entity and middle-name cases, and a challenge contradicts the seed. Joint bank names ('A Morgan & S Morgan'), trustee-format names ('Smith Pty Ltd ATF Smith Super Fund' normalises to 'SMITH SMITH SUPER FUND') and names without the middle name never equal a single verified name. So joint and entity investors (INV-J, INV-E) can never nominate their usual withdrawal account (422 NOMINATED_NAME_MISMATCH), and most of their deposits are held. The first Money challenge assumes verified name 'Alex Morgan', but A06's seeded persona, which A17's fakes use, is 'Alex James Morgan', so under exact equality 'alex  morgan' would be held, not auto-matched. And for SMSF, company and trust investors, verifiedNames includes each individual trustee's personal name, so a trustee's personal-account payment auto-credits the entity. That is a third-party deposit under the spec's own AML logic.",
+   "fix": "Specify the composite-name rule as data. Split the payer or account name on joint and trustee separators ('&', 'AND', 'ATF', 'AS TRUSTEE FOR'). Each part must equal a verified name, and for entities the set must be the trustee plus the fund or trust. State whether middle names and initials may be omitted (for example, given plus family equal, with the middle name optional). For entity investors, remove individual trustees' personal names from the auto-credit list (hold as third_party_deposit), and add the SMSF personal-contribution case as an HG-LEGAL or MLRO question. Fix the challenge to use A06's 'Alex James Morgan', and add oracle cases for joint, SMSF corporate trustee, family trust and missing-middle-name payers and nominated accounts."
+  },
+  {
+   "severity": "high",
+   "issue": "The payout primitive has no purpose for distribution line payouts. A17 names A40's SVCA as a createPayout caller, and A40 posts distribution.pay_bank, with 'A17's confirmation settles it' for manual per-line payouts. But A17's purpose table covers only withdrawal, refund, return_to_payer, escrow_settlement and internal_transfer. A40's call has no destination rule, no G02 subject and no approval binding, so either it is refused or the builder improvises the rule for a money-out path.",
+   "fix": "Add a 'distribution' purpose row. Caller: A40. Destination: the investor's active NominatedAccount version. G02 subject: the investor. Approval: the per-line approval id bound to the run approval (draw checked by A16). Settlement: withdrawal.settle on payout_clearing; failure: the row agreed in finding 2. Add an oracle case where a distribution payout without a screening reference or line approval never reaches submitted."
+  },
+  {
+   "severity": "medium",
+   "issue": "G14 in the product map names IFTI (international transfers) reporting, and foreign investors (INV-F) are a supported sub-type, but A17 has no international rail or IFTI intake line. The rail enum is npp | payto | de | cash | bank, and no rule flags a cross-border inbound or outbound transfer. A foreign investor's SWIFT credit would be treated as a domestic receipt with no AML intake beyond the generic line.",
+   "fix": "Add a 'swift' rail (or an international:true flag with originator country) to the adapter's transaction schema and the sandbox receive payload. Add an 'ifti_candidate' AmlIntakeLine kind, raised for any international credit or payout, and record who must lodge the IFTI (RealX or the ADI) as an HG-LEGAL question. Add a sandbox marker or payload field and an oracle case."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G02 'done' statement overclaims. The product map's G02 says to screen 'before each payout or withdrawal', and A17 says 're-screen before every payout holds by construction', yet the primitive accepts any screening result up to 24 h old for the subject, so one screening can cover several payouts. Separately, A17 attributes screening_max_age_h to A42, while A42 and A19 say it is A19's parameter (table 1b), and A17 depends on A19, not A42.",
+   "fix": "Either require a screening result created for this payout (bound to the payout or approval id, single use), or reword the done criterion to 'a screening no older than A19's screening_max_age_h' and list the per-payout re-screen as an MLRO or counsel question. Change the parameter's owner to A19 throughout."
+  },
+  {
+   "severity": "medium",
+   "issue": "A17's promise that createPayout is 'absent from the public OpenAPI, the SDK and the MCP server' rests on an A09 'internal-route convention (/v1/internal/...)' that A09's spec does not define. A09 lists only /healthz, /readyz, /metrics, /internal/health/adapters and /sandbox/<adapter>/* outside /v1 and has no exclusion mechanism. The pass criterion that checks the OpenAPI document may be impossible without editing A09.",
+   "fix": "Make createPayout an in-process export of index.ts only, with no HTTP route; A37, A39 and A40 call it inside their own transactions. Or, if an HTTP route is kept, record an A09.x follow-up that defines internal-route registration (excluded from the OpenAPI, SDK and MCP, SVCA only), and make that a Specify precondition."
+  },
+  {
+   "severity": "medium",
+   "issue": "The seed and deposit-detail contracts are missing. A06 produces bank-balances.json, which A23 compares with A17's SandboxControl.state(), and A06 says 'both consumers must name these files'. A17 does not say how its four accounts get opening balances or how they are kept equal to A16's seeded bank_mirror. A56 expects a deposit BSB and account number in A17's PayID response (product map ONB-09: 'Personal PayID and BSB/account for deposits'), but GET /v1/payments/payids/me returns only the PayID and the masked nominated account.",
+   "fix": "State that the sandbox loads opening balances from A06's bank-balances.json through SandboxControl.reset(seed), and that the seed's 96 NPP deposits and AML-117 and AML-118 lines flow through ingestTransaction, so the bank and the ledger agree at boot. Add the virtual account's deposit BSB and account number (sandbox values, fixture-marked) to the PayID response, or record the product-map difference for A56 and the founder."
+  },
+  {
+   "severity": "medium",
+   "issue": "PayTo's phase differs between sources, and A17 does not record the difference. The product map's ONB-09 has a P1 'Set up PayTo' action (G02) for regular top-ups, M16's purpose includes PayTo agreements, and the context lists PayTo as a P1 AUD rail. A17 returns 501 until a P3 flag is on, following the architecture brief. The ONB-09 P1 action is silently deferred.",
+   "fix": "Record this in the node's Human gates or Skipped section as a product-map discrepancy (ONB-09 'Set up PayTo' is P1 in the product map and P3 in the architecture brief and graph) for the founder to decide, and name the decision id that would move the payments.payto flag into P1."
+  },
+  {
+   "severity": "low",
+   "issue": "A17 names the SoD refusal code APR_CHECKER_IS_MAKER, but A14's catalogue spells it APR_MAKER_IS_CHECKER. The hidden oracle would assert a code the approvals engine never returns.",
+   "fix": "Use APR_MAKER_IS_CHECKER (A14's spelling) in the build brief and the CFO-route challenge."
+  },
+  {
+   "severity": "low",
+   "issue": "The Unlocks line and the Gate step list A23, A37, A39, A42, A56 and A95, but the graph's dependents also include A20 (which consumes getStatement and statement.ready), A41, A48 and A99.",
+   "fix": "List every graph dependent: A20, A23, A37, A39, A41, A42, A48, A56, A95 and A99."
+  },
+  {
+   "severity": "low",
+   "issue": "The expected result is undefined for a manual match or return on a receipt already in manual_match_pending, and for a second TRSY session matching while a request is open. The concurrent-match challenge has no stated outcome, so a duplicate A14 request could pass.",
+   "fix": "Specify 409 MATCH_PENDING with the open approval id for any match or return on a manual_match_pending receipt, one A14 request per bankTxnId (unique), and assert it in the concurrency challenge."
+  }
+ ]
+}

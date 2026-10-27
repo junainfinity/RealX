@@ -1,0 +1,100 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "The spec builds against a HaltModule API that A24 does not have. A25 uses `HaltModule.setHalt(address,bool)` in the V2 and V3 allow-lists, in the restrict-only rule that decodes the bool, in the challenges and in gateway-config.json. A24's frozen spec instead defines `halt(cause)` (halter = V3 gateway only) and `lift()` (lifter = V2 gateway, or the owner), plus the lifter-only `setUnlockAt` and `forcedTransferOverride`, and `DocumentAnchor.setDocument` for a token agent. None of these is on A25's V2 list, so A28 cannot change lock-ups, cannot arm the forced-transfer-while-paused override that J09 recovery needs, and cannot lift a halt. A25's lists also differ from A15's `function_allow_list`: A25 adds batchBurn, batchForcedTransfer and batchSetAddressFrozen, and A15 also uses setHalt. The required A15 cross-check test therefore fails by construction, and the builder would have to edit A24 or invent a function.",
+   "fix": "Rewrite every HaltModule reference to A24's exact signatures. V3 list: pause, setAddressFrozen and batchSetAddressFrozen (every bool must be true), and HaltModule.halt. V3 may never list lift, unpause, setUnlockAt, forcedTransferOverride, unfreezePartialTokens, mint, burn, forcedTransfer or recoveryAddress. Add lift, setUnlockAt, forcedTransferOverride and DocumentAnchor.setDocument to V2 (or state that setDocument goes through V1). Derive selectors from A24's exports.json and ABIs, never by hand. Raise a plan-level reconciliation item so A15's V2 and V3 lists are corrected, and have the node escalate rather than edit A15."
+  },
+  {
+   "severity": "high",
+   "issue": "A dependency is missing. A25 consumes A15's CustodyAttestation struct, attestation-vectors.json, vault records and signer keys, attestation key and allow-lists. It also uses A14's approval id, A11's principal ids and A03's SM-00 table. The graph lists only A24 (A24 -> A07 -> A01), so none of these is guaranteed to be frozen when A25 starts.",
+   "fix": "Add A15 to A25's deps in final-graph.json and in the node note. Milestone order holds (A15 is AM1, A25 is AM2), and A14, A11 and A03 then come transitively. Update A15's Unlocks list."
+  },
+  {
+   "severity": "high",
+   "issue": "The replay guard and mint cap can be bypassed across the two replay shapes. Mint calls consume only (approvalId, nonce), and non-mint calls consume only usedApproval. So an id consumed by a burn can still be used to mint, and an id used for mints can be used once more for a non-mint call. The cap is also read from each chunk's own attestation, so a later chunk attested with a larger cap raises the ceiling. This defeats the oracle items 'replayed id refused' and 'mint over cap reverts', while the stated tests (same cap on every chunk) still pass.",
+   "fix": "Record kindOf[approvalId] (MINT or SINGLE) and capOf[approvalId] on first use. Refuse any cross-kind reuse with ApprovalAlreadyUsed. Require att.cap == capOf[approvalId] on every later chunk (CapMismatch). Add challenges: burn then mint under the same id; mint then burn; chunk 2 attested with a larger cap."
+  },
+  {
+   "severity": "high",
+   "issue": "RealXOwnerMultisig does not bind the maker or the approval id. propose() takes makerId as a free parameter with no attestation and does not say who may propose, so an owner can declare a false makerId and then approve their own proposal. That makes V1 maker-checker (G13) a convention only. approvalId is not checked for uniqueness and is never verified against the approvals key, so 'one approval ID binds both' fails for V1. The challenge refers to an 'attested maker' that the multisig does not have.",
+   "fix": "Only owners may propose. makerId is set on-chain to the proposer's principalId, or propose requires an EIP-712 attestation from the attestation key. approvalId must be unique across all proposals (ApprovalAlreadyUsed), and the proposer can never approve. Add oracle cases: a non-owner proposes; an owner proposes with a forged makerId; an executed approvalId is reused."
+  },
+  {
+   "severity": "high",
+   "issue": "The V1 multisig has no function allow-list, so the product-map rule 'V1 never moves value' is not enforced. Three owners can propose addAgent(multisig or any EOA) and then mint or forcedTransfer directly, bypassing the gateway's attestation, cap and 2-of-3 quorum. A15's V1 allow-list is neither mirrored nor cross-checked.",
+   "fix": "Add an owner allow-list, seeded from gateway-config.json to mirror A15's V1 list and changeable only by a timelocked proposal. Refuse any Token agent-function selector with a named error, and limit addAgent targets to the registered gateways and the V4 identity agent. Add a cross-check test and challenges: propose Token.mint; propose addAgent(multisig)."
+  },
+  {
+   "severity": "high",
+   "issue": "Deploy seeding contradicts ownership. The constructor sets owner = multisig, but 20-gateways.ts must then seed signers, quorum, attestation key and more than 17 allow-list entries through onlyOwner calls. Each would need its own 3-of-5 proposal and 48 h wait, because there is no batching. If the deployer owns first instead, the Ownable2Step handover needs a timelocked acceptOwnership, which the idempotent scripts and the A86 testnet run do not account for. CREATE2 with constructor args that differ per environment also cannot give identical addresses across Hardhat, Base Sepolia and production.",
+   "fix": "Pass the initial signer set, principalIds, quorum, attestation signer and allow-list as constructor arrays, with owner = multisig. Likewise pass the multisig's owners, threshold, delays and allow-list to its constructor. Drop or qualify the cross-environment CREATE2 address claim, and say how A15's attestation domain learns the deployed gateway address."
+  },
+  {
+   "severity": "high",
+   "issue": "The handover is incomplete. A24 leaves the deployer as IdentityRegistry agent, RealXClaimIssuer management key, owner of TREXFactory, TREXImplementationAuthority and IdFactory, and management key of each token's ONCHAINID. A25's ownership map omits all of these and never adds V4 as IR agent. Removing the deployer then breaks A31's registerIdentity, and keeping it fails 40-verify ('deployer holds no role anywhere').",
+   "fix": "Enumerate every A24 privileged slot and its holder after handover: IR agent -> V4 identity agent with the deployer removed; ClaimIssuer key, factories, implementation authority, IdFactory and token ONCHAINID keys -> multisig, with the 72 h delay on upgrade and factory. 40-verify reads them from A24's manifests. Add a test that V4 registerIdentity works after handover and the deployer's call fails."
+  },
+  {
+   "severity": "high",
+   "issue": "The 48 h timelock on V2 forced transfer and recovery is not enforced on-chain, and there is no on-chain veto. Architecture brief §6 step 10 says the gateway refuses execution during the queue, and the node claims 'the chain refuses what the policy engine would refuse even if bypassed'. The attestation has no notBefore, anyone can call execute, and an issued approval cannot be revoked, so a signed bundle cannot be vetoed.",
+   "fix": "Keep the A15 struct unchanged, because changing it is an escalation. Add revokeApproval(approvalId), callable by any current signer or the multisig; it marks the id used and emits ApprovalRevoked. Test that a revoked bundle reverts. State that the 48 h timelock is enforced off-chain by A15 signing only after executable_at, and record the residual risk in the HG-AUDIT pack. If on-chain enforcement is wanted, escalate for a notBefore field. Correct the overclaiming sentence."
+  },
+  {
+   "severity": "medium",
+   "issue": "Named errors conflict. A replayed mint nonce has no named error, and the challenge accepts 'ApprovalAlreadyUsed/nonce used'. A signer removed before execute is a non-member, which the brief maps to BadSigner, but the challenge expects QuorumNotMet. Hidden oracles assert exact errors, so the builder and Fable can disagree about a correct build.",
+   "fix": "Add NonceAlreadyUsed(approvalId, nonce). Define non-member handling once (BadSigner, or skipped and counted toward QuorumNotMet) and make the challenge match."
+  },
+  {
+   "severity": "medium",
+   "issue": "The approval id encoding is undefined. A14 issues 'APR-<yyyymmdd>-<6 base32>' strings, while A25 needs 'the exact 32-byte id A14 assigned' and fails a builder that stores a string. The mapping (ASCII right-padded or keccak) is not given, and it decides whether A27 can show APR-2279 from the log alone.",
+   "fix": "Fix the encoding once: ASCII right-padded with zero bytes to 32, which is reversible. Name the owning node (A14 or the A15 vectors) and add a test that decodes Executed.approvalId back to the APR string."
+  },
+  {
+   "severity": "medium",
+   "issue": "SGL+R through V3 is unspecified. V3 quorum is 1 and the maker is always excluded, but under SGL+R the maker is the single actor (for example the CCO pausing a token). That actor can therefore never sign their own emergency pause, which contradicts 'one authorised person acts at once', and J10 step 3 does not say who signs.",
+   "fix": "State the rule explicitly: either a second V3 signer always signs (raise this as a founder-visible deviation), or a documented A14/A15 makerId convention applies to SGL+R. Add a J10 test with named maker and signer principals."
+  },
+  {
+   "severity": "medium",
+   "issue": "A single-owner veto has no liveness protection. Any one owner can veto any queued proposal, including one that removes them, so one compromised V1 key can block its own removal and every owner-level change forever.",
+   "fix": "Refuse a veto of an owner-set change that affects the vetoing owner, or require two owners for it. Add challenges: an owner vetoes their own replacement; a compromised owner vetoes repeatedly and the recovery path still executes."
+  },
+  {
+   "severity": "medium",
+   "issue": "Onboarding a new trust is undefined. The allow-list is keyed by target address and the multisig cannot batch, so each new J12 token needs addAgent plus about 17 setAllowList proposals, each needing 3-of-5 approval and 48 h. A27 also claims it attaches tokens to the gateway with deployer account 0 after handover, which contradicts 'no admin bypass'.",
+   "fix": "Either key the allow-list by (contract kind, selector) with a registry of token and module addresses maintained by the multisig, or add a batch setter. Specify and test the onboarding of a ninth trust as one proposal set, and flag A27's contradiction."
+  },
+  {
+   "severity": "medium",
+   "issue": "The deploy output path is outside the owned paths and circular with A27. The scripts write to 'A07's local deployment output', but A07 owns only the root files of packages/contracts and A27 owns packages/contracts/deployments. A27 also says A25 calls writeManifest and contracts:export, which do not exist before A27, a child of A25.",
+   "fix": "Write to contracts/deploy/gateway/out/<chainId>/gateway.json (owned, mirroring A24's deploy/suite/out) and have A27 import it. Add this file to the pass criteria and flag A27's sentence."
+  },
+  {
+   "severity": "medium",
+   "issue": "The A15 vectors cannot be 'consumed unchanged'. Their EIP-712 domain uses a placeholder verifyingContract and a fixed chain id, while a normally deployed gateway uses its own address and stored attestation signer, so valid vectors will fail on-chain.",
+   "fix": "Specify the harness: deploy at the placeholder address on 31337 with A15's key (a matching CREATE2 salt, or setCode with equivalent initialisation), or have the vectors carry their domain and use a test-only digest harness."
+  },
+  {
+   "severity": "medium",
+   "issue": "Two delay values cannot be implemented as written. '24 h for A15's policy-change selector' names an on-chain selector that does not exist (A15's policy engine is off-chain), and the 72 h upgrade and factory selectors are not listed. Delay values are founder-visible and protected by the escalation rule.",
+   "fix": "List every (target kind, selector, delay) in gateway-config.json: 48 h for agent and compliance changes, 72 h for the implementation-authority upgrade and TREXFactory deploy. Decide whether the gateway signer, quorum and attestation-key setters take 24 h or 48 h, and test each."
+  },
+  {
+   "severity": "medium",
+   "issue": "D04's 'no agent, token or service principal is a gateway signer or multisig owner' is stated but never tested.",
+   "fix": "Make 40-verify and a unit test check every on-chain signer and owner principalId against A15's vault fixture and refuse AGNT, SVCA and token principal types. Add a challenge that seeds an AGNT principalId and must fail verification."
+  },
+  {
+   "severity": "low",
+   "issue": "The solc 0.8.17 pin (A24) rules out OpenZeppelin 5.x. OZ ECDSA.recover also reverts with its own error on high-s or malformed signatures, so the 'expected error' challenge cannot produce BadAttestation or BadSigner.",
+   "fix": "Pin an OZ version that matches A07's compiler (4.9.x), and require ECDSA.tryRecover mapped to BadAttestation or BadSigner. setAllowList should refuse target == address(this) or the owner."
+  },
+  {
+   "severity": "low",
+   "issue": "The architecture brief says the gateway enforces minted total == allocation file total, but A25 enforces only <= cap and does not say where equality is checked.",
+   "fix": "State that equality is checked off-chain by A28 and A20 reconciliation, and that the gateway enforces only the upper bound."
+  }
+ ]
+}

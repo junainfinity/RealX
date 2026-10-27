@@ -1,0 +1,1389 @@
+{
+ "screens": [
+  {
+   "id": "PUB-01",
+   "title": "Home",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "PUB-02",
+   "title": "How it works",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "PUB-03",
+   "title": "Investments",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "PUB-04",
+   "title": "Property page",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "PUB-05",
+   "title": "Sponsor profile",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "PUB-06",
+   "title": "Fees",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "PUB-07",
+   "title": "Returns calculator",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "PUB-08",
+   "title": "Transparency",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "PUB-09",
+   "title": "Help and documents",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ONB-01",
+   "title": "Create account",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ONB-02",
+   "title": "Investor type",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ONB-03",
+   "title": "Verify identity",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ONB-04",
+   "title": "Entity and owners",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ONB-05",
+   "title": "Tax details",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ONB-06",
+   "title": "Wholesale certificate",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ONB-07",
+   "title": "Target market check",
+   "surface": "investor",
+   "phase": "P2",
+   "module": null
+  },
+  {
+   "id": "ONB-08",
+   "title": "Set up wallet",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ONB-09",
+   "title": "Link bank and deposit",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ONB-10",
+   "title": "Verification status",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "INV-01",
+   "title": "Buy tokens",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "INV-02",
+   "title": "Review and confirm",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "INV-03",
+   "title": "Order status",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "INV-04",
+   "title": "Auto Invest",
+   "surface": "investor",
+   "phase": "P3",
+   "module": null
+  },
+  {
+   "id": "INV-05",
+   "title": "Sell tokens",
+   "surface": "investor",
+   "phase": "P2",
+   "module": null
+  },
+  {
+   "id": "INV-06",
+   "title": "Buy on the resale board",
+   "surface": "investor",
+   "phase": "P2",
+   "module": null
+  },
+  {
+   "id": "INV-07",
+   "title": "Market tracker",
+   "surface": "investor",
+   "phase": "P2",
+   "module": null
+  },
+  {
+   "id": "POR-01",
+   "title": "Portfolio",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "POR-02",
+   "title": "Holding detail",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "POR-03",
+   "title": "Distributions",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "POR-04",
+   "title": "Transactions",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "POR-05",
+   "title": "AUD wallet",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "POR-06",
+   "title": "Token wallet and recovery",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "POR-07",
+   "title": "Tax and statements",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "GOV-01",
+   "title": "Votes and meetings",
+   "surface": "investor",
+   "phase": "P2",
+   "module": null
+  },
+  {
+   "id": "GOV-02",
+   "title": "Vote",
+   "surface": "investor",
+   "phase": "P2",
+   "module": null
+  },
+  {
+   "id": "ACC-01",
+   "title": "Profile and security",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ACC-02",
+   "title": "Recover account",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ACC-03",
+   "title": "Notifications",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ACC-04",
+   "title": "Support and complaints",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-01",
+   "title": "Apply as a sponsor",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-02",
+   "title": "Sponsor dashboard",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-03",
+   "title": "New listing: property",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-04",
+   "title": "New listing: due diligence",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-05",
+   "title": "New listing: offer terms",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-06",
+   "title": "New listing: documents and submit",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-07",
+   "title": "Offer monitor",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-08",
+   "title": "Investor register",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-09",
+   "title": "Distributions",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-10",
+   "title": "Property reporting",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-11",
+   "title": "Valuations",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-12",
+   "title": "Announcements",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-13",
+   "title": "Meetings and resolutions",
+   "surface": "sponsor",
+   "phase": "P2",
+   "module": null
+  },
+  {
+   "id": "SPN-14",
+   "title": "Team and approvals",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-15",
+   "title": "Billing",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ADM-01",
+   "title": "Command center",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M01"
+  },
+  {
+   "id": "ADM-02",
+   "title": "Alerts centre",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M01"
+  },
+  {
+   "id": "ADM-03",
+   "title": "Sponsor admission",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M02"
+  },
+  {
+   "id": "ADM-04",
+   "title": "Licences and permissions",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M02"
+  },
+  {
+   "id": "ADM-05",
+   "title": "Property register",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M03"
+  },
+  {
+   "id": "ADM-06",
+   "title": "Valuations workbench",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M03"
+  },
+  {
+   "id": "ADM-07",
+   "title": "Listing review",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M04"
+  },
+  {
+   "id": "ADM-08",
+   "title": "Live raise monitor",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M04"
+  },
+  {
+   "id": "ADM-09",
+   "title": "Investor 360",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M06"
+  },
+  {
+   "id": "ADM-10",
+   "title": "Identity review",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M07"
+  },
+  {
+   "id": "ADM-11",
+   "title": "Wholesale certificates",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M07"
+  },
+  {
+   "id": "ADM-12",
+   "title": "Orders and allocation",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M05"
+  },
+  {
+   "id": "ADM-13",
+   "title": "Wallets, custody and recovery",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M08"
+  },
+  {
+   "id": "ADM-14",
+   "title": "Token operations console",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M09"
+  },
+  {
+   "id": "ADM-15",
+   "title": "Forced transfer and recovery desk",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M09"
+  },
+  {
+   "id": "ADM-16",
+   "title": "Rule packs and threshold monitors",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M10"
+  },
+  {
+   "id": "ADM-17",
+   "title": "Register and reconciliation",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M11"
+  },
+  {
+   "id": "ADM-18",
+   "title": "Treasury and client money",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M16"
+  },
+  {
+   "id": "ADM-19",
+   "title": "Distribution run review",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M12"
+  },
+  {
+   "id": "ADM-20",
+   "title": "Tax centre",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M13"
+  },
+  {
+   "id": "ADM-21",
+   "title": "Resale board control",
+   "surface": "admin",
+   "phase": "P2",
+   "module": "M14"
+  },
+  {
+   "id": "ADM-22",
+   "title": "Property operations",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M22"
+  },
+  {
+   "id": "ADM-23",
+   "title": "Meetings and ballots",
+   "surface": "admin",
+   "phase": "P2",
+   "module": "M17"
+  },
+  {
+   "id": "ADM-24",
+   "title": "Disclosure library",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M18"
+  },
+  {
+   "id": "ADM-25",
+   "title": "AML cases",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M20"
+  },
+  {
+   "id": "ADM-26",
+   "title": "Regulatory calendar and data room",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M19"
+  },
+  {
+   "id": "ADM-27",
+   "title": "Complaints register",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M23"
+  },
+  {
+   "id": "ADM-28",
+   "title": "Marketing compliance",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M21"
+  },
+  {
+   "id": "ADM-29",
+   "title": "Sponsor performance",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M24"
+  },
+  {
+   "id": "ADM-30",
+   "title": "Approvals inbox",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M25"
+  },
+  {
+   "id": "ADM-31",
+   "title": "Audit log",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M25"
+  },
+  {
+   "id": "ADM-32",
+   "title": "Integrations and jobs",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M26"
+  },
+  {
+   "id": "ADM-33",
+   "title": "Sponsors and guardrails",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M27"
+  },
+  {
+   "id": "ADM-34",
+   "title": "Feature flags and kill switches",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M27"
+  },
+  {
+   "id": "ACC-05",
+   "title": "API tokens and agents",
+   "surface": "investor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "SPN-16",
+   "title": "API tokens and agents",
+   "surface": "sponsor",
+   "phase": "P1",
+   "module": null
+  },
+  {
+   "id": "ADM-35",
+   "title": "Agent and API access",
+   "surface": "admin",
+   "phase": "P1",
+   "module": "M26"
+  }
+ ],
+ "journeys": [
+  {
+   "id": "J01",
+   "name": "Browse and decide",
+   "phase": "P1"
+  },
+  {
+   "id": "J02",
+   "name": "Sign up and verify (individual, wholesale)",
+   "phase": "P1"
+  },
+  {
+   "id": "J03",
+   "name": "Onboard an SMSF",
+   "phase": "P1"
+  },
+  {
+   "id": "J04",
+   "name": "First investment in a primary offer",
+   "phase": "P1"
+  },
+  {
+   "id": "J05",
+   "name": "Offer misses its soft cap: refund",
+   "phase": "P1"
+  },
+  {
+   "id": "J06",
+   "name": "Monthly distribution",
+   "phase": "P1"
+  },
+  {
+   "id": "J07",
+   "name": "Sell tokens on the resale board",
+   "phase": "P2"
+  },
+  {
+   "id": "J08",
+   "name": "Five-year liquidity vote and exit",
+   "phase": "P2"
+  },
+  {
+   "id": "J09",
+   "name": "Lost phone: wallet recovery",
+   "phase": "P1"
+  },
+  {
+   "id": "J10",
+   "name": "AML alert to SMR",
+   "phase": "P1"
+  },
+  {
+   "id": "J11",
+   "name": "Sponsor joins RealX",
+   "phase": "P1"
+  },
+  {
+   "id": "J12",
+   "name": "Sponsor lists a property",
+   "phase": "P1"
+  },
+  {
+   "id": "J13",
+   "name": "Six-monthly valuation",
+   "phase": "P1"
+  },
+  {
+   "id": "J14",
+   "name": "Property reporting breach",
+   "phase": "P1"
+  },
+  {
+   "id": "J15",
+   "name": "Withdraw cash",
+   "phase": "P1"
+  },
+  {
+   "id": "J16",
+   "name": "Retail purchase with a target market (from 2027)",
+   "phase": "P2"
+  },
+  {
+   "id": "J17",
+   "name": "Investor check-in",
+   "phase": "P1"
+  },
+  {
+   "id": "J18",
+   "name": "Auto Invest (later)",
+   "phase": "P3"
+  },
+  {
+   "id": "J19",
+   "name": "Sponsor month-end",
+   "phase": "P1"
+  },
+  {
+   "id": "J20",
+   "name": "Operator daily run",
+   "phase": "P1"
+  },
+  {
+   "id": "J21",
+   "name": "Wind-down of a failing trust",
+   "phase": "P1"
+  },
+  {
+   "id": "J22",
+   "name": "Delegate to your own agent",
+   "phase": "P1",
+   "note": "Added with D04 after the graph was drawn"
+  }
+ ],
+ "gates": [
+  {
+   "id": "G01",
+   "name": "Identity verified"
+  },
+  {
+   "id": "G02",
+   "name": "Sanctions and PEP clear"
+  },
+  {
+   "id": "G03",
+   "name": "Entity and owners verified"
+  },
+  {
+   "id": "G04",
+   "name": "Wholesale status valid"
+  },
+  {
+   "id": "G05",
+   "name": "Target market fit"
+  },
+  {
+   "id": "G06",
+   "name": "Residency and FIRB"
+  },
+  {
+   "id": "G07",
+   "name": "Holder cap"
+  },
+  {
+   "id": "G08",
+   "name": "Lock-in period"
+  },
+  {
+   "id": "G09",
+   "name": "Price band"
+  },
+  {
+   "id": "G10",
+   "name": "Trading halt"
+  },
+  {
+   "id": "G11",
+   "name": "Offer caps and escrow"
+  },
+  {
+   "id": "G12",
+   "name": "Disclosure acknowledged"
+  },
+  {
+   "id": "G13",
+   "name": "Maker-checker"
+  },
+  {
+   "id": "G14",
+   "name": "AML monitoring and reports"
+  },
+  {
+   "id": "G15",
+   "name": "Travel rule"
+  },
+  {
+   "id": "G16",
+   "name": "Tax details"
+  },
+  {
+   "id": "G17",
+   "name": "Marketing claims approved"
+  },
+  {
+   "id": "G18",
+   "name": "Complaints handled in time"
+  },
+  {
+   "id": "G19",
+   "name": "Proof of property current"
+  },
+  {
+   "id": "G20",
+   "name": "Valuation current"
+  },
+  {
+   "id": "G21",
+   "name": "Licence perimeter"
+  },
+  {
+   "id": "G22",
+   "name": "Agent authority"
+  }
+ ],
+ "modules": [
+  {
+   "id": "M01",
+   "name": "Command Center",
+   "phase": "P1",
+   "screens": [
+    "ADM-01",
+    "ADM-02"
+   ]
+  },
+  {
+   "id": "M02",
+   "name": "Sponsors, trusts & entities",
+   "phase": "P1",
+   "screens": [
+    "ADM-03",
+    "ADM-04"
+   ]
+  },
+  {
+   "id": "M03",
+   "name": "Properties & assets",
+   "phase": "P1",
+   "screens": [
+    "ADM-05",
+    "ADM-06"
+   ]
+  },
+  {
+   "id": "M04",
+   "name": "Offerings & deals",
+   "phase": "P1",
+   "screens": [
+    "ADM-07",
+    "ADM-08"
+   ]
+  },
+  {
+   "id": "M06",
+   "name": "Investors",
+   "phase": "P1",
+   "screens": [
+    "ADM-09"
+   ]
+  },
+  {
+   "id": "M07",
+   "name": "Onboarding review",
+   "phase": "P1",
+   "screens": [
+    "ADM-10",
+    "ADM-11"
+   ]
+  },
+  {
+   "id": "M05",
+   "name": "Subscriptions & orders",
+   "phase": "P1",
+   "screens": [
+    "ADM-12"
+   ]
+  },
+  {
+   "id": "M08",
+   "name": "Wallets & custody",
+   "phase": "P1",
+   "screens": [
+    "ADM-13"
+   ]
+  },
+  {
+   "id": "M09",
+   "name": "Token operations",
+   "phase": "P1",
+   "screens": [
+    "ADM-14",
+    "ADM-15"
+   ]
+  },
+  {
+   "id": "M10",
+   "name": "Compliance rules",
+   "phase": "P1",
+   "screens": [
+    "ADM-16"
+   ]
+  },
+  {
+   "id": "M11",
+   "name": "Register & reconciliation",
+   "phase": "P1",
+   "screens": [
+    "ADM-17"
+   ]
+  },
+  {
+   "id": "M16",
+   "name": "Treasury & client money",
+   "phase": "P1",
+   "screens": [
+    "ADM-18"
+   ]
+  },
+  {
+   "id": "M12",
+   "name": "Distributions",
+   "phase": "P1",
+   "screens": [
+    "ADM-19"
+   ]
+  },
+  {
+   "id": "M13",
+   "name": "Tax",
+   "phase": "P1",
+   "screens": [
+    "ADM-20"
+   ]
+  },
+  {
+   "id": "M14",
+   "name": "Resale board",
+   "phase": "P2",
+   "screens": [
+    "ADM-21"
+   ]
+  },
+  {
+   "id": "M15",
+   "name": "Lending & liquidity",
+   "phase": "P3",
+   "screens": []
+  },
+  {
+   "id": "M22",
+   "name": "Property operations",
+   "phase": "P1",
+   "screens": [
+    "ADM-22"
+   ]
+  },
+  {
+   "id": "M17",
+   "name": "Governance & voting",
+   "phase": "P2",
+   "screens": [
+    "ADM-23"
+   ]
+  },
+  {
+   "id": "M18",
+   "name": "Documents & e-sign",
+   "phase": "P1",
+   "screens": [
+    "ADM-24"
+   ]
+  },
+  {
+   "id": "M20",
+   "name": "AML cases",
+   "phase": "P1",
+   "screens": [
+    "ADM-25"
+   ]
+  },
+  {
+   "id": "M19",
+   "name": "Reporting & filings",
+   "phase": "P1",
+   "screens": [
+    "ADM-26"
+   ]
+  },
+  {
+   "id": "M23",
+   "name": "Support & complaints",
+   "phase": "P1",
+   "screens": [
+    "ADM-27"
+   ]
+  },
+  {
+   "id": "M21",
+   "name": "Communications & IR",
+   "phase": "P1",
+   "screens": [
+    "ADM-28"
+   ]
+  },
+  {
+   "id": "M24",
+   "name": "Partners",
+   "phase": "P1",
+   "screens": [
+    "ADM-29"
+   ]
+  },
+  {
+   "id": "M25",
+   "name": "Access, approvals & audit",
+   "phase": "P1",
+   "screens": [
+    "ADM-30",
+    "ADM-31"
+   ]
+  },
+  {
+   "id": "M26",
+   "name": "Integrations & API",
+   "phase": "P1",
+   "screens": [
+    "ADM-32"
+   ]
+  },
+  {
+   "id": "M27",
+   "name": "Settings & tenancy",
+   "phase": "P1",
+   "screens": [
+    "ADM-33",
+    "ADM-34"
+   ]
+  }
+ ],
+ "states": [
+  {
+   "id": "SM-00",
+   "name": "Privileged action (every approval)"
+  },
+  {
+   "id": "SM-01",
+   "name": "Onboarding case"
+  },
+  {
+   "id": "SM-02",
+   "name": "Wholesale certificate"
+  },
+  {
+   "id": "SM-03",
+   "name": "Property and listing"
+  },
+  {
+   "id": "SM-04",
+   "name": "Offering"
+  },
+  {
+   "id": "SM-05",
+   "name": "Order"
+  },
+  {
+   "id": "SM-06",
+   "name": "Token"
+  },
+  {
+   "id": "SM-07",
+   "name": "Holding (wallet × token)"
+  },
+  {
+   "id": "SM-08",
+   "name": "Distribution run"
+  },
+  {
+   "id": "SM-09",
+   "name": "Resale order and trade"
+  },
+  {
+   "id": "SM-10",
+   "name": "Governance proposal"
+  },
+  {
+   "id": "SM-11",
+   "name": "AML alert to SMR"
+  },
+  {
+   "id": "SM-12",
+   "name": "Complaint"
+  },
+  {
+   "id": "SM-13",
+   "name": "Wallet recovery or forced transfer"
+  }
+ ],
+ "roles": [
+  {
+   "id": "VIS",
+   "name": "Visitor",
+   "group": "Investors"
+  },
+  {
+   "id": "INV-W",
+   "name": "Wholesale investor",
+   "group": "Investors"
+  },
+  {
+   "id": "INV-S",
+   "name": "Sophisticated or professional investor",
+   "group": "Investors"
+  },
+  {
+   "id": "INV-E",
+   "name": "Entity investor (SMSF, company, trust)",
+   "group": "Investors"
+  },
+  {
+   "id": "INV-J",
+   "name": "Joint investors",
+   "group": "Investors"
+  },
+  {
+   "id": "INV-R",
+   "name": "Retail investor",
+   "group": "Investors"
+  },
+  {
+   "id": "INV-F",
+   "name": "Foreign investor",
+   "group": "Investors"
+  },
+  {
+   "id": "INV-M",
+   "name": "Guardian for a minor",
+   "group": "Investors"
+  },
+  {
+   "id": "SP-OWN",
+   "name": "Sponsor owner",
+   "group": "Sponsors"
+  },
+  {
+   "id": "SP-OPS",
+   "name": "Sponsor operator",
+   "group": "Sponsors"
+  },
+  {
+   "id": "SP-FIN",
+   "name": "Sponsor fund accountant",
+   "group": "Sponsors"
+  },
+  {
+   "id": "SP-IR",
+   "name": "Sponsor investor relations",
+   "group": "Sponsors"
+  },
+  {
+   "id": "TP-LIC",
+   "name": "AFSL licensee (RealX's CAR principal)",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-RE",
+   "name": "Responsible entity or trustee",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-CUS",
+   "name": "Custodian",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-REG",
+   "name": "Unit registry",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-VAL",
+   "name": "Independent valuer",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-PM",
+   "name": "Property manager",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-AUD",
+   "name": "Auditor",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-OBS",
+   "name": "Regulator observer",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-KYC",
+   "name": "Identity verification provider",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-BANK",
+   "name": "Bank and payments provider",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "TP-SIGN",
+   "name": "Custody signing provider",
+   "group": "Licensed partners and providers"
+  },
+  {
+   "id": "CEO",
+   "name": "Chief executive",
+   "group": "RealX staff"
+  },
+  {
+   "id": "SUPER",
+   "name": "Platform super-admin",
+   "group": "RealX staff"
+  },
+  {
+   "id": "SECO",
+   "name": "Security officer",
+   "group": "RealX staff"
+  },
+  {
+   "id": "CCO",
+   "name": "Chief compliance officer",
+   "group": "RealX staff"
+  },
+  {
+   "id": "MLRO",
+   "name": "Money laundering reporting officer",
+   "group": "RealX staff"
+  },
+  {
+   "id": "KYCA",
+   "name": "KYC analyst",
+   "group": "RealX staff"
+  },
+  {
+   "id": "CLSR",
+   "name": "Classification reviewer",
+   "group": "RealX staff"
+  },
+  {
+   "id": "PART",
+   "name": "Partner manager",
+   "group": "RealX staff"
+  },
+  {
+   "id": "INVM",
+   "name": "Investments and diligence",
+   "group": "RealX staff"
+  },
+  {
+   "id": "ASTM",
+   "name": "Asset manager",
+   "group": "RealX staff"
+  },
+  {
+   "id": "VALO",
+   "name": "Valuation officer",
+   "group": "RealX staff"
+  },
+  {
+   "id": "CAPM",
+   "name": "Offerings manager",
+   "group": "RealX staff"
+  },
+  {
+   "id": "TOKO",
+   "name": "Token operations officer",
+   "group": "RealX staff"
+  },
+  {
+   "id": "REGO",
+   "name": "Registrar officer",
+   "group": "RealX staff"
+  },
+  {
+   "id": "FINA",
+   "name": "Fund accountant",
+   "group": "RealX staff"
+  },
+  {
+   "id": "CFO",
+   "name": "Finance approver",
+   "group": "RealX staff"
+  },
+  {
+   "id": "TRSY",
+   "name": "Treasury operations",
+   "group": "RealX staff"
+  },
+  {
+   "id": "MKTO",
+   "name": "Market operations",
+   "group": "RealX staff"
+  },
+  {
+   "id": "TAXO",
+   "name": "Tax operations",
+   "group": "RealX staff"
+  },
+  {
+   "id": "LEGL",
+   "name": "Legal and company secretary",
+   "group": "RealX staff"
+  },
+  {
+   "id": "IRCM",
+   "name": "Investor relations and comms",
+   "group": "RealX staff"
+  },
+  {
+   "id": "MKTG",
+   "name": "Marketing",
+   "group": "RealX staff"
+  },
+  {
+   "id": "SUPP",
+   "name": "Support",
+   "group": "RealX staff"
+  },
+  {
+   "id": "CMPH",
+   "name": "Complaints handler",
+   "group": "RealX staff"
+  },
+  {
+   "id": "PROP",
+   "name": "Property operations",
+   "group": "RealX staff"
+  },
+  {
+   "id": "ENGO",
+   "name": "Engineering and chain operations",
+   "group": "RealX staff"
+  },
+  {
+   "id": "AGNT",
+   "name": "AI agent",
+   "group": "System"
+  },
+  {
+   "id": "SVCA",
+   "name": "Service account",
+   "group": "System"
+  },
+  {
+   "id": "AGT-U",
+   "name": "A user's own agent",
+   "group": "System"
+  }
+ ],
+ "founder_decision_D04": "Every user type gets API token management so their own agents can carry out all their account actions via API/MCP, under the same gates; see AGENT_REQ in the plan workflow."
+}

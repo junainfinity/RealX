@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The bug-19 check that the UI and the API show the same listings uses a token that cannot reach the data it checks. Build brief 6 (bug 19), challenge 3 and the prototype-bugs and D04 pass criteria have 'Alex Morgan's sandbox token' call GET /v1/listings and the MCP listing tool, then compare the result with the UI. A12 says every live route refuses rx_sb_ tokens with TOKEN_WRONG_ENVIRONMENT. A99 says an rx_sb_ token works only on a separate per-user sandbox dataset through /sbx/v1. So the call is either refused, and the check cannot pass, or it runs on a sandbox dataset that does not hold the pending APR-2290 state, and the check passes without testing anything. Neither result proves the agent sees what the person sees.",
+   "fix": "Use a live-environment rx_inv_ token for Alex Morgan with read access to listings, on the local compose stack. Create it through A11's sandbox authenticator with a passkey step-up and revoke it when the run ends. Call the live /v1/listings and the A104 MCP tool against the same seeded data the UI shows. Keep the sandbox-only rule for the copy-once capture only. Add a pass line: the check records the token's environment=live, its revocation, and the listing ids returned by the UI, REST and MCP as equal sets. Optionally add a second check that the sandbox dataset also hides a pending listing."
+  },
+  {
+   "severity": "high",
+   "issue": "The contrast rule contradicts WCAG and the design, so the gate either cannot pass or passes only if the design is changed. Item 4 and the Accessibility pass criterion demand 4.5:1 for 'every visible text node' and 'all text', and find the background by 'ignoring transparent layers'. The design and A05 draw disabled buttons at opacity .4 and .45 (dc lines 356 and 446; A05's Button disabled state), and every blocked and not-eligible state in A50 and A51 shows a disabled main action. WCAG 1.4.3 exempts inactive controls; this spec does not. The algorithm also ignores element opacity, see-through overlays (A51's hardware-key modal sits over an rgba(23,25,28,.25) overlay) and text over images or placeholders, so it will compute wrong ratios. Separately, the sweep for colours outside the token set makes any colour with transparency a Major finding, which flags A51's approved modal overlay.",
+   "fix": "State the WCAG 1.4.3 exemption for disabled or inactive controls (disabled or aria-disabled) and record them for information only. Specify the contrast algorithm: blend semi-transparent colours and parent opacity into the background; for text over images or gradients, sample the screenshot pixels behind the text box and use the worst case. In the colour sweep, accept semi-transparent values that A05's tokens.json lists (have A05 add the overlay colour rgba(23,25,28,.25), reopened upstream if it is missing) and leave out box-shadow colours. Add a planted-drift challenge: a disabled button is not failed, but an enabled button with the same colours is."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec does not say how tests are kept from affecting each other, so the 'identical finding ids on two runs' and 'three consecutive runs, no retries' criteria are unreliable. Four Playwright workers share one compose stack while tests change shared data: approving APR-2291, approving the September distribution, approving APR-2290 (the second half of the bug-19 test), signing the SPN-10 attestation, and turning on kill switches up to the platform level, which halts everything. What other workers capture (the Approvals waiting count, 'Inbox clear.', Marine Parade hidden, kill-switch banners) then depends on test order.",
+   "fix": "Specify isolation. Each test that changes data runs in its own A06 scenario dataset, or resets the seed before and after with A06's reset or snapshot. Those tests (the five bug tests, the approve flows, the platform kill switch) run one at a time in their own Playwright project after the read-only captures, or on a separate stack instance. Add a challenge: run the full suite twice in shuffled order and require identical ids in findings.json."
+  },
+  {
+   "severity": "medium",
+   "issue": "Two things the spec relies on have no dependency link or defined file behind them. Items 1 and 8 say A90, A92, A93 and A95 'must re-run' the harness before they can pass, but none of those nodes depends on A87 in final-graph.json and none of their specs mentions it. The scheduler does not enforce milestone order, so A92 or A93 could run before the harness exists. A88 also compares against 'A87's accepted baseline' and records 'A87's baseline set hash', but A87 defines no baseline file.",
+   "fix": "Add A87 as a dependency of A90, A92, A93 and A95 and name the re-run command in their pass criteria, or drop the requirement and let A94 run the harness. Define a baseline output inside A87's owned paths: for example docs\\fidelity\\baseline\\<code>--<state>--<width>.json holding the set of token names found in each region, plus baseline-manifest.json with a hash of the whole set. Write it only after the founder's HG-REVIEW sign-off, and add it to the pass criteria and the evidence manifest."
+  },
+  {
+   "severity": "medium",
+   "issue": "The partner portal pages fall outside the scope rule, so they are never checked. The scope covers screen-list rows whose owning node is in AM4 to AM8, plus the SGN- screens and 'the partner variant of the light sidebar'. A105 (AM6) builds the partner home pages and the four partner frames that A50's screens.json draws (Trustee and RE, Auditor, Regulator observer, Licensee). These are not rows in the charter's screen list, so coverage.json can show 100 percent while none of them gets the token comparison, axe, contrast, focus or reflow checks.",
+   "fix": "Add to the scope every frame and state in A50's and A51's screens.json that is not a charter row (the four partner frames, the SGN- screens and the partner sidebar), with A105 or A52 as the owning node. Count them in the number of cells the Coverage pass criterion expects."
+  },
+  {
+   "severity": "medium",
+   "issue": "The check that an agent persona sees no approve controls is too narrow and covers only the operator console. It counts only Approve, Reject, Sign, Broadcast, Ratify and Toggle. A51's own sweep also bans Publish, Allocate, Halt and Revoke, and A74 bans authorisation slots, so a build that shows an agent 'Allocate' (CAPM to CFO), 'Halt all' (SGL+R) or 'Authorise' would pass. D04 keeps sponsor-side approvals with a second human, but no sweep with a sponsor-agent persona checks SPN-09 'Approve as sponsor owner', SPN-14 team approvals or the SPN-16 pending-owner approval.",
+   "fix": "Take the banned-control list from A03's delegable.ts (every action marked requiresHuman or checker/approver/signer) instead of a typed word list, and match on accessible name and data-action. Run the sweep with a sponsor-agent persona across SPN-01 to SPN-16 as well as with the console agent persona. Add a planted drift that shows 'Approve as sponsor owner' to a sponsor agent."
+  },
+  {
+   "severity": "medium",
+   "issue": "The npm workspace command does not match the repo layout. The harness is 'run as its own workspace' with its own package.json and the command npm -w e2e/fidelity run fidelity. But A01 declares the workspace globs apps/*, services/*, packages/*, packages/adapters/*, contracts, e2e and scripts. 'e2e' is a single workspace, so e2e/fidelity is not one, and A01 rejects an unknown -w name. A87 cannot edit the root package.json.",
+   "fix": "Either run the harness as a script of the e2e workspace (for example npm -w e2e run fidelity with a Playwright project filter) and own only e2e\\fidelity, or reopen A01 upstream to change the glob to e2e/* and record that dependency. Use the same choice in the re-run commands inside the fix items."
+  },
+  {
+   "severity": "medium",
+   "issue": "The screen-reader challenge needs software that is not installed and a sense an agent does not have. Challenge step 5 asks Fable to tab through twelve screens 'by hand' with NVDA running. NVDA is not in the machine's toolchain (Node, Docker, Git, Python). Installing it is a download that needs the user's permission, and an agent cannot hear speech output.",
+   "fix": "Replace it with an automated check: Playwright accessibility-tree snapshots plus recording of DOM changes in the live regions, or NVDA's speech-viewer log through guidepup if the user approves installing it (recorded as a prerequisite). Move any real screen-reader walk into the founder's HG-REVIEW or into the optional independent accessibility audit already logged."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec claims its evidence is measured against WCAG 2.2 AA but leaves out AA criteria this design is exposed to. Reflow is tested only at 375 px, while WCAG 1.4.10 is defined at 320 CSS px. Nothing checks 1.4.4 (text resized to 200 percent), 1.4.12 (text spacing), 1.4.13 (content on hover; A66's AgentMarker hover shows the token id and mandate) or 2.4.11 (focus not hidden), although the design uses sticky asides and headers. A build that scrolls sideways at 320 px, or hides focused rows under a sticky header, passes.",
+   "fix": "Add: reflow at 320 px wide (scrollWidth <= 320, 16 px gutters) for the public, investor, sponsor and partner surfaces; 200 percent text zoom with no clipped text; the 1.4.12 spacing styles with no lost content; hover and focus tooltips that can be dismissed and hovered; no focused element fully covered by a sticky element. Or narrow the claim to the N11 checks and remove the WCAG 2.2 AA wording."
+  },
+  {
+   "severity": "medium",
+   "issue": "The tipping-off guard is broader than N08 and conflicts with N18 and with sibling nodes. Any 'AML' on a public, investor or sponsor page is a Blocker, yet N18 requires 'AML/CTF' to be spelled out on first use on every surface. A generic identity-check or privacy collection notice, which may need to name the Anti-Money Laundering and Counter-Terrorism Financing Act 2006 as the law requiring collection, is not tipping-off. The spec also says 'the only allowed investor-facing phrase is account under review', while A59 shows 'Under review' and A60 shows 'Paused while we review your account'.",
+   "fix": "Limit the Blocker to places that show the viewer's own status: banners, pills, notices, activity, errors, token states and API responses tied to the viewer's account. Allow generic legal references on public help, privacy and onboarding pages, and log that as a counsel question. Replace 'the only allowed phrase' with the generic strings that N08, A59 and A60 fix, listed in compliance-copy.json."
+  },
+  {
+   "severity": "low",
+   "issue": "The fixed clock time differs from the seed. The spec fixes A09's clock to 23 Sep 2026 10:41 AEST, but A06's AS_OF is 2026-09-23T10:30:00+10:00; 10:41 is the time of order RX-ORD-55120 on 22 Sep. Relative values ('4h', countdowns, 'x min ago') can then differ from what the seed asserts.",
+   "fix": "Import A06's AS_OF constant instead of typing a time."
+  },
+  {
+   "severity": "low",
+   "issue": "The owner lists for the bug tests are incomplete, so fix items may go to the wrong node. Bug 19 checks ADM-01, which A66 owns, but lists only A54, A62 and A71 as owners. Bug 17 checks ACC-01 (A59) and the sponsor register's Type column (SPN-08, A64) but lists only A56.",
+   "fix": "Route each bug-test check to the screen's owning node from screens.json instead of a typed list, and correct the lists: add A66 to bug 19, and A59 and A64 to bug 17."
+  },
+  {
+   "severity": "low",
+   "issue": "'The prototype compared against itself yields zero findings' is ambiguous. If the whole harness runs on the prototype (copy check, axe, focus, the clickable-span rule, the colour sweep), it will report findings, because the prototype has clickable spans and no focus style.",
+   "fix": "State that the self-comparison baseline covers only the token comparator and region matching, and that the accessibility suite never runs against the prototype."
+  },
+  {
+   "severity": "low",
+   "issue": "The target-size rule is stricter than WCAG 2.5.8 and does not say so. 'Every control at least 24 x 24 px at 375' ignores WCAG's exceptions for inline links and for enough spacing, so inline footer links and links inside sentences, drawn at 12 px, would have to change.",
+   "fix": "Apply WCAG 2.5.8 with its spacing and inline exceptions, or keep the stricter rule and send conflicts with the design to the founder as DF-A87 findings."
+  },
+  {
+   "severity": "low",
+   "issue": "The estimate looks light for how much the node covers. 6-10 agent-hours has to cover two drivers; region maps and state recipes for about 96 screen-list rows plus the extension frames, at two to four widths; the accessibility and jargon suites; five bug tests; the D04 checks; the gallery; routing the findings; and a re-run.",
+   "fix": "Raise it to about 10-16 agent-hours, or state that the region maps are generated from screens.json and A05's component tags, which is what keeps the hours this low."
+  }
+ ]
+}

@@ -1,0 +1,100 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "J09 recovery is claimed as done, but the vendored recoveryAddress behaviour is not pinned and conflicts with the design. It requires the new wallet to be a management key (purpose 1) of the investor's ONCHAINID, which is impossible once the lost passkey account was the only management key. It calls registerIdentity(newWallet) itself, which reverts on the shared storage because A29 registers the new wallet first. It re-freezes the new wallet when the old one was frozen, and J09 freezes the old one first. It calls deleteIdentity(lostWallet) on the SHARED storage, which strands units in every other trust and breaks the second token's recovery.",
+   "fix": "Add a brief item 'Recovery on shared storage' with tests: an investor holds 2 trusts, the old wallet is frozen and A31 has pre-registered the new wallet; recovery must succeed for both tokens. State the expected end state (the new wallet stays frozen until a four-eyes unfreeze). Define the ONCHAINID key layout (investor account plus a RealX recovery management key). If the pinned tag cannot do this without a vendor patch, specify the alternative (forcedTransfer with the HaltModule override plus A31 registration) or escalate before Build."
+  },
+  {
+   "severity": "high",
+   "issue": "The ONCHAINID key layout is missing. A31 has the V4 identity agent call addClaim on investor identities, and ONCHAINID only allows that for a purpose-3 CLAIM key on the identity. A24 creates identities with only 'management key = the address passed in'.",
+   "fix": "Specify createIdentity followed by addKey(V4, purpose 3), plus the recovery management key. Add a test that V4 can add and remove a claim on a new identity and a stranger cannot."
+  },
+  {
+   "severity": "high",
+   "issue": "WHOLESALE_AU is a required IR topic that expires on-chain. After a two-year certificate lapses, isVerified is false for every wallet of that identity, so forcedTransfer to an estate, recoveryAddress to the holder's own new wallet and moves between the holder's own wallets all revert. This contradicts G04: 'expiry blocks new purchases, not holdings'.",
+   "fix": "Either drop WHOLESALE_AU from the IR-required topics and enforce it in a RealX module only on mints and on transfers from another identity, or make the claim non-expiring on-chain and leave expiry to A19 and A32. Add vectors: a holder with an expired certificate can sell and can be recovered or force-transferred within their own identity, and cannot receive a mint or a transfer from another identity."
+  },
+  {
+   "severity": "high",
+   "issue": "G06 country semantics are undefined. The IR stores the residence country (A31: 'confirmed residency'), but a FATA foreign person is not defined by residence: temporary residents in Australia are foreign persons and Australian citizens abroad are not. CountryAllow [36] therefore admits temporary-visa holders to established residential trusts and refuses citizens abroad. The required RESIDENCY_FIRB claim has no defined meaning.",
+   "fix": "Define the IR country field (or a separate FOREIGN_PERSON claim) as A19's G06 classification and state what RESIDENCY_FIRB attests. Add vectors: a temporary resident is refused on a residential trust and a citizen abroad is accepted. Record the fractional-interest reading as an HG-LEGAL question."
+  },
+  {
+   "severity": "high",
+   "issue": "The commercial 'FIRB-permitted list' is never defined, and foreign.allowed defaults off until counsel answers, so the seed commercial trusts also get [36]. The pass criterion, the design-fidelity challenge ('accepted on a commercial one') and the design's 'Permitted after FIRB checks' cannot be written blind or met.",
+   "fix": "State the exact seed allowed-country list for commercial trusts as a named fixture, or state that every trust is [36] while foreign.allowed is off and the design row is rendered from the flag. Map A19's foreign_policy enum (blocked | after_firb_check | allowed) to allowedCountries explicitly."
+  },
+  {
+   "severity": "high",
+   "issue": "Fable cannot compute rulesHash blind, and the spec contradicts itself. 'Canonical ABI encoding' names no types, order or name encoding. Modules are hashed 'sorted', yet the challenge says swapping the order of two modules must change the hash. Issuers are hashed without the topics they are trusted for, so changing an issuer's topics goes undetected. Fable must write 50 expected hashes before RULE-HASH.md exists.",
+   "fix": "Write the exact tuple in the spec, e.g. keccak256(abi.encode(bytes32 version, bytes32 rulePackCode, uint256[] topicsAsc, (address issuer, uint256[] topicsAsc)[] issuersAsc, (bytes32 nameHash, address module)[] in one stated order, uint16[] countriesAsc, uint256 maxBalance, uint256 maxHolders, uint256 lockInSeconds, uint256 supplyLimit)), and align the rules-hash challenge with it."
+  },
+  {
+   "severity": "high",
+   "issue": "The rulesHash contract conflicts with other nodes. A19 (AM1, built earlier) defines params_sha256 as SHA-256 over canonical JSON of the resolved set, including off-chain fields. A27 checks a per-module 'parameter hash equal to params_sha256'. A20's R6 compares the chain hash with A19's params_sha256. A24's keccak token-level rulesHash can never equal these, so R6 raises a permanent Sev1 rule_drift that halts resale.",
+   "fix": "Define R6 as chain rulesHash == ruleHash(A19.expectedOnchainParams(vehicle)), computed by A24's rule-hash.ts and exported through packages/contracts. Specify the mappings holder_cap_bps -> maxBalance units, lock_in_days -> seconds and foreign_policy -> countries. Stop saying A19's params_sha256 stores this value, and raise the A19, A20 and A27 edits as cross-node fixes."
+  },
+  {
+   "severity": "high",
+   "issue": "The vendored modules may not expose the rule parameters on-chain. CountryAllowModule stores a mapping with no enumeration, and MaxBalanceModule may have no maxBalance getter. Without them RuleHash.sol and SuiteInspector cannot produce the sorted country list or maxBalance except through a RealX copy, which the spec forbids.",
+   "fix": "At Specify, list the pinned tag's getters per vendored module and name the read strategy: iterate a constant ISO 3166-1 numeric list for countries, or keep a RealX RuleParams store written in the same call that configures the modules and check it by read-back. Otherwise allow a RealX equivalent when a getter is missing and record it in AUDIT-SCOPE.md."
+  },
+  {
+   "severity": "high",
+   "issue": "The deployment spec cannot be built as written. The vehicle salt includes chainId, yet addresses must be identical on every chain. Deploying Ownable contracts (TREXFactory, IdFactory, the implementation authority) through the 0x4e59 deterministic proxy makes the proxy their owner, so deployTREXSuite (onlyOwner) can never be called. deployTREXSuite always deploys a fresh TIR and CTR per token, so the 'shared' TrustedIssuersRegistry and the per-rule-pack CTR need explicit re-pointing. Binding an existing IRS requires the factory to own it.",
+   "fix": "Remove chainId from the salt, or drop the same-address claim for vehicles. Specify a RealX CREATE2 deployer (or CreateX deployCreate2AndInit) that deploys and then transfers ownership or initialises in the same transaction, with a test that every shared contract's owner is the configured owner. State that deploy-vehicle gives the factory ownership of the IRS (or binds it manually) and calls setTrustedIssuersRegistry and setClaimTopicsRegistry on each IR, with read-back."
+  },
+  {
+   "severity": "high",
+   "issue": "tokenState is under-determined and contradicts A27. T-REX tokens start paused (A27 states this), so paused() and totalSupply alone cannot distinguish configured, issuing and paused. A24 never states that tokens start paused or that unpause is the step from issuing to active.",
+   "fix": "State the pinned tag's start-paused behaviour and define tokenState precisely: configured = modules bound and agents set, supply 0, paused; issuing = supply > 0 and never activated; active = unpaused; paused = paused after activation. Add an on-chain activation marker (e.g. HaltModule.markActivated, called by the lifter on first unpause) or move the issuing/paused split to A27's event history. Align with A27's seven configured checks."
+  },
+  {
+   "severity": "high",
+   "issue": "Dependencies are missing. seed-vehicles.ts uses A06's seed definitions and a pass criterion requires the state vocabulary to equal A03's enums, but A24 depends only on A07 and neither A03 nor A06 is an ancestor. The scheduler may start A24 before either exists.",
+   "fix": "Add A03 and A06 to A24's deps in the graph data (both are AM0, so no milestone-order violation)."
+  },
+  {
+   "severity": "high",
+   "issue": "Fable's hidden vectors run 'through the builder's harness', and that harness also checks against the builder's SuiteInspector. A harness that swallows reverts or misreads expect would let the oracle pass on a wrong build.",
+   "fix": "Fable ships a minimal independent runner in gauntlet/hidden/A24, or harness self-test vectors that must fail (e.g. a deliberately wrong expect). The pass criterion requires both runners to agree."
+  },
+  {
+   "severity": "medium",
+   "issue": "The HaltModule role matrix is ambiguous. Build brief item 3 says only the halter may halt, while the role-test line says 'lifter calling halt is allowed', so hidden role tests may expect NotHalter.",
+   "fix": "Add a role table per function (halt, lift, setUnlockAt, forcedTransferOverride, setHalter/setLifter, setDocument) with the allowed callers. Make halt and lift take the compliance address, because the module is shared across tokens."
+  },
+  {
+   "severity": "medium",
+   "issue": "The identity-keyed modules (MaxBalance, HolderCount, LockIn) fall out of sync if updateIdentity or registerIdentity re-points a wallet that holds a balance to another identity. The fast-check runner does not include updateIdentity.",
+   "fix": "Add updateIdentity and deleteIdentity to the fast-check action set. Either require zero balance first (an off-chain precondition, with the chain limitation documented and tested) or specify how the modules resync."
+  },
+  {
+   "severity": "medium",
+   "issue": "holdingState has no precedence when facts overlap (locked and partially frozen, frozen and locked). The SM-07 transitions active -> eligible_empty (balance zero) and frozen/active -> recovered_out are not listed as tested.",
+   "fix": "State the precedence (frozen > partially_frozen > locked > active > eligible_empty > unregistered) and add those transitions to the state-derivation tests."
+  },
+  {
+   "severity": "medium",
+   "issue": "The forced-transfer override carries no approval binding, so A25 cannot prove that arming the override and the forcedTransfer came from one approval ID (maker-checker traceability).",
+   "fix": "Add bytes32 approvalId to forcedTransferOverride and to the OverrideConsumed event, and test that the consumed event carries the approval ID it was armed with."
+  },
+  {
+   "severity": "medium",
+   "issue": "ClaimIssuer.isClaimValid in @onchain-id/solidity may not be declared virtual. If so, the expiry override needs a vendor patch (an escalation) and G01 claim expiry fails.",
+   "fix": "Check this at Specify, and name the fallback before Build: a RealX IClaimIssuer built on Identity, or a V4 job that revokes expired claims."
+  },
+  {
+   "severity": "medium",
+   "issue": "The token symbols RXWLG01, RXPAD01, RXSBK02, RXPAR01 and 'the four others from the prototype' do not match A06's eight seed vehicle codes (KST01, MRN01, BAY01, ANN01, HAW01, MPA01, GYM01, UNL01).",
+   "fix": "Derive symbols as RX plus the A06 vehicle code and list all eight explicitly."
+  },
+  {
+   "severity": "low",
+   "issue": "deploy-shared.ts says it deploys 'the five compliance modules' while six are bound (CountryAllow, MaxBalance, HolderCount, LockIn, Halt, SupplyLimit). A23 (AM1) is named as a runner of A24's Base Sepolia path, but A23 comes before A24. The product map says G10 halts are time-boxed, but there is no on-chain 'until' field or pointer to where the time-box lives.",
+   "fix": "Say six modules, name A27 or A86 instead of A23, and state that the halt time-box and published reason live off-chain in A48."
+  }
+ ]
+}

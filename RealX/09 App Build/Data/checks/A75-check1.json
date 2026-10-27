@@ -1,0 +1,60 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The seed and the pass criteria contradict each other on ADM-25. The design-fidelity challenge and pass criteria require the prototype's four rows and the nav badge '4', and the spec defines that badge as GET /v1/aml/summary.open_cases. But the A42 seed has only three open cases: AML-114 is case_closed via no_file. So open_cases is 3, not 4. The default table's empty state also reads 'No open cases', which implies an open-only filter that would hide AML-114. The builder therefore has to either fake the count or fail the fidelity check.",
+   "fix": "Decide it in the spec. Either (a) the default ADM-25 list shows all cases from the last 30 days, including closed ones, so all four rows appear, and the badge is open_cases = 3, recorded as design finding DF-A75-07 (the prototype's '4' is a static string, design analysis §6.4 bug 8), with the fidelity check expecting 3; or (b) A06/A42 seed a fifth open case. Change the empty-state text to match whichever filter is chosen."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec consumes A42 and A43 operations that do not exist in those nodes' route lists, and they are missing from the §1 follow-up list. Missing: a route that records the tipping-off check (with its hardware-key assertion); a route to switch the SMR clock to smr_tf_24h; TTR and IFTI decision routes (file or no-file on a filing); the QA-sample 'Mark reviewed' route ('through A42's route' names no route); the smr_3bd policy label for the subtitle (A42's /v1/aml/summary returns counts only); and A43's 'Raise to material' route. The builder would invent or mock these, and Fable's hidden tests would target routes that do not exist.",
+   "fix": "Add them explicitly to the follow-up loops with verbs, roles and requiresHuman flags. A42.1: POST /v1/aml/cases/{id}/tipping-off-check (MLRO, hardware key, requiresHuman), POST /v1/aml/cases/{id}/clock-policy (MLRO, one-way), POST /v1/aml/filings/{id}/file|no-file (MLRO, requiresHuman), POST /v1/aml/alerts/{id}/qa-review (MLRO), and smr_policy {code,label} on GET /v1/aml/summary. A43.1: POST /v1/comms/items/{id}/raise-materiality (CCO/LEGL, requiresHuman). Make them frozen Specify inputs."
+  },
+  {
+   "severity": "high",
+   "issue": "The §7 agent-delegability table ('the rule set it must reproduce') leaves out several MLRO-judgement acts: take case with 'suspicion formed' (this starts the statutory SMR clock), record suspicion, add or remove an analyst on the case ACL, switch to the 24-hour clock, close case, TTR and IFTI file or no-file, and QA mark reviewed. It also leaves out template.publish submit, ticket resolve and Suggest wording. A42 is also silent on token access for these. Two rows are non-deterministic ('shown to agents only as the API answers'; 'as A35's OpenAPI marks envelopes:manage'). That makes the pass criterion 'outcomes agree in 100 % of cells' circular: a build exposing 'close case' or 'record suspicion' to an MLRO's agent token or as an MCP tool would pass.",
+   "fix": "Add explicit rows: take/record suspicion, ACL change, clock switch, close case, TTR/IFTI decisions and QA review = never (MLRO personal, refused before scope evaluation with AML_MLRO_ONLY or requiresHuman), listed as D04 counsel questions under HG-LEGAL. Template publish submit = maker yes, decision never. Ticket resolve = within the human's slice. Pin AFCA escalation/outcome/resolve/reopen and envelope void to a fixed yes or no at Specify, defaulting to never when the owner is silent, and record them in A03's delegable.ts so the hidden parity table has fixed expected values."
+  },
+  {
+   "severity": "medium",
+   "issue": "The sealed SMR content can leak into caches the spec forbids. §3 shows the sealed content from the MLRO's filing read in a collapsed panel, but filing reads go through the SDK (queries.ts), whose query cache the spec forbids for this content, and the browser HTTP cache and service-worker cache are not covered. The planted-marker probe does not check the HTTP disk cache or CacheStorage.",
+   "fix": "Require the sealed content to be fetched only by a dedicated uncached SDK call (a separate endpoint or ?include=sealed), made only when the MLRO opens the panel, with caching disabled (gcTime 0, never persisted), a Cache-Control: no-store response header checked by a test, and the value dropped on collapse or navigation. Add the HTTP cache and CacheStorage to the sealed-content probe and the pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag is inconsistent. The frontmatter and graph say oracle: no, but the Oracle rule paragraph requires Fable to write hidden Playwright specs and fixtures before the build (tipping-off sweep, sealed-content probe, agent-parity table). An orchestrator that runs the Oracle stage only for oracle: yes nodes would skip them, even though the node renders authority acts (SGL+R freezes, redress approvals, SMR filing).",
+   "fix": "Set oracle: yes for A75 in final-graph.json and the frontmatter, keeping the existing hidden-test scope. Alternatively, add an explicit graph field (e.g. hidden_tests: true) that the orchestrator honours, and cite it in the node."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some done criteria depend on nodes that are not dependencies. D04 is 'done when ... appears on ADM-35' (A77, an AM7 sibling). The restriction challenge expects Ratify 'in ADM-30' (A66, a sibling). Case detail links go to ADM-09/10 (A68), ADM-14 (A72), ADM-26 (A76) and ADM-31 (A66). A75's gate can run before these, so those checks cannot be run.",
+   "fix": "Verify agent attribution through A12's token activity and A10's audit query (on_behalf_of), and ratification through A14's GET /v1/approvals/{id}. Check cross-screen links only for their href, never by navigating. Alternatively, add A77 and A66 as dependencies if screen-level proof is required."
+  },
+  {
+   "severity": "medium",
+   "issue": "The design-extension coverage for ADM-25 is inconsistent across nodes. A42 says the undesigned ADM-25 surfaces (alert queue, case detail, restriction modal, tipping-off checklist, sealed filing form, filings, screening, QA) are specified in A51, but A51's screen list omits ADM-25. A75 composes the most sensitive UI without a reviewed frame and leaves it to Specify point (b).",
+   "fix": "Add the ADM-25 extension frames (at least the sealed filing form, restriction/ratify panel and tipping-off checklist) to A51's scope, add design-ext:ADM-25 to A75's design_refs, and make HG-REVIEW of those frames a precondition. Or correct A42 and make founder review of the composed ADM-25 surfaces a hard gate before A75 passes."
+  },
+  {
+   "severity": "low",
+   "issue": "The graph summary for A75 says 'sealed content limited to MLRO and CCO', but the spec and A42 make the content MLRO-only and give the CCO metadata only. A reviewer working from the graph could accept a CCO content view.",
+   "fix": "Update the A75 summary in final-graph.json to 'sealed SMR content MLRO-only; CCO sees filing metadata'."
+  },
+  {
+   "severity": "low",
+   "issue": "The product map lists SP-IR as an ADM-28 role, and the spec does not say how sponsor IR is served.",
+   "fix": "State that SP-IR drafts and tracks sponsor items on SPN-12 (A64), that the operator console refuses sponsor principals, and that the product-map role is satisfied there. Record this in A75.qa.md."
+  },
+  {
+   "severity": "low",
+   "issue": "No challenge tests the G22 token limits (expiry, revocation, allowed-actions list, time window) on staff tokens for the delegable ADM-24/25/27/28 actions. Only role-level delegability is tested.",
+   "fix": "Add a parity case: expired, revoked and out-of-allowed-actions IRCM/LEGL tokens each call a delegable action (comms submit, document version submit). Expect A12's refusal code and no side effect, identical through the SDK and MCP."
+  },
+  {
+   "severity": "low",
+   "issue": "The 8-12 agent-hour estimate matches three-screen console nodes. A75 has four screens, about 25 sub-routes and the heaviest privacy probes. A72, which is comparable, is 10-14.",
+   "fix": "Raise the estimate to 10-14 agent-hours in the graph and the note."
+  }
+ ]
+}

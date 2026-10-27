@@ -1,0 +1,90 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "J06 trustee-countersign variant has no upstream contract. The product map's J06 has no trustee step. A40's chain stages (rent_roll_uploaded, proposed, sponsor_owner_approval, realx_approval, paid) have no trustee stage and no substages[]. A40 records 'whether TP-RE must countersign every run' as a counsel question. A98's policy rows name the trustee only on distribution.exit.approve, not on the monthly run. A06 seeds HAW01's September run as 'sponsor-approved and in RealX review'. So the J06 done-criterion and PTR-06's YOUR TURN chip cannot be satisfied, and A65's hired-RE variant inherits the gap.",
+   "fix": "Add spec point (f), settled before Fable writes the hidden tests and raised as upstream reopenings: A03 adds a monthly distribution policy row with a TP-RE countersign where the trustee is a partner principal, A40 adds a trustee stage or substage with your_turn, and A06 seeds HAW01 at that stage. If counsel keeps the question open, re-scope J06 to the exit-waterfall countersign and mark the monthly variant as blocked on HG-LEGAL."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec relies on A14 fields that do not exist: checker_view (a projection redacted for partners) and available_actions. A14's detail returns the full checks[] and the diff against the last approved payload. The tipping-off guarantee, the veto-control rule and the trustee-acts rule all depend on the missing fields, and they are not in the Specify contract follow-ups.",
+   "fix": "Add a Specify contract follow-up to A14 and A98 for two things. First, a partner-safe checker_view projection per approval type, with an allow-list test. Second, an available_actions[] array for the caller. Block the trustee approval pages until both exist, and forbid rendering checks[] or diff outside checker_view."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec calls an A98 route that does not exist and ignores the ones A98 defines. A105 calls GET /v1/partners/me/engagements and builds nav and labels from /iam/me. A98 defines GET /v1/partners/me, which returns organisation, role_label, read_only, time_box_label, nav[], can_countersign, engagements and grants 'without translation'. A98 also defines /me/vehicles, /me/approvals?stage=your_turn and /me/activity. A98's screen contract test for A105 would fail.",
+   "fix": "Rewrite §1 and §2 on GET /v1/partners/me and its nav[], dropping the local nav sets. Use /me/vehicles for PTR-02 and /me/approvals?stage=your_turn for PTR-07. Add A98's screen contract test to the pass criteria."
+  },
+  {
+   "severity": "high",
+   "issue": "Hardware-key countersign is left open and has no UI. A14 allows credential_kind webauthn_hardware only, and A98 makes a TP-RE a checker only with hardware_key_registered, otherwise returning can_countersign:false with PARTNER_HARDWARE_KEY_REQUIRED. A105 leaves spec point (c) open ('synced platform passkey or hardware key'). It renders no can_countersign:false state, and no page lets a partner enrol or manage a passkey or hardware key. No node renders this state.",
+   "fix": "Close spec point (c) as hardware-attested only. Add a partner Security page (or mount A52's or A59's passkey management with surface='partner') where enrolment is person-only. Add the can_countersign:false banner on Home and PTR-07. Add both to the state matrix and add a fixture of a TP-RE without a hardware key."
+  },
+  {
+   "severity": "high",
+   "issue": "The trustee's register-instruction acknowledgement has no surface. A98 defines POST /v1/partners/trustee/instructions/{id}/acknowledge and /reject (requiresHuman, purpose trustee_ack) for vehicles whose register_keeper = trustee, and assigns the TP-RE portal to A105. A105 has no page, parity.json entry or test for it, so this person-only act cannot be done at all.",
+   "fix": "Add a Register instructions list and detail for TP-RE (acknowledge and reject via withFreshAssertion, with a reason code on reject). Add parity.json entries with delegation 'person', the states, and a challenge that a token is refused and a person's acknowledgement is recorded exactly once."
+  },
+  {
+   "severity": "high",
+   "issue": "The licensee's complaints review is optional in the spec although it is required. The product map gives TP-LIC 'Review marketing and complaints (read-only)' with G17 and G18, and A98 grants TP-LIC read on M23. A105 makes it conditional (spec point (e)) with an escape clause to record the gap in qa.md, so a build without it passes. A44 is not a dependency.",
+   "fix": "Make a read-only complaints tab mandatory for TP-LIC. Add A44 to deps, and G18 and M23 to the node data. Add its states and a no-write-control challenge. Leave only the depth of detail to counsel."
+  },
+  {
+   "severity": "high",
+   "issue": "A direct interface dependency is missing: A55. §7 mounts A55's PUB-08 and PUB-09 page bodies, but A55 is neither a dependency nor an ancestor of A105 in final-graph.json, so a scheduler could start A105 first.",
+   "fix": "Add A55 to A105's deps in final-graph.json and to the note's 'Depends on'."
+  },
+  {
+   "severity": "medium",
+   "issue": "A51 is a design source but not a dependency. The data-room grant card, calendar table and flagged-phrase highlight are fidelity-checked against A51's design-ext:ADM-26 and ADM-28, but A51 is neither a dependency nor an ancestor.",
+   "fix": "Add A51 to deps and add design-ext:ADM-26 and design-ext:ADM-28 to design_refs in the graph data."
+  },
+  {
+   "severity": "medium",
+   "issue": "The audit-count challenge contradicts itself. The initial page plus three 'Load more' clicks makes four listing pages, but the challenge expects exactly three item_viewed events. A45 defines events per listing page and per download, but not per item open, so 'one per open' is not grounded.",
+   "fix": "Correct the count to 1 + the number of Load more clicks. Get a contract confirmation from A45 at Specify of the event written by GET /items/{itemId} and by the file fetch."
+  },
+  {
+   "severity": "medium",
+   "issue": "The auditor's metric read is not permitted by A45. PTR-12 reads GET /v1/metrics/values?basis=management as TP-AUD, but A45 gives TP-AUD only metrics:attest (no reporting:read), has no basis parameter, and does not scope values to the engagement.",
+   "fix": "Raise to A45 and A03 a TP-AUD read cell scoped to the engagement and the filter parameter. Treat the read as a blocked contract gap until they exist, with no local filtering."
+  },
+  {
+   "severity": "medium",
+   "issue": "The licensee's marketing perimeter conflicts with A43 and A98. A43 limits TP-LIC to 'its licensee's tenant items', and A98 to M21 for the platform tenant. The G17 challenge has TP-LIC open a sponsor announcement, which would be a 404, and the table has an Owner column for RealX or sponsor.",
+   "fix": "Settle the perimeter at Specify with A43 and A98, including whether sponsor-tenant items are in it, and align the challenge and the columns with the answer."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec gets the Harbour & Co trustee wrong and omits the same-person rule. PTR-02 says Harbour & Co has no partner trustee principal. A98 makes each sponsor's licensed trustee, including Harbour & Co, a TP-RE, and seeds a trustee director who is also a sponsor user to test its same-person rule. A105 has no challenge for that rule.",
+   "fix": "Correct PTR-02 to follow A98 and use the Harbour & Co TP-RE as the second-trustee fixture. Add a challenge: that person approves a run as SP-OWN, then gets no trustee decide control in the portal and is refused by the API with A98's code."
+  },
+  {
+   "severity": "medium",
+   "issue": "The auditor's engagement-level collections are ignored. A98's partner_engagement.collections[] lets a TP-AUD read A45 collections outside a grant, but A105 says 'only through grants' and has no page or scope test for them.",
+   "fix": "Show engagement collections on PTR-10 with the same collection and item pages, watermark and logging. Include them in the scope property test, or record with A98 that they are served through a grant."
+  },
+  {
+   "severity": "medium",
+   "issue": "Trustee acts are incomplete against A98's cells. A98 gives TP-RE property.propose_exit (TP-RE maker, CCO checker), but PTR-09 has only record trustee control and withdraw exit proposal, so proposing an exit (J21) has no UI.",
+   "fix": "Add 'Propose exit' to PTR-09, driven by available_actions, with its parity.json entry and a maker-cannot-check challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "The estimate is too low. 17 pages across four personas, countersign and veto sheets, the data-room viewer, attestation, marketing review, parity and page objects are estimated at 5-8 agent-hours. Comparable UI nodes are A64 at 10-14, A55 at 6-10 and A60 at 6-10.",
+   "fix": "Raise the estimate to 9-14 in final-graph.json and in the note."
+  },
+  {
+   "severity": "low",
+   "issue": "The PTR-01..17 screen codes collide with A98's partner_user id prefix PTR-. They also need a defineScreen 'reuses' field and routes.ts rows that A52 and A02's ScreenCode do not support, which means reopening A52 after its gate.",
+   "fix": "Use a distinct prefix (for example PRT-) and list the A52 and A02 reopening explicitly in the Specify follow-ups."
+  },
+  {
+   "severity": "low",
+   "issue": "Some edge states and seed items are missing. There is no page for zero engagements (A98 returns state 'lapsed', nav [] and PARTNER_NO_SCOPE). There is no view of the partner's own activity (/me/activity). The seed has no TP-OBS grant. The mid-session engagement-end challenge relies on another engagement the observer does not have. A50's fidelity personas (Coastline Trustees, Northline Capital compliance) differ from the seed (Meridian).",
+   "fix": "Add the lapsed page and an Activity page. Add a TP-OBS grant and a TP-LIC user to the A06 follow-up. Rewrite the challenge to assert revocation on the next call and in ADM-35. State that fidelity compares structure and tokens while persona text comes from the seed."
+  }
+ ]
+}

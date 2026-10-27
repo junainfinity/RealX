@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Graph dependencies do not cover interfaces the spec drives. Step 1 needs A31 (claims issued, identity registered: SM-07 starts at eligible_empty only after 'identity registered', and A38 refuses a mint to an unregistered destination with SET_DESTINATION_NOT_REGISTERED) and A32 (wholesale certificate accepted). Neither is in A49's transitive closure. The spec also asserts behaviour owned by other AM3 nodes outside the closure: the AML restriction hold and the AML-118 held line (A42); 'sends no notice' and 'Distribution paid' (A43; without it 'no notice' passes trivially); settled withdrawals in the investor's activity read (A47); the halt routes for the 'no route clears the halt' probe (A48); the agent.action.money notice reaching the person (A101); and the nightly 02:00 job (A46).",
+   "fix": "Add A31, A32, A42, A43, A47, A48, A101 and A46 to A49's deps in final-graph.json and to the Depends on line. Where a behaviour is deliberately not asserted here, say so in Requirements covered and name the node that proves it."
+  },
+  {
+   "severity": "high",
+   "issue": "The Gate says 'Pass closes milestone AM3', but 11 AM3 nodes (A31, A32, A42-A48, A98, A99, A101) are not upstream of A49. AM3 could therefore be recorded as closed while those nodes are unbuilt, even though the AM3 milestone goal lists them.",
+   "fix": "Either make A49 depend on every AM3 node, or change the Gate and Human gates text to: 'AM3 closes when A49 passes AND every AM3 node's status.json entry is passed'. Also make the stub-route pre-check cover the operationIds of every AM3 node."
+  },
+  {
+   "severity": "high",
+   "issue": "The agent path cannot work as written. Under A12 section 4, A37 (line 71) and A39, when a token confirms an order or requests a withdrawal it must present a signature from a signing key registered on the mandate. Without one the API returns 428 CONFIRMATION_REQUIRED and creates nothing. The actor setup never registers a signing key, so order B and the A$2,000 agent withdrawal would get 428. The owners also disagree about calls above the cap: A12 and A37 line 71 say 428, while A37 line 158 and A39 say 403 G22_LIMIT_EXCEEDED. So the refusals of order C and of A$5,000.01 have no single right answer.",
+   "fix": "In Actors, register a signing key under the investor's fresh passkey assertion, sign order B and the agent withdrawal, and add one unsigned agent order that must return 428 CONFIRMATION_REQUIRED and leave no row. Pin the expected result for a signed request above the cap: 403 G22_LIMIT_EXCEEDED naming the cap and the remaining amount. File a spec-defect against A12 and A37 to remove the '428 above the caps' wording before A49 is built."
+  },
+  {
+   "severity": "high",
+   "issue": "The agent token expires 24 h after it is created on 23 Sep 2026. The suite then advances the clock past KST01's closes_at, the 02:00 reconciliations and BAY01's 10 Oct 2026 payment date before J15 runs. The J15 agent withdrawal and its A$5,000.01 refusal would therefore fail with TOKEN_EXPIRED or MANDATE_EXPIRED instead of the asserted outcomes. A builder could hide this by silently re-creating tokens, or a refusal could pass for the wrong reason.",
+   "fix": "Set the mandate expiry to 30 days after AS_OF (inside A12's 90-day default) and state the absolute expires_at in the brief. Assert TOKEN_EXPIRED once, deliberately, after advancing the clock past it. Otherwise create a second named token for J15 and record both ids in evidence."
+  },
+  {
+   "severity": "high",
+   "issue": "The drift-halt test cannot produce a legitimate mint refusal, and it relies on interfaces the owning nodes do not provide. KST01 is fully minted (10,000 units = hard cap) and A38 has no top-up or late-allocation mint. The fallback, 're-submission of the same approval', is refused because the approval id is already consumed (A38 line 132, AM2 exit). That is exactly the 'refused for a different reason' trap the challenges warn about. A18 triggers drift through an instruction reference ending in -DRIFT-n when units are issued, not through SandboxControl.trigger afterwards, and it has no reset or corrected-extract control. The real codes are A38 SET_RECON_NOT_CLEAR, A40 DST_RECON_BREAK_OPEN (at funding -> funded, not at execution) and A20's preflight {clear:false} / recon_not_clear; there is no single 'A20 not-clear code'. The brief also never creates a KST01 distribution run that could be refused.",
+   "fix": "Restructure the test. Issue the KST01 register instructions with a -DRIFT-2 reference, or use a second sim offering, so the break exists after the register entry and before the mint. Assert that A38's run pauses with SET_RECON_NOT_CLEAR carrying the KST01 break id. Have the sim create a KST01 distribution run in approved or funding and assert DST_RECON_BREAK_OPEN on funding -> funded while BAY01 and MRN01 proceed. Open loop A18.1 (additive) for a sandbox 'correct extract' control, then re-run and assert the mint proceeds. Name each exact code in the brief and in the pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "Step 5 says every refusal leaves 'no row', but in A37 a placement failure (G07 and others) creates an order in state rejected. SM-05 coverage also requires eligibility_check and rejected to be reached 'by a named row id'. A correct A37 would fail this suite, or the builder would weaken the assertion.",
+   "fix": "State that the G07 holder-cap attempt leaves one order row in rejected, with its GateEvaluation, and that this row is the SM-05 rejected witness. Only G22 middleware refusals (order C, token creation, agent approve) leave no order, reservation or journal row; they still leave gate_evaluation, activity and audit rows."
+  },
+  {
+   "severity": "medium",
+   "issue": "The Requirements section says J04, J05, J06 and J15 are 'done', but several product-map failure paths and oracle hooks are never exercised. J04: an ineligible recipient at mint or allocation is excluded and refunded; a confirmation PDF exists per settled order. J05: invalid bank details are held; refunds complete within 5 business days. J06: the CEO is added above A$1m or a 25% variance; a court-order legal hold pauses distributions; a failed line is paid manually under 4E; AMMA statements are generated. J15: an account-name mismatch is held for review.",
+   "fix": "Add the ones that are cheap at service level: the J15 name-mismatch hold; J04 ineligibility at allocation, excluded and refunded; a confirmation record per settled order; J05 refund timestamps within 5 business days of failed; J06 manual_payout under 4E on one line. List the rest (CEO variance, legal hold, AMMA) explicitly as deferred to named nodes (A41, A48, A79, A88)."
+  },
+  {
+   "severity": "medium",
+   "issue": "G22 and D04 coverage has gaps against the pass criteria. (a) The pass criteria require a daily-cap refusal, but no step produces one: every agent amount stays under the A$8,000 daily cap, and the only refusals are per-action. (b) No agent tries to act as custody signer or to change the withdrawal bank account, which is a non-delegable money act under D04. (c) There is no sponsor-agent path, although D04 lets sponsor agents prepare distributions while the second sponsor approval stays with a human. (d) A12 requires a staff token to have a hardware-attested assertion plus a SECO checker. The actors list has no SECO, and the watch page's staff read token 'created at start-up' has no defined approval path, so the builder would bypass A12.",
+   "fix": "Add: an agent order that breaches daily_cap_cents after one inside the band; agent calls to the custody-signer route and to the bank-account change route, each refused with a G22 evaluation; MRN01 proposed by an SP-FIN token (A06's hco-month-end), with the SP-OWN approval refused to any token; SECO in Actors, activating the FINA token and the watch-page token through A12's two-step. State where the watch token's secret is stored, and cover it with the C9 scan."
+  },
+  {
+   "severity": "medium",
+   "issue": "The per-line 'A$0.004 to the rounding account' for Alex Morgan cannot be expressed in integer cents, yet evidence must be in integer cents. A40 books one integer remainder_cents (net minus the sum of floored lines) as a leg of the last distribution.pay journal. This pass criterion cannot be measured as written.",
+   "fix": "Assert Alex Morgan's line = 3,110 cents and the rounding leg = 259,200 cents minus the sum of line cents, as one integer. If a sub-cent audit trail is wanted, require A40 to expose each line's fraction in a stated unit such as millicents, and assert Alex's contribution = 400 millicents."
+  },
+  {
+   "severity": "medium",
+   "issue": "C2 (cents conservation) lists only pay-ins, run funding, withdrawals, refunds and escrow settlements. It leaves out money that exits client money under A16 and A38: the RealX fee held in fee_payable_realx and then swept out, and withholding tax remitted. It also does not say whether the KST01 scaled-back refund goes to the wallet (which stays in client money) or to the bank. A correct system could fail C2, or the builder could tune the formula to the observed data.",
+   "fix": "Define C2 over the A16 catalogue entry types that move money out of client money, listed by catalogue code. State for each refund whether it goes to the wallet or to the verified bank account. Add fee and withholding outflows, and assert them as zero if none occur in the run."
+  },
+  {
+   "severity": "medium",
+   "issue": "A06's soft-cap-missed scenario already takes ANN01 through close at 28% to refunding. A36 also moves live -> closed -> failed automatically in the same job unless a revert is chosen. J05 needs the suite itself to perform CAPM's revert, the FINA agent's draft, the CFO approval and the TRSY payouts. The scenario may already have passed the states the suite must drive and witness.",
+   "fix": "State that the suite runs ANN01 only to live with 2,800 units applied (or to a scenario variant that ends at closed), advances the clock itself, and records which actor or job caused each SM-04 transition. Open A06.1 if the scenario cannot stop earlier."
+  },
+  {
+   "severity": "medium",
+   "issue": "C7 requires each step's audit event count to equal 'the suite's expected count', and C8 and the gate-evaluation counts also use expectations the suite defines. Because the builder writes these numbers, it can tune them to whatever the system emits. Fable's hidden re-derivation covers money figures only, not event counts.",
+   "fix": "Derive the expected event counts from A10's event catalogue and each owning node's documented emissions, as a table in checkpoints.ts that cites the owning node. Add per-step event counts to Fable's hidden re-derivation list in the Oracle rule."
+  },
+  {
+   "severity": "low",
+   "issue": "The mandate field is called allowed_vehicles here, but A12 names it allowed_vehicle_ids (alongside allowed_property_ids). The design ref 'design:adApprovals APR-2291 checks' is used but is missing from the node's design_refs in the graph. Its third check is quoted as 'Snapshot 186 holders, 10,000 units', but the design reads 'Snapshot: 186 holders, 10,000 units', and word-for-word matching is required.",
+   "fix": "Rename the field to allowed_vehicle_ids, add the APR-2291 ref to design_refs in final-graph.json, and quote the design strings exactly, including the colon."
+  },
+  {
+   "severity": "low",
+   "issue": "The Fable probe expects 'a released daily counter' after the agent token is revoked between order B and the withdrawal. A12 releases a counter only when an action fails after the gate, not on revoke, so this expected outcome contradicts the owning node. The probe also does not say how the suite continues after the revoke.",
+   "fix": "Change the expected outcome to: the next agent call returns 401 TOKEN_REVOKED, the mandate and signing key are revoked, agent.token.revoked is emitted, and counters are unchanged. State that the suite stops the agent sub-path at a named checkpoint."
+  },
+  {
+   "severity": "low",
+   "issue": "Clock advances from 23 Sep to 10 Oct 2026 cross the start of Sydney daylight saving (Sunday 4 Oct 2026, when 02:00 jumps to 03:00). The nightly 02:00 reconciliation has no such local time that day, and the mandate's day boundary follows Australia/Sydney time.",
+   "fix": "Add one assertion that the 4 Oct run fires exactly once and that daily counters roll over at Sydney midnight across the change. Otherwise avoid advancing the clock through 02:00 on 4 Oct, and say so in the brief."
+  }
+ ]
+}

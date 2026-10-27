@@ -1,0 +1,95 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "packages/config is a closed schema that A08 owns and freezes, and envSchema is 'the only reader of process.env'. But downstream nodes put their own keys into packages/config: A09 (rate limits), A11 (STAFF_AUTHENTICATOR_AAGUIDS, relying-party origins), A12 (rate ceilings), A15 (AgentGateway placeholder address), A16 (ledger.withdrawal.*), A29 (WALLET_EAGER_DEPLOY, guardian waiting period), A33 (holder_cap_platform_max_bp), A37 (orders.*), A05 (design path), A06/A23 (CLOCK_AS_OF), A23 (OTEL endpoint, MCP_PORT, PANEL_PORT), A86 (TESTNET_OPT_IN). There is no extension mechanism, so later nodes must either edit A08's owned path or read process.env themselves.",
+   "fix": "Add defineConfigSection(name, zodShape, {secret?, consumer}) so each owning node registers its section from its own path. loadConfig() merges all sections into one parse that reports every error, and README/.env.example generation covers all sections. Add tests that a fixture section's errors appear in the combined report and that no file outside packages/config reads process.env."
+  },
+  {
+   "severity": "high",
+   "issue": "The frozen flag table is incomplete, and the snapshot test requires 'exactly' these flags. ADM-34 in the product map requires a 'marketplace suspend' kill switch, and A48 plans to add platform.marketplace_suspend by editing A08's flags.ts. A29 relies on a wallets.external phase flag from 'A08 flag defaults', and A24 relies on foreign.allowed. None of these is declared.",
+   "fix": "Add platform.marketplace_suspend (kill-switch, P1, default off, Global), wallets.external (default off, with its phase), and either foreign.allowed or an explicit statement that it is an A36 per-listing field. Update the snapshot pass criterion to the full list. State that new flag keys are added only by reopening A08's spec."
+  },
+  {
+   "severity": "high",
+   "issue": "The magic-marker list is closed, but other nodes use markers A08 does not define: A22 ' FRAUD' ('through A08's documented extension list', which the spec never defines), A17 SIM-DUP, SIM-CASH, BSB 000-000 and account 99999999, and A15 SIM-REVERT. The lint rule also forbids importing magic.ts outside sandbox/, but the spec says packages/sim, tests and e2e use the markers.",
+   "fix": "Split magic.ts into marker builders (importable anywhere) and the scenarioOf parser (sandbox/ only). Let each adapter manifest register its own markers; core merges them, refuses duplicate tokens, and generates MAGIC-INPUTS.md from all manifests. Add a pass criterion that a second adapter's marker parses without editing core and that a duplicate token fails start-up."
+  },
+  {
+   "severity": "high",
+   "issue": "The CHAIN_RPC_URL allow-list '*.base.org' matches mainnet.base.org, and 'documented testnet host' is not defined, so a production RPC host passes config under RUN_MODE=local (against N15 and HG-PROD). This also conflicts with A07, which allows only loopback under local/test while A23 asserts the two allow-lists are identical, and with A86's four-condition opt-in. None of the five planted cases is mainnet.base.org.",
+   "fix": "Use exact hosts: loopback and the compose service 'chain' by default, plus sepolia.base.org (and hosts listed in TOOLCHAIN.md) only when CHAIN_ID=84532 and TESTNET_OPT_IN=A86 are both set. Declare TESTNET_OPT_IN in the schema. Export the allow-list as one constant that A07 and A23 compare against, and add mainnet.base.org with CHAIN_ID=84532 as a planted failure."
+  },
+  {
+   "severity": "high",
+   "issue": "kms sign and decrypt have no caller authorisation. The attestation key that binds approval IDs to custody signatures, the V1-V3 vault keys, the paymaster signer and the deployer all sit behind this interface, so any module that imports kms can sign a CustodyAttestation or vault transaction directly, bypassing A14 maker-checker and A15's policy engine. The 'callers do not change' swap promise carries this hole into production.",
+   "fix": "Add a key-use policy: createKey records purpose and allowedCallers, callers get a capability handle via kms.forCaller(identity), and disallowed use fails with KEY_USE_NOT_PERMITTED and a log line. Add a lint or boundary rule limiting kms signing and decrypt imports to the custody adapter, the paymaster and packages/db. Pass criterion: a planted module signing with the attestation key is refused at runtime and fails lint."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec names the wrong nodes as consumers. ADM-32 belongs to A76 in the graph, not A69 (the 'sandbox panel (node A69)' is also wrong). ADM-34 belongs to A69 (A21 confirms this), not 'A21 and A62', and A62 is the sponsor console. The upload links for SPN-04/10/11 belong to A63, A64 and A98, not A38.",
+   "fix": "Correct the Done criteria: ADM-32 -> A76 (plus A46), ADM-34 -> A69 on A21's data, upload links -> A63, A64 and A98."
+  },
+  {
+   "severity": "medium",
+   "issue": "The phase guard covers only the static defaults. A21 inserts a database OverrideSource before the env override, so a database row could turn resale.board on under PHASE=P1. The precedence of sources and how kill switches combine with them are not defined in isEnabled, which A08 owns.",
+   "fix": "Define isEnabled as env override (local/test only), then the registered OverrideSource, then the static default. Then apply the phase guard to every source except the local/test env override. Test with a stub source that returns on for a P2 flag under P1 and expect off."
+  },
+  {
+   "severity": "medium",
+   "issue": "The snapshot requires kind, phase and scope for every flag, but kind is frozen only for the two kill switches. Whether offers.wholesale, offers.retail, resale.board, governance.votes and payouts.stablecoin are 'phase' or 'licence-bound', and their default scope (ADM-34 shows All sponsors, All trusts, Global), are not stated. Fable cannot write a hidden snapshot from the spec, and A21 depends on the kind.",
+   "fix": "Freeze a full table with key, phase, kind, default, default scope and description for every flag (for example offers.wholesale P1 licence-bound on 'All sponsors'; resale.board P2 licence-bound off 'All trusts')."
+  },
+  {
+   "severity": "medium",
+   "issue": "objectId = sha256(plaintext) with 'second put is a no-op' drops the second owner's ownerRef and classification for identical bytes in one tenant. Legal hold and delete then act on a shared object, so one owner's delete can remove a document another record still needs.",
+   "fix": "Return a reference id per put, bound to ownerRef and classification. Holds and deletes act on references, and the blob is purged only when no unheld references remain. Refuse a put with a conflicting classification (CLASSIFICATION_CONFLICT). Test two owners with the same bytes, deleting one, and a hold on one."
+  },
+  {
+   "severity": "medium",
+   "issue": "Conformance suites must run against future vendor implementations, but their error and scenario cases can only be forced through magic markers, which vendors are forbidden to honour. As specified, vendors fail those cases or the cases get skipped.",
+   "fix": "makeImpl returns {impl, driver: ScenarioDriver}. The sandbox driver uses markers; a vendor driver uses the vendor's test fixtures. Conformance calls driver.force(scenario) only, and the harness fails, naming the verb and scenario, when a declared scenario cannot be produced."
+  },
+  {
+   "severity": "medium",
+   "issue": "The lint rules realx/no-magic-outside-sandbox, realx/adapter-via-registry and no Date.now/Math.random in sandboxes have no owned home. A01 owns the root eslint.config.js and scripts/eslint-rules, and the rules must apply to other packages. No pass criterion proves the rules fail on planted violations, including Windows case-insensitive paths.",
+   "fix": "Put the rules in an A08-owned plugin folder and state how A01's root config loads workspace plugins, or reopen A01. Add pass criteria for planted violations: Sandbox/ and SANDBOX/ paths, and a direct sandbox import that bypasses getAdapter."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several pass criteria cannot be measured or can be faked. Scanning every source file for chain id literal '1' is either always red or quietly narrowed. The 'no network connection' check runs with no Postgres, but a process that tries to connect and fails also exits 1. 'permissionless with a live key' cannot be decided by a package.json scan. The threshold separating degraded from down (versus the 2 s timeout) is not defined.",
+   "fix": "Scan chain-id positions only (chainId/CHAIN_ID keys, manifests, deployment JSON, hardhat networks, viem chain imports). Hook net/dns and assert zero connection attempts before exit. Replace the permissionless rule with 'no bundler/paymaster URL carrying an API key and no host outside the allow-list'. Define degraded as latency above a stated threshold within the timeout, and down as timeout or error."
+  },
+  {
+   "severity": "medium",
+   "issue": "The D04 per-user sandbox and A46's config lifecycle need registry features A08 does not define. A99 requires sandbox instances keyed by sandbox_of with partition-scoped reset, but the registry holds one global instance per adapter. A46 requires a database overlay in loadConfig() and adapter reconfigure(values), but A08 parses config once, before any database call.",
+   "fix": "Add getAdapter(name, {partition}) with per-partition instances and partition-scoped SandboxControl, plus an isolation test. Add an optional reconfigure(values) verb and a loadConfig({overlay}) hook that re-validates the merged result with the same schema."
+  },
+  {
+   "severity": "medium",
+   "issue": "The SWAP-POINTS human-gate column is limited to HG-VENDOR, HG-KEYS and HG-PROD, but the token-contracts (Q12) row needs HG-LEGAL (the GPL-3.0 opinion) and HG-AUDIT, and the stablecoin row needs HG-LEGAL. The cross-check test would enforce a false record.",
+   "fix": "Allow several gates per row, validated against the Human Gates note's IDs. Token contracts = HG-LEGAL + HG-AUDIT + HG-PROD; stablecoin = HG-LEGAL + HG-VENDOR."
+  },
+  {
+   "severity": "medium",
+   "issue": "Two challenges test behaviour the spec never defines. Storage has no source of tenant status, yet a challenge expects an upload token to fail after tenant suspension. The adapter call wrapper has no principal or flag check, yet a challenge expects agents.traffic off to stop calls there (A12's middleware owns that enforcement). A correct build can fail these, or a builder invents behaviour.",
+   "fix": "Either specify the behaviour (an injected TenantStatusSource returning TENANT_SUSPENDED; the wrapper refusing AGNT principals with AGENTS_PAUSED when agents.traffic is off), or move both challenges to A33/A35 and A12/A101 and keep only the isEnabled check here."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag is inconsistent. kms holds the approval attestation key and the custody and paymaster keys (authority), and Fable already writes hidden suites before the build, yet the graph and frontmatter say oracle: no while an 'Oracle rule' paragraph sits on a non-oracle node. This contradicts the plan rule that oracles go where money or authority is involved.",
+   "fix": "Set oracle: yes in the graph and frontmatter, scoped to kms (known-answer vectors, AAD and tenant isolation, key-use policy, no material export) and the no-production plants. Use the standard oracle-rule wording."
+  },
+  {
+   "severity": "low",
+   "issue": "The 4-6 agent-hour estimate is low for four packages at 90% coverage: harness with broken fixtures, env schema with docs, flags, kms with two curves, rotation and a 10k property test, and storage with sniffing, presign, EICAR and legal hold. Smaller siblings are estimated at 4-8 (A22) and 8-12 (A15, A17).",
+   "fix": "Raise to 8-12, or split kms and storage into their own node, then regenerate the graph numbers."
+  },
+  {
+   "severity": "low",
+   "issue": "Smaller accuracy points. The spec says J01-J21 where J01-J22 is needed (J22 came with D04). It says the agents.traffic toggle is 'in A21', but A48 sets it through A21's setFlag. ADM-32's open-gate list is sourced from Markdown instead of manifest data. The N10 claim overstates A08's part, since the licence-binding half is A21's. The master key default location is left to escalation.",
+   "fix": "Correct to J01-J22, to A48 via setFlag, to manifest-sourced gates, and to N10 met jointly with A21. Fix a default master-key location (a docker secret or %LOCALAPPDATA%\\RealX) that is created only when KMS_SANDBOX_CREATE_MASTER=true."
+  }
+ ]
+}

@@ -1,0 +1,105 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Idempotency is not atomic with the business write. The key is claimed in its own short transaction, the handler runs in withTx, and the spec never says the stored response is written inside the handler's transaction; it also says 'a handler failure releases the claim'. A crash after the business commit but before the response is stored leaves the claim 'in progress' forever (409 idempotency_in_progress on every retry, no lease or timeout is specified), and a failure raised after the commit (response serialisation, a hook after the handler) releases the claim so the retry executes the money write a second time. The 1,000-concurrent-request stress test does not exercise either window, so a wrong build passes.",
+   "fix": "Specify: (1) the claim row carries a lease (`locked_until` = clock now + 60 s) and a stale in-progress claim can be re-claimed after the lease; (2) the completion (status, headers, body, `completed_at`) is written by withTx in the SAME transaction as the business change, so either both commit or neither does; (3) release on failure happens only when the business transaction rolled back. Add a challenge and pass criterion: crash injection (process kill) between business commit and response write, and a thrown error after commit, each followed by a retry with the same key, must give exactly one execution and a replay of the committed result."
+  },
+  {
+   "severity": "high",
+   "issue": "withTx contradicts A04 and cannot give RLS the context it needs. A04 says A09's withTx calls A04's `withTenant`/`withPlatform` and 'nothing else may set the variables', while A09 says withTx runs its own `SET LOCAL` for only three variables (tenant_id, principal_id, principal_kind). A04's policies also read app.platform_access, app.view_as_tenant, app.investor_id, app.vehicle_scope, app.sandbox_of and app.principal_role; A10 fills session_id and sandbox_of 'from the request or job context'. None of these is in A09's ctx shape, and A11/A12/A98/A99 cannot edit src/core/db.ts. Under D04 an AGNT call must see the person's own rows exactly like the UI, which needs investor_id resolved from on_behalf_of_id. The worker is also unspecified: the outbox relay reads outbox rows across all tenants under FORCE RLS with no BYPASSRLS role, and event handlers get an SVCA context with no tenant, so the relay sees zero rows or a builder adds a bypass policy. Every later node that trusts RLS inherits this.",
+   "fix": "Rewrite the Database access bullet: withTx(ctx, fn) delegates to A04's withTenant(ctx, fn) for tenant or person work and withPlatform(ctx, fn) for staff and service-account work, and never issues SET itself. Extend the ctx type with every field A04's RLS reads plus session_id and sandbox_of (all nullable, filled by the principal slot owned by A11/A12/A98/A99). For AGNT, principal_id is the agent and investor_id, vehicle_scope and tenant_id come from the on_behalf_of person. Worker: the relay and scheduler run through withPlatform as their named service_account rows, under an A04 policy limited to the runtime tables; every event handler's ctx takes tenant_id, sandbox_of, on_behalf_of_id, token_id, approval_id and a causation request_id from the event and uses withTenant, and any outbox event it enqueues copies them. Add a pass criterion that runs A04's generated two-tenant RLS test through withTx for a HUMAN, an AGNT on behalf of that human (same rows visible), an SVCA relay and an event handler."
+  },
+  {
+   "severity": "high",
+   "issue": "Several challenges and pass criteria depend on `RUN_MODE=ci` and on 'any other run mode' using SystemClock and hiding the stack. A08 defines RUN_MODE as `local | test` only and makes every other value exit with code 1 before opening a port. So the clock-escape check (endpoint 404 and absent from OpenAPI), the stack-leak check and the SystemClock branch cannot be exercised; Fable either cannot run them or the builder adds a `ci` mode that A08's no-production test forbids.",
+   "fix": "Pick a mechanism that exists in this build and state it: for example a config switch declared in A08 (`TEST_CONTROLS=on|off`, default on only in local; off in test) that turns off the clock endpoint, the /__test and /sandbox mounts and `details.stack`, with DbClock only when it is on. Rewrite the challenges and pass criteria to use `RUN_MODE=test TEST_CONTROLS=off` (or A08's chosen equivalent) instead of `RUN_MODE=ci`. Record the A08 addition as an A08.1 spec-defect loop if it needs one."
+  },
+  {
+   "severity": "high",
+   "issue": "Table ownership conflicts with A04. A04 defines the runtime tables in packages/db `runtime.ts`: `outbox_event`, `idempotency_key`, `processed_event`, `system_clock` and `job_schedule_fire`, with `system_clock` on its EXEMPT list. A09 declares `system_clock`, `processed_event` and `job_schedule_fire` again through the module-schema registry in src/core/schema.ts, so the migration runner hits duplicate CREATE TABLE statements, or two definitions drift. A09 also calls the outbox table `outbox` (A04: `outbox_event`) and says the `pgboss` schema comes from A04's migrations, while A04 says pg-boss creates it at runtime under the worker role.",
+   "fix": "Align with A04: remove src/core/schema.ts table declarations (or delete them from A04 through an A04.1 loop, but only one owner). Use A04's names everywhere (`outbox_event`, including the relay query and the challenge text). Decide one owner for the pgboss schema; the safer choice is A04's migrations with pg-boss `migrate: false`, because realx_worker then needs no CREATE privilege. Record whichever choice is made in both notes."
+  },
+  {
+   "severity": "high",
+   "issue": "Fixture principals are required by many checks (the AGNT with on_behalf_of_id and token_id, the tenant-B cursor probe, the HUMAN vs AGNT kill-switch probe), but A09 always sets `anonymous` and the spec only says 'a fixture AGNT principal set by a test hook'. It does not say how. A builder will most likely add a request header such as X-Test-Principal; if that header is honoured outside tests it lets anyone act as any person or agent, bypassing A11/A12 and G22 entirely.",
+   "fix": "Specify the mechanism: fixtures are injected only through an in-process test decorator used with `fastify.inject()` (or a principal-slot hook registered from test files), never by an HTTP header or query value, and the decorator is not registered unless test controls are on. Add a challenge and pass criterion: with test controls off, sending every candidate header (X-Test-Principal, X-Principal, X-On-Behalf-Of, X-Token-Id) leaves the principal `anonymous`, and a grep of src/ finds no header-based principal read outside A11/A12's modules."
+  },
+  {
+   "severity": "medium",
+   "issue": "SDK retry behaviour can double-execute agent writes or keep calling through a kill switch. RealXClient auto-generates an Idempotency-Key 'for mutations' and 'handles Retry-After for 429 and 423', but the spec never says the key is created once per logical call and reused on every automatic retry (429, network error, 5xx). It also implies automatic retry on 423 agents_paused, which is a kill switch and should stop the agent, not retry.",
+   "fix": "State: the SDK generates one key per logical call and reuses it for every retry of that call; automatic retries cover 429 and network errors only, capped at 3; 423 agents_paused and every 4xx other than 429 are returned at once as RealXApiError. Add an SDK test where the first attempt times out after the server commits: the retry must be answered with Idempotent-Replayed: true."
+  },
+  {
+   "severity": "medium",
+   "issue": "The reference module cannot satisfy the tests that depend on it. `system` ships only ping, echo and a STUB list route, but the SDK smoke must 'paginate the system stub list to next_cursor: null' (a stub answers 501) and the cursor challenges (HMAC tamper, a cursor naming another tenant's row) need a real list over a tenant table under RLS. A09's own `system` stub also breaks the rule that 'the gauntlet refuses to pass a node while any stub route remains in its owned module'.",
+   "fix": "Give `system` a real list route (`GET /v1/system/echoes`) over a small tenant-scoped table (for example `system_echo`, written by the echo mutation, declared in A04 or through the registry) with at least 250 fixture rows across two tenants, keep one separate stub route for the 501 test, and exempt `system`'s one stub from the stub rule by name."
+  },
+  {
+   "severity": "medium",
+   "issue": "`npm run verify` would need Docker, which A01 forbids ('Verify does not need Docker'; DB work goes to verify:infra). A09 puts `openapi:check` (boots the API against a throw-away compose Postgres) and the DB-backed contract suite into verify, and says the repo-root verify 'runs' A09's steps without saying how, while the root package.json scripts block is A01's generated file.",
+   "fix": "Make openapi:emit DB-free (build the document from route registration with a lazy database connection) so openapi:check and sdk:build stay in verify. Register the DB-backed contract suite, compose boot and hidden-suite runner as a separate step (for example `verify:api-infra`) through A01's workspace `realx` script-registration block and scripts:sync, never by editing root files. Make the pass criteria name both commands."
+  },
+  {
+   "severity": "medium",
+   "issue": "`docker compose up api worker` cannot work at AM0 without editing infra/. A09 says the infra compose 'includes' compose.api.yml and compose.worker.yml, but infra/base is A01's (already passed) and infra/stack is A23 (AM1, later). Nothing in A09's owned paths adds that include, so the compose pass criterion fails or the builder edits a path it does not own.",
+   "fix": "Reverse the include: each service fragment `include:`s ../../infra/base/compose.yml, and the pass criterion names the exact command (for example `docker compose -f services/api/compose.api.yml -f services/worker/compose.worker.yml up`). Or add the include to A01 through an A01.1 loop. A23 then includes the fragments."
+  },
+  {
+   "severity": "medium",
+   "issue": "Owned-path data disagrees with the prose. The note claims `services/api/src/modules/system/` as owned ('Also owned as the reference module'), but final-graph.json's owned_paths for A09 does not list it. Standing pass criterion 3 (only owned paths changed), checked by A01's script against the graph data, will flag every file of the reference module.",
+   "fix": "Add `<workspace>\\app\\services\\api\\src\\modules\\system\\` to A09's owned_paths in the graph data and regenerate the note so the list and the prose agree."
+  },
+  {
+   "severity": "medium",
+   "issue": "The error-code vocabulary and status map are not fixed. A12 lists `423 AGENTS_PAUSED`, `428 CONFIRMATION_REQUIRED` and `429 RATE_LIMITED` in upper case, while A09's core codes are lower case (`agents_paused`, `rate_limited`) and the SDK and MCP key on `code`. A09 also gives no HTTP status for `gate_failed`, `forbidden`, `conflict` or `invalid_cursor`, and uses `503 service_unavailable` in §5 without listing it in the core set that the contract suite must cover.",
+   "fix": "Add a core table in the spec: code, HTTP status, retryable (yes or no). For example gate_failed 403, service_unavailable 503, conflict 409. Add service_unavailable to the list. Fix one case convention for all codes (lower snake_case) and have registerErrors() reject any other form, with a note that A12's codes are registered in that form. Record the A12 wording fix as a cross-node note."
+  },
+  {
+   "severity": "medium",
+   "issue": "The kill-switch slot could read a stale flag. A08 exposes `isEnabled(key, ctx)` over override sources, and A21 adds a database-backed source so ADM-35/A48 can flip `agents.traffic` at runtime. A101 requires each tier to stop agents 'within one request'. A09 only says the slot does 'a check of A08's agents.traffic flag'; a builder can read the config snapshot once at startup, which passes the env-override test but ignores a runtime flip.",
+   "fix": "Specify that the slot calls `isEnabled('agents.traffic', ctx)` on every request, with any cache at most 1 s and invalidated on the flag-change outbox event. Add a test: flip the flag through a fake database override source while the process is running, and the next AGNT request answers 423."
+  },
+  {
+   "severity": "medium",
+   "issue": "Later nodes need extension points that A09 owns but does not provide. A12 expects 'the pino redaction list gains the token pattern rx_...', but pino's redact is path-based and cannot match secrets inside free text (URLs, error messages, query strings). A10 'gains a rule' in A09's boundary lint (audit_event import only inside modules/audit), but eslint.config.js is A09's root file. A46 already plans an A09.1 reopen for a SchedulePolicy hook and pg-boss dead-letter options.",
+   "fix": "Add: registerRedactionPattern(regex) applied as a value scrubber to log messages, URLs and span attributes, with the rx_ token pattern shipped by default; a lint extension point that reads per-module restricted-import declarations from each module's folder (for example modules/<name>/lint.json), so no later node edits eslint.config.js; and the SchedulePolicy hook and deadLetter queue in registerJob now, which removes the planned A09.1 loop."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag does not match what the node guards. The spec says 'no money, supply or holdings move here', but two of its challenges are labelled (money): the idempotency store and outbox dedupe are the only barrier against double-applied money writes (N13) for every money node (A16, A17, A37, A39, A40). The spec already asks for five hidden suites, but with oracle=false in the graph the orchestrator may skip the Oracle stage and the hiddenCasesHash record.",
+   "fix": "Set oracle: yes for A09 in the graph data, limit the oracle scope to the idempotency and outbox suites, and keep the other three as hidden Challenge suites."
+  },
+  {
+   "severity": "medium",
+   "issue": "The idempotency scope and storage are underspecified. The scope is '(principal id, operationId)', but the challenge requires that 'another token of the same person' never receives T1's response. Under A12 a rotated token (grace window) can map to the same agent_principal, so the spec and the challenge can disagree. Stored responses (24 h, full body and headers) can also hold PII such as bank details or addresses in plain text, outside PII_PATHS and the _enc convention.",
+   "fix": "Define the scope as (principal_kind, principal_id, token_id or session_id, operationId), and state what happens on rotation. Store the response body encrypted through A04's enc codec (kms adapter) and redact it in any log. Add a pass criterion that no fixture PII string appears in plain text in idempotency_key."
+  },
+  {
+   "severity": "medium",
+   "issue": "The outbox gives no ordering guarantee and does not say so. The relay orders by ULID id with SKIP LOCKED, but ids are assigned before commit, so a later-committed transaction can have an earlier id and concurrent relays reorder batches. Consumers such as register/chain mirroring (A27, A28) and webhooks (A46) may assume per-aggregate order.",
+   "fix": "Either add `aggregate_seq` (per-aggregate sequence taken under the aggregate row lock) to the outbox envelope, with registerEventHandler offering an in-order option that parks out-of-order events, or state plainly that delivery is unordered and consumers must check versions. Add a test with two interleaved transactions on one aggregate."
+  },
+  {
+   "severity": "medium",
+   "issue": "The D04 operation metadata is not enough for its consumers. Only requiredScope, gates, screens, mutation and money are emitted. A104 (MCP), A99 (docs 'each operation with required scopes, gates that may refuse it') and A100 (parity) also need to know, without re-deriving it, whether an operation is non-delegable (a passkey-present act), needs step-up confirmation (428), or is a checker, approver or signer action that an agent may never perform.",
+   "fix": "Emit derived fields from A03's matrix cell at registration: `x-realx-delegable` (false for non-delegable acts), `x-realx-step-up` and `x-realx-duty` (maker, checker, signer or none). Registration fails if the scope's cell is missing from A03. Add a contract test that no operation with duty checker or signer is delegable."
+  },
+  {
+   "severity": "low",
+   "issue": "A03 is not a direct dependency, although the spec is 'frozen together with A03's principal types and scope enum' and registration validates against A03's scopes.ts. It is reachable only through A04.",
+   "fix": "Add A03 to A09's deps in the graph data. No schedule change results, since A04 already depends on A03."
+  },
+  {
+   "severity": "low",
+   "issue": "The API's /readyz goes to 503 on outbox lag over 60 s. A worker backlog would then take the whole API out of service (including reads and withdrawals status), which is a readiness anti-pattern. Also a 30-day clock advance fires every cron occurrence at once, with no catch-up bound.",
+   "fix": "Report outbox lag as a degraded reason in /v1/meta and through A13 alerts, and keep /readyz 503 only on the worker. State a catch-up rule for scheduler.tick (all fires in order, capped per tick, for example 1,000), or leave coalescing to A46's SchedulePolicy."
+  },
+  {
+   "severity": "low",
+   "issue": "The estimate of 6-10 agent-hours looks thin for two processes, the scheduler, the outbox, the SDK generator, OpenTelemetry, compose, 60+ contract cases, five hidden suites and ten crash injections.",
+   "fix": "Re-estimate at 10-14 agent-hours (the top OddX band), or split the SDK/OpenAPI generation into its own node."
+  }
+ ]
+}

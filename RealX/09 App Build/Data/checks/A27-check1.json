@@ -1,0 +1,110 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Dependencies miss interfaces the spec calls directly. A27 lists A24, A25, A26, A09, A13, whose closure is A00-A04, A07-A10, A13, A24-A26. But the spec calls A15 (CustodyOp states and callback, custody bundles, the sandbox custody used in the integration mint), A20 (registerChainSnapshotSource, targeted recon, and a pass criterion on A20's oracle), A14 (an approved deploy_approval_id), A18 (the seeded 9,998 register), A12 and A11 (token-per-role tests, on_behalf_of audit, the service principal), A104 (the MCP catalogue criterion) and A06 (the seed). None of them is in the closure.",
+   "fix": "Add A14, A15, A18, A20, A12, A104 and A06 to A27's deps in final-graph.json and in the note (A11 comes through A12). All are AM0/AM1, so there is no cycle and AM2 ordering holds."
+  },
+  {
+   "severity": "high",
+   "issue": "The snapshot source does not implement A20's frozen ChainSnapshotSource contract. A20 defines getSnapshot({tokenAddress, atBlock?}) with snake_case fields, nested roles incl. agent_gateway, claims[], frozen_amount and document_anchors[], and R7 needs a per-mint approval id. A27 specifies snapshot(tokenId, blockNumber?) in camelCase, with no claims (and no claim events decoded) and extra unboundChanges[]/unmatchedExecuted[] that no A20 rule reads. So 'recon treats a non-empty list as a Sev1 break' is false, and 'A20's oracle passes unchanged' cannot be met.",
+   "fix": "Implement A20's exact getSnapshot signature and shape, adding claims[], agent_gateway, frozen_amount, document_anchors[] and a mints[] list with approval_id for R7. A27 raises its own Sev1 through A13 for unbound freeze, agent and owner changes. Log any extra field A20 must read as an A20 spec defect before the freeze."
+  },
+  {
+   "severity": "high",
+   "issue": "The decoded-event list contradicts the upstream contracts. A25's Executed has six args (approvalId, nonce, target, selector, dataHash, executor), and one approvalId covers several mint nonces, which breaks 'approvalId equals an open CustodyOp'. The multisig Executed(id, approvalId) has no target or dataHash, so it must be joined to Proposed(id,...), which is not listed. A24 emits no LockInSet or HaltSet (the mint sets unlockAt silently, setUnlockAt emits UnlockSet, and the lock is per ONCHAINID), so SM-07 'locked' cannot be derived from events. A24 binds six modules, not five. A26 emits RecoveryProposed/Vetoed/Executed, which A26 says A27 matches to CustodyOp and RecoveryRequest; A27 lists OwnerProposed/OwnerChanged and has no recovery matching.",
+   "fix": "Decode only from the ABIs A24/A25/A26 export. Match on (approvalId, nonce) plus emitter, tx hash, target and keccak(data); join multisig Executed via Proposed. Read unlockAt[compliance][identity] with readAt at block N and handle UnlockSet. Use six modules. Add the RecoveryProposed/Vetoed/Executed events and match RecoveryExecuted (SM-13). Add a challenge that fails on any undecoded topic from a manifest address."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec contradicts its consumer A28. Both claim the deploy_requested->deployed->configured transitions, with different configured checks. A28 calls sendGatewayCall, 'idempotent on op_id', with 'A27 owns re-broadcast'; A27 has sendSignedBundle and 'never retries'. A28 expects delivery to POST /v1/internal/token-ops/events; A27 only calls A15 and A20. A28 compares dataHash (keccak) to calldata_sha256 (SHA-256).",
+   "fix": "In A27, as the upstream spec, fix: one owner per SM-06 transition (A27 through configured, A28 from issuing); one verb name, idempotent on op_id, with re-broadcast owned by one node; an outbox event chain.executed.confirmed / chain.tx.failed / chain.executed.reorged with {approvalId, nonce, txHash, block, confirmations} that A28 consumes; one keccak hash rule. Record the matching A28 edits."
+  },
+  {
+   "severity": "high",
+   "issue": "SM-06 deploy_requested->deployed can happen without the owner quorum. The product map SM-06 ('owner quorum 3 of 5') and J12 (G13, owner quorum) require the V1 quorum, but the spec accepts 'the deployer bundle's receipt' on the sandbox path. And sandbox-deploy has already deployed at the CREATE2 counterfactual addresses, so a quorum deploy at that salt is impossible. The five transitions can pass with no approval binding.",
+   "fix": "Require, on every chain, an A14-approved deploy_approval_id plus a matched V1 multisig Executed (via Proposed) for deployed. Give sandbox_deployed a distinct salt (or deploy then evm_revert). Add a challenge: reach deployed without an approved APR and expect a refusal."
+  },
+  {
+   "severity": "high",
+   "issue": "The seed contradicts SM-06, A06 and the binding rule. It has seven tokens 'active', including KST01/ANN01 (live offers, 'no mint for an open offer' in A06) and UNL01 (mint pending) with supply 0. It never says how 40,000 units are minted at boot; unbound mints would raise Sev1 breaks on every trust. The literal '0xa1…9f' hash cannot come from a real transaction, so passing needs fake chain rows that reindex or the cross-check destroys. The Marion pause has no unpause. A06 already owns the token records and chain-state.json, while A27 claims the data with no path.",
+   "fix": "Take states from A06: MRN01/BAY01/HAW01/GYM01 active, minted at boot through A15 sandbox custody and the A25 gateway with approved APRs; KST01/ANN01/UNL01 configured (paused, supply 0); MPA01 designed. Add the MRN01 unpause. Check the Recent rows by join and shortHash format on the real hash, not the literal. Seed no chain_event rows without an on-chain log."
+  },
+  {
+   "severity": "high",
+   "issue": "The reorg challenge and pass criterion need a CustodyOp confirmed->broadcast transition that neither A15's op states nor A03's tables define. With confirmations = 1 on 31337, every reorg case hits it, and A20 may already have run a clean targeted recon on the ghost mint.",
+   "fix": "Add a reorged edge to A03 and A15's callback as cross-node spec defects before the freeze, or instead raise a Sev1 chain.reorg_past_confirmation and hold the op. Require a targeted re-run by A20 after the rewind that supersedes the clean run on the orphaned block."
+  },
+  {
+   "severity": "medium",
+   "issue": "oracle is false, yet the spec requires hidden tests in gauntlet\\hidden\\A27 before the build, and A27 decides when a supply-moving CustodyOp is confirmed (the observation half of G13). An orchestrator keyed on the flag may skip the Oracle stage.",
+   "fix": "Set oracle: yes in the frontmatter and in final-graph.json, with the standard oracle rule scoped to the binding match, unbound flagging, the fail-closed snapshot and the reorg rewind."
+  },
+  {
+   "severity": "medium",
+   "issue": "The sendSignedBundle guard is a shape check (signatures + attestation + op_id) that a forged object passes; the challenge only tests a raw transaction.",
+   "fix": "Verify that op_id is in A15 in state signed with a matching calldata keccak and a manifest gateway target, that the attestation and signer signatures verify, and that the op has not been broadcast. Add a well-formed forged-bundle challenge that expects CHAIN_UNBOUND_BUNDLE before any RPC call."
+  },
+  {
+   "severity": "medium",
+   "issue": "PUB-08 and the public ProofBand read the manifest and snapshot, and the spec says the snapshot is 'masked for non-staff', but chain:read excludes visitors, investors and their D04 tokens. Either there is no path or holder lists leak.",
+   "fix": "Add a public projection (for example GET /v1/chain/proof/{vehicle}: addresses, code hashes, supply, last clean snapshot time, no holders), plus own-holdings-only access for investors and their tokens. Add both to the permission and parity tests."
+  },
+  {
+   "severity": "medium",
+   "issue": "The permission matrix is incomplete: request-deploy has no permission, chain:design roles are not named, and G22 token limits (allowed vehicles, window, expiry) are not stated for the per-vehicle writes.",
+   "fix": "Name chain:design (TOKO, ENGO), chain:request_deploy (TOKO maker of 6E+Q), chain:sandbox_deploy and chain:reindex (ENGO). Apply A12's G22 check, including allowed vehicles, on every write, and test that a token limited to another vehicle is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "Deliverables fall outside the owned paths: shortHash in packages/sdk (A09), an edit to A07's packages/contracts/README.md, and seed data with no path (packages/db/seed is A06's). This contradicts the node's own escalation trigger.",
+   "fix": "Put shortHash in packages/contracts/src and re-export it through the SDK. Log the README fix as an A07 defect. Contribute fixtures through A06's seed hooks or drop the seed section."
+  },
+  {
+   "severity": "medium",
+   "issue": "Chain time and platform time are not aligned at boot. The local platform clock is AS_OF (23 Sep 2026), Hardhat genesis defaults to wall time, and only deltas are forwarded. The lag alert, the locked evaluation and lock-in expiry would be offset, and Hardhat cannot move time backwards.",
+   "fix": "Set Hardhat's initialDate from the platform clock. Assert |block time - platform now| <= blockTimeSeconds + 5 s at start and after each clock.advanced, and mark the chain unhealthy otherwise. Add a challenge that boots with a wall clock far from AS_OF."
+  },
+  {
+   "severity": "medium",
+   "issue": "'No other agent exists' and the snapshot agent set are specified as direct reads, but ERC-3643 AgentRole cannot enumerate agents (only isAgent).",
+   "fix": "Derive the agent set from AgentAdded/AgentRemoved since deployBlock and confirm each member with isAgent at block N. Do the same for IR agents."
+  },
+  {
+   "severity": "medium",
+   "issue": "A13's catalogue has chain.stuck_or_lagging only as Sev3 with stuck_tx_30m and indexer_lag_5m. A27 emits manifest_drift and indexer_inconsistent at Sev2 and an untyped unbound-change Sev1, against its own criterion 'no alert type outside A13's catalogue'.",
+   "fix": "Use catalogue types, or log the new types and sub-codes (severity, owner, screen) as an A13 addition before the freeze."
+  },
+  {
+   "severity": "medium",
+   "issue": "SM-07 has no precedence for overlapping conditions (locked with partial freeze, frozen while locked, IdentityRemoved with a balance), and unlock_at is stored per wallet although A24 locks per identity. Exact vectors are then ambiguous.",
+   "fix": "Define a precedence (deregistered > recovered_out > frozen > partially_frozen > locked > active > eligible_empty), take unlock_at per identity, and require agreement with A24's SuiteInspector holding-state view at block N."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ADM-32 'Switch RPC or network config' action (ENGO -> SECO, maker-checker) is left undefined: the adapter reads config once and refuses every call after CHAIN_ID_MISMATCH until restart, with no rule for re-initialising or for the cursor per chain.",
+   "fix": "Apply config v+1 only after the A14 approval, re-initialise and re-run manifest:check on the approved event, key indexer_cursor by chain_id, and refuse a disallowed chain id before approval. Add a challenge."
+  },
+  {
+   "severity": "low",
+   "issue": "The design references are partly inaccurate. adToken shows only green Confirmed pills (no amber 'waiting' or grey 'broadcast'). 'Run 06:00' is the recon run time, not a block timestamp. A51's ADM-40 columns differ from the set A27 says it fixes. ADM-32 is rendered by A76, not A69 or A72.",
+   "fix": "Cite only what the dc file shows. Align GET /v1/chain/tokens with A51's ADM-40 columns. Name A76 as the ADM-32 renderer."
+  },
+  {
+   "severity": "low",
+   "issue": "The gateway-bypass challenge uses the Hardhat deployer to add an agent, but A25 ensures the deployer holds no role and the owner is the multisig, so the test cannot run as written.",
+   "fix": "Use hardhat_impersonateAccount on the owner multisig to add the agent and mint in one transaction."
+  },
+  {
+   "severity": "low",
+   "issue": "Seven wikilinks do not resolve because the note files use '-' where the links use ':' or '/' (A25, A29, A50, A51, A72, A96).",
+   "fix": "Use the actual filenames, for example [[A25 - AgentGateway and owner multisig- approval IDs bound on-chain]]."
+  },
+  {
+   "severity": "low",
+   "issue": "The 8-12 hour estimate is low for this scope (reorg, binding match, exhaustive SM-06/SM-07, snapshot cross-checks, 200-op and 1,000-transfer sims); A20 and A28 are 10-14.",
+   "fix": "Raise the estimate to 12-16 in the note and in final-graph.json."
+  }
+ ]
+}

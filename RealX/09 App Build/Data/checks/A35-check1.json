@@ -1,0 +1,105 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Acknowledgement flow cannot be used by the order it guards. POST /v1/acknowledgements requires context_ref to be an existing order owned by the holder, but A37 creates the order only at placement and records acknowledgements inside that same placement transaction, in its OWN table `disclosure_acknowledgements`, from a client-supplied `acknowledgements[{document_id, version, sha256, opened_at}]` payload (A37 lines 42, 64). So there are two G12 record stores, the order id does not exist when A57 must acknowledge, and A37 accepts the client-supplied opened_at that A35's challenge 1 says fails the node. A35 exposes no in-process function A37 can call inside its transaction.",
+   "fix": "Export `recordAcknowledgements(tx, {holderId, offeringId, orderRef|quoteId, documentVersionIds[], statementHash, actor})` from index.ts. It runs evaluateAcknowledgement and writes `document_acknowledgement` rows inside the caller's transaction, deriving opened_at only from `document_open` rows. Allow context_type `quote` for the pre-order HTTP path and bind it to the order at placement. State that A35's table is the single G12 record and that A37's `disclosure_acknowledgements` must be a reference or view onto it; record the defect on A37 and A19. Add a challenge in which a placement carrying a forged opened_at is refused."
+  },
+  {
+   "severity": "high",
+   "issue": "Standing consent and the CQ-02 parameter have three conflicting definitions. A35 puts the consent in its own `standing_consent` table with flag `cq02.delegated_acknowledgement` (allowed under consent in every regime) and refusal 428 `ACK_PERSON_REQUIRED`. A19 reads an 'A12 mandate flag standing_disclosure_consent'. A37 reads document versions held on A12's mandate record, behind its own switch `orders.agent_standing_consent` (default wholesale_only, retail off), and returns 428 `documents_required`. A35's Specify item reconciles only A19 and misses A37, so the hidden vectors could encode one rule while A37 enforces another.",
+   "fix": "Name one source of truth: the consent lives in A35's `standing_consent`, with one parameter key taken from A00's CQ-02 entry and a regime dimension (default: wholesale allowed under consent, retail person_required, matching A37). Require A37 and A19 to read the consent through `getAcknowledgementFacts`, and have them drop `orders.agent_standing_consent` and the mandate-held version list. Keep one 428 code (`ACK_PERSON_REQUIRED` with sub-reasons). Add the A37 reconciliation to the Specify items and the escalation triggers."
+  },
+  {
+   "severity": "high",
+   "issue": "Future-dated publication breaks the library. A version may be published with effective_from in the future, but on publish the previous version becomes `superseded` immediately and current_version_id moves in the same tick. Meanwhile getDisclosureSet picks 'the published version with the latest effective_from <= now'. Between publish and the future effective_from no version is in effect, so every offering fails G12 (DISCLOSURE_SET_INCOMPLETE) and a not-yet-effective document is shown. The SPDS rule and the _test/advance-effective route show that future dates are expected. The 500-sequence invariant contradicts the resolver.",
+   "fix": "Separate approval from effect. The new version is `published` with a pending effective_from, and the old version stays in effect until then. A job on the injectable clock (or a read-time rule) then sets it `superseded` with effective_to = new.effective_from - 1 ms and moves current_version_id. Restate the invariant as 'exactly one version in effect at any instant, at most one pending'. Add a challenge: v3 is published effective in 7 days, and v2 still resolves and is acknowledgeable until then."
+  },
+  {
+   "severity": "high",
+   "issue": "The optional on-chain anchor contradicts the graph and bypasses approval-ID binding. The spec says the real DocumentAnchor contract is 'a later chain node' and anchors into an `anchor_sandbox` table via an outbox event. In fact A24 (AM2) already builds DocumentAnchor.setDocument(token, docType, sha256, uri, version), callable only by V1/V2 through A25's AgentGateway, which binds the approval id on-chain. A27 indexes `DocumentAnchored`, and A20's R14 reads it from the chain snapshot. The product map marks this action as on+off-chain ('4E; optional setDocument'). The outbox sink has no custody signature and no approval-ID binding, and R14 would compare against nothing.",
+   "fix": "When anchor=true, the document.publish request carries custody_vault V2, and the effector submits setDocument through A28/A25's gateway with the same approval id on the local chain (sandbox custody A15). Set anchor_state from A27's indexed `DocumentAnchored` event, not from an internal POST. Add the chain node(s) as dependencies, drop the 'later node' claim, map doc types to A24's docType constants, and add a challenge that replays an approval id for a different version at the gateway."
+  },
+  {
+   "severity": "high",
+   "issue": "Renderer and investor vault ownership collide with A47. A47 already owns `confirmation-pdf.ts`, byte-deterministic confirmation, advice and annual-statement PDFs, a `portfolio_document` table and `GET /v1/me/documents/{confirmationId}`. A35 claims the deterministic renderer for the same documents and owns `GET /v1/me/documents`. A47 does not depend on A35, so both would be built with different fixtures and hashes, and two modules would define the /v1/me/documents namespace.",
+   "fix": "Choose one owner. Option 1: A35 owns the renderer and vault; A47 (plus A40, A41, A58) depend on A35 and drop their own PDF code and routes. Option 2: A47 keeps confirmations and statements, and A35's renderer is narrowed to disclosure templates, board packs and register extracts. Record the route split explicitly and add the dependency edges in the graph data."
+  },
+  {
+   "severity": "medium",
+   "issue": "Dependencies do not cover the interfaces the spec uses. Direct deps are A14 and A10; the transitive set is A00-A04 and A08-A14. Not covered: A19 (FactProvider shape and DISCLOSURE_VERSION_STALE, read at Specify), A05 (fonts from packages/ui), A21 (platform.disclosure_text from /perimeter/public), A104 (a pass criterion needs the MCP tool catalogue), and the chain nodes for the anchor. The scheduler ignores milestone priority, so A35 can start before A19 or A05 passes. Downstream, A58 reads /v1/me/documents and A40/A41 call the renderer, but none of them depends on A35.",
+   "fix": "Add A19, A05, A21, A104 and the anchor's chain node to A35's deps. Add A35 to the deps of A40, A41, A58 and A47 if it keeps using the renderer; otherwise use fixtures plus a later integration node."
+  },
+  {
+   "severity": "medium",
+   "issue": "The acknowledgement disclosure set and the listing submission set are conflated. A35 says A36 blocks review on disclosure_set members (s708: IM + fee schedule + risk statement) and that the SPN-06 CheckRows (IM, Trust deed, Fee schedule) are getDisclosureSet members. But the trust deed is not in that set, risk_statement is not on the design, A36's `document_set` is IM/PDS + trust deed + fee schedule + valuation, and the product map's SPN-06 requires a Sponsor declaration for which A35 has no doc type.",
+   "fix": "Define two rule-pack rows per regime: `acknowledgement_set` (what G12 needs) and `listing_submission_set` (IM/PDS, trust deed/constitution, fee schedule, risk statement, valuation, sponsor declaration, TMD in P2). Add a `sponsor_declaration` doc type and expose `getListingDocumentSet(offering)` with per-member state for A36 and A63."
+  },
+  {
+   "severity": "medium",
+   "issue": "The retail cooling-off default contradicts A37 and the product map. A35 seeds au_mis_retail with {{cooling_off_days}} default 14. A37's `cooling_off_days` defaults to 0 (the value is set by A90 on the offering). The product map's G12 rule says MIS interests carry no cooling-off right (BrickX precedent); 14 days is only an inference. The hashed statement could promise 14 days while the order never enters a reflection period.",
+   "fix": "Drop A35's own default and render the retail statement from the offering's cooling_off_days, read through A36 (value from A90 in P2). When the value is 0, use the no-cooling-off wording; above 0, use the days template. Keep the wording set_with_counsel, and test that the statement hash changes when cooling_off_days changes."
+  },
+  {
+   "severity": "medium",
+   "issue": "A person's acknowledgement can rely on an open made only by their agent. The evaluator accepts an open by the holder OR by a token acting for the holder for every acknowledgement, so a UI tick by the person passes even when only the agent opened the disclosure. That weakens G12 ('the investor opens and acknowledges').",
+   "fix": "A human acknowledgement requires an open by the human principal (any session); a delegated acknowledgement requires the agent's own open. Add a hidden vector and a challenge: only the agent opened v2, the person acknowledges in the UI, and the result is ACK_DOCUMENT_NOT_OPENED."
+  },
+  {
+   "severity": "medium",
+   "issue": "INV-02's required state 'Documents not opened: confirm stays disabled' (product map; design analysis section 6) has no read model. GET /v1/offerings/{id}/disclosure-set returns versions, titles, meta, statement and hash, but not the caller's open status, so A57 would have to track opens client-side, which is a UI-only check.",
+   "fix": "Add per-caller `opened_at` per required version and an `all_opened` flag to the disclosure-set response when the caller has a session or token. Add a contract test that A57 reuses."
+  },
+  {
+   "severity": "medium",
+   "issue": "Staff can put fabricated records into an investor's vault without maker-checker. POST /v1/documents/render is open to SVCA, FINA, REGO, IRCM and LEGL (and their agents as maker) with caller-supplied inputs, and a rendered investor document becomes `published` in the vault with no A14 step. A LEGL agent could render a confirmation or holding statement with invented figures into an investor's vault.",
+   "fix": "Only the owning module's service principal may create a published investor-scoped render, and its inputs are a reference (order, run or statement id) that the renderer resolves server-side from the source module. Staff and agents get preview or draft only. Add a challenge in which a LEGL token renders a confirmation for another investor with made-up inputs and is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "Scope and permission names are invented (`documents:read`, `documents:publish`, `acknowledgements:create`, `consents:manage`, `render:request`...). A12 says no node invents scope names: scopes are A03 matrix cells of the form `M18.<resource>.<action>` (for example M09.mint.approve). The token pickers, the G22 evaluator and the A100 parity suite would not find these strings.",
+   "fix": "Replace them with A03 cell ids (for example M18.document.read, M18.document.publish, M18.acknowledgement.create, M18.consent.revoke, M18.render.request, M18.envelope.manage, M18.template.manage). Mark each one's delegable flag in A03's delegable.ts (consent create = false). Record any missing cell as an A03 follow-up."
+  },
+  {
+   "severity": "medium",
+   "issue": "POR-07 is designed, but the spec treats it as undesigned and invents columns. The prototype's screen key `statements` is POR-07 (DataTable Document / Trust / Period / Issued / Status). The spec cites `design-ext:POR-07` from A50 with columns Date / Document / Property / Version / Acknowledged by and says this node 'fixes those column names', which contradicts the UI source of truth.",
+   "fix": "Reference `design:statements` for POR-07 with the design's columns and statuses. Treat the acknowledged-disclosures list ('acknowledged by your agent') as an A50 extension of POR-07, not a replacement."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag does not match the spec. The node is oracle: no, yet G12 decides whether money goes to escrow, and delegated acknowledgement is agent authority, which D04 says gets oracles. The prose relies on Fable writing hidden vectors before the build, and pass criterion 1 depends on them. An orchestrator that schedules the Oracle stage from the graph flag would skip it.",
+   "fix": "Set oracle: yes for A35 in the graph data (scope: the acknowledgement evaluator, the standing-consent evaluator and renderer determinism). Otherwise, make the App Gauntlet and the generator state that oracle: no nodes naming a hidden folder still run the pre-build Oracle stage."
+  },
+  {
+   "severity": "medium",
+   "issue": "The estimate of 6-8 agent-hours is low for the scope: a versioned library with A14 effectors, holds and retention, the acknowledgement and consent gate with hidden vectors, an e-sign adapter with conformance tests, templates with a PII scan, a byte-deterministic cross-platform PDF renderer with a fallback plan, a vault, and about 40 endpoints in OpenAPI, SDK and MCP. Smaller sibling nodes are estimated at 8-12 hours (A34, A36).",
+   "fix": "Raise the estimate to about 12-16 agent-hours, or split the deterministic renderer and templates into their own node, which also settles the A47 overlap. Then regenerate the graph numbers."
+  },
+  {
+   "severity": "low",
+   "issue": "The design key for the listing wizard is wrong. The spec cites screen key `spList`, which does not occur in RealX App.dc.html; the key is `spNew` (go list at line 790; lsteps 'Documents & submit' at line 849).",
+   "fix": "Replace `spList` with `spNew`."
+  },
+  {
+   "severity": "low",
+   "issue": "The error catalogue is incomplete. Challenge 3 expects G13_APPROVAL_REQUIRED and challenge 7 expects TEMPLATE_PII_DETECTED, but neither is in the stable error-code list, so a builder following the list would not emit them.",
+   "fix": "Add G13_APPROVAL_REQUIRED and TEMPLATE_PII_DETECTED to the error-code list and to the OpenAPI requirement."
+  },
+  {
+   "severity": "low",
+   "issue": "The A04 follow-up loop id collides: both A35 and A44 (both AM3) claim 'loop A04.2'. A04 also allows a module-schema registry for tables that belong wholly to one module, which fits document_version, document_open, esign_*, template_* and render_record.",
+   "fix": "Register A35's own tables through A04's module-schema registry. Use a numbered A04 loop only for columns on `document`, `document_acknowledgement` and `standing_consent`, with the orchestrator assigning the number."
+  },
+  {
+   "severity": "low",
+   "issue": "E-signing by an agent is not addressed. Envelopes carry legal declarations (sponsor terms, wholesale-certificate countersignatures, register certifications). D04 requires personal declarations to be raised as a counsel question, but the spec does not say whether a signer's agent may sign, and the sandbox 'Sign now' signs for any signer.",
+   "fix": "State that signing happens only at the provider, authenticated by the signer, with no API or MCP signing tool. Add signing to A00's counselFlagged list (CQ-01) and restrict the 'Sign now' hook to RUN_MODE=local."
+  },
+  {
+   "severity": "low",
+   "issue": "A55 is told to keep the design toast 'Opens the PDF (G12 acknowledgement recorded)', but the spec records only an open row, so the UI would claim an acknowledgement that does not exist.",
+   "fix": "Record the toast as a design deviation for A55 to reword, or show it only when an open row was actually written (signed-in user)."
+  }
+ ]
+}

@@ -1,0 +1,125 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The data model clashes with A04, which already owns register_entry, register_lot, register_version and register_instruction in packages/db/src/schema/register.ts. A18 says its Drizzle tables live in 'a packages/db schema slice owned by this node', but that path is not in A18's owned paths. A18 also uses different names: plural tables, effective/recorded tstzranges with record_from/record_to where A04 has valid_period/recorded_at/superseded_at, and lots as jsonb where A04 says lots are rows and 'never JSON'. A04 also puts register_version in INSERT_ONLY_TABLES, so A18's version states (draft, submitted_for_certification, certified, superseded, rejected) cannot be stored. The builder must either edit A04's path or build a second, divergent register.",
+   "fix": "Rewrite the Data section to consume A04's tables by their A04 names and columns. Register only wholly new tables (register_extract, version certification events) through A04's registerModuleSchema, with migrations under modules/register/migrations. Model version state as an insert-only event table, or reopen A04 (A04.1) to take register_version off the insert-only list. Name the needed A04 follow-ups as preconditions."
+  },
+  {
+   "severity": "high",
+   "issue": "The bitemporal update rule loses history. On a change the spec closes the old row's record_to and inserts one successor with valid_from = ack.effective_at, and it forbids updating valid_to. The current-record-time view then has no row for the holder before the effective date, so GET entries?as_of=<earlier date> returns nothing or the wrong units. The same flaw breaks cap tables as of past dates, the back-dated adjustment challenge, and A40/A93 snapshots.",
+   "fix": "State the standard bitemporal correction: close the old row in record time, then insert a copy of the old values over [old_from, effective_at) and the new values over [effective_at, old_to). A back-dated adjustment re-states every affected effective segment. Add oracle cases for as_of reads at any earlier effective date, at both the current and the old record time."
+  },
+  {
+   "severity": "high",
+   "issue": "TP-REG is used as a human principal, but A03, A11 and A98 define TP-REG as an adapter with signsIn=false and no matrix cells. A18 makes it a certification checker, an alternative third checker on 6E adjustments, the certified_by user, an extract issuer, and a row in the scoping pass criterion. The spec also hard-codes TP-RE where the architecture brief uses the vehicle's trustee set, which on the wholesale track may include the SP-OWN acting as trustee, resolved by A14 and A98.",
+   "fix": "Make the human checker 'the vehicle's trustee checker set as A14 resolves it' (A98 resolver on trustee_entity_id). Treat the registry's part as the adapter's certifyVersion record only. Remove TP-REG from certified_by, the extract issuers and the scoping matrix, or use the SVCA registry principal. Tests should use a resolved checker-set fixture."
+  },
+  {
+   "severity": "high",
+   "issue": "G13 approval binding is specified only for adjust, holder_detail, certify and resync. For issue, redeem and transfer the spec gives no required action_code or policy row: allocation.mint (CFO + CCO), token.burn, token.forced_transfer and token.recovery (6E+Q with trustee), settlement.exclude_after_issue, and the exit codes. Only adjust binds its lines to payload_sha256. Approvals are not single-use, and 'approved or later' is ambiguous (expired, vetoed and failed are later states). An approved request can be replayed to apply an adjustment or redemption twice, or used with lines the checkers never saw. The 'approval binding matrix' pass criterion is untestable as written.",
+   "fix": "Add a table per instruction kind: allowed action_codes, minimum policy_code, required checker set, accepted SM-00 states (approved or executing only), and the payload hash rule for every kind (canonical hash of vehicle, kind and lines equals payload_sha256). Add UNIQUE(approval_id, kind) consumption with REG_APPROVAL_ALREADY_USED, and oracle cases for replay and line tampering."
+  },
+  {
+   "severity": "high",
+   "issue": "A transfer 'backed by a settled trade' needs no approval, but nothing verifies the trade. A91 (P2) is not a dependency and does not exist in P1. A caller can prepare a transfer with any trade_id and move units on the legal register without maker-checker, which bypasses G13.",
+   "fix": "In P1 (phase flag off), refuse trade-referenced transfers (REG_TRADE_PATH_DISABLED). In P2, verify through a TradeReader port (A91, fixture until then) that the trade is settled, that its lines match, and that it has not been registered before. Add hidden tests for a fabricated trade id and a replayed one."
+  },
+  {
+   "severity": "high",
+   "issue": "The timeout path can double-issue units. A late ack to a timed_out instruction is 'recorded but does not create entries', even though the registry, the legal record, applied it. A resubmission is a new instruction, so the registry can apply the same issue twice, and /internal/register/issued then sees two acked issues per approval, doubling the mint total. There is no instruction uniqueness or idempotency key, although A38 relies on 'reference + approval_id uniqueness'.",
+   "fix": "Make timed_out non-terminal: a late ack moves timed_out -> acked and applies the entries. A resubmission reuses the original registry idempotency key, so the adapter returns the original ack, and the conformance suite asserts this. Add UNIQUE(vehicle_id, kind, approval_id, reference). /issued must return exactly one acked instruction per approval. Add an oracle case: -SLOW, time out, resubmit, two acks, applied once."
+  },
+  {
+   "severity": "high",
+   "issue": "The contract with A20 does not close. A20's nightly run at 02:00 Sydney uses A18's 00:00 internal snapshot, but A18 fetches the registry's legal extract at 02:10, after the run, so the legal record is never in that night's reconciliation. Nobody compares the internal copy with the registry extract: A18 says 'never compares', and A20's rules do not cover it. A -DRIFT registry drift therefore goes undetected, and A20's planted Gympie Road challenge fails. The snapshot shape (pending_instructions[], delivery_wallet, unit_price_cents, certified_by realx_extract) and the event names (registry.ack.received vs register.changed) also differ.",
+   "fix": "Export getRegisterSnapshot(vehicleId, versionId | latest_registry | latest_internal) in index.ts with exactly A20's fields. Move the sandbox file and fetch before the recon (for example 01:30 and 01:40), or trigger A20 on register.version.created with source=registry. Assign the internal-versus-registry comparison to one node. Align the event names in both notes."
+  },
+  {
+   "severity": "high",
+   "issue": "A18 and A28 contradict each other on who submits register instructions and in what order relative to the chain. A28 submits issue, redeem and transfer after chain confirmation and runs its own register-first check. A18 names A37/A38 as the issue caller and offers register-first /issued with kind=transfer|redeem for burns and forced transfers. A28 sends a 'lot update for lock-ups' that A18 has no instruction kind for. Recovery is a holder_detail adjust in A18 but a transfer in A28.",
+   "fix": "Add a per-kind contract table to A18: caller (A38 issue, A28 redeem, forced transfer and recovery, A91 trades, REGO adjust), order relative to the chain (issue register-first; others explicit, or the counsel question with a default), endpoint and approval code. State how lock-up changes reach the register (lot-attribute adjust under the ADM-16 REGO -> CCO row, or chain-only). Reopen A28 so the notes agree."
+  },
+  {
+   "severity": "high",
+   "issue": "'register:instruct' lets 'a sponsor's agent' prepare and submit register instructions. The product map makes SPN-08 read-only with only 'Export register', so sponsors have no instruct right in the UI. Under D04 an agent can never exceed its person, so this is a new write path onto the legal record.",
+   "fix": "Limit instruction preparation to REGO (adjust, redeem, holder_detail), the service principals of the caller modules, and human-bound agents whose human holds the cell. State that sponsor principals and their agents get read and export only. Add a scoping test that SP-OWN, SP-FIN and SP-IR tokens are refused on POST instructions."
+  },
+  {
+   "severity": "high",
+   "issue": "The issue precondition requires the offer to be 'finalised' (REG_OFFER_NOT_FINALISED), but SM-04 has 'closed -> finalising (allocation locked) -> minted' and no finalised state, and A04's CHECK and A38 both use 'finalising'. Built literally, every issue is refused, or the builder invents a state that A03's enum-drift test rejects.",
+   "fix": "Require the SM-04 state 'finalising' with a locked allocation, read from A03's enum. Rename the error to match, and add oracle cases for closed, live, minted and failed offerings."
+  },
+  {
+   "severity": "high",
+   "issue": "The PII pass criterion says no PII appears in any sponsor, investor or token response. But SPN-08 (design and product map) shows holder names ('Kwan Family SMSF', 'Estate of H. Lowe') to the sponsor, and A18's own sponsor export adds a display-name column. A correct build fails this criterion, and a build that passes it cannot render SPN-08. What 'PII masked' means for staff is also undefined.",
+   "fix": "Define the field set per principal. Sponsor of the vehicle: display name, type, classification, residency, units, % of trust, truncated wallet and status, with no TFN, address, contact, date of birth or legal_record_ref. Investor: own rows. Staff: masked name unless they hold audited unmask rights. Rewrite the criterion as 'no field outside the principal's declared field set'."
+  },
+  {
+   "severity": "medium",
+   "issue": "Force re-sync diverges from the product map. ADM-17 says 'Re-submits instructions' (REGO -> Head of operations), while A18's resync only diffs. 'Head of operations' is not one of the 51 roles in A03. A20 defines a second resync route that is REGO-only with no 4E.",
+   "fix": "Keep one endpoint and one owner. Make resync fetch, diff, and re-submit un-acked or timed_out instructions under their original idempotency keys, with any remaining delta going to a 6E adjust. Map Head of operations to a concrete A03 role or record it as a decision. Say that A20's route calls A18's."
+  },
+  {
+   "severity": "medium",
+   "issue": "REG_CERTIFICATION_HASH_MISMATCH compares against 'the adapter's certification hash', but certifyVersion returns only certification_ref and certified_at. The spec does not say which version is certified (internal or registry), and the version transitions are not specified.",
+   "fix": "Have certifyVersion return or echo file_sha256. Certify the registry-source month-end version and require it to equal the internal month-end snapshot hash. List the version transitions with their triggers and refusal codes."
+  },
+  {
+   "severity": "medium",
+   "issue": "REG_LOT_LOCKED is waived only for a 6E adjustment or a forced-transfer approval. That blocks A38's redeem under settlement.exclude_after_issue (the lots are locked just after issue), the A48 wind-down redemption, and recovery. A38 also computes lock_in_until from the ack effective date, but A18 has the caller pass lock_in_until.",
+   "fix": "List the action codes that bypass lot lock, and say lock-in carries over on recovery. Have the caller pass lock_in_days and A18 compute lock_in_until from ack.effective_at when it applies the ack. Align A38."
+  },
+  {
+   "severity": "medium",
+   "issue": "frozen_units comes 'from A28 events', which contradicts 'instructions and acknowledgements are the only way entries change'. No kind, consumer or table is specified for freeze and unfreeze, yet REG_HOLDER_FROZEN, the cap-table status and the SM-07 criterion depend on it.",
+   "fix": "Specify a bitemporal freeze-fact table fed by an outbox consumer of A28's freeze, partial-freeze and unfreeze events (fixture emitter until A28). Say how it joins into entries and the cap table, and add as-of tests."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec mixes '00:00 AEST/AEDT', '02:00 AEST' and '02:10'. In Australia/Sydney, 02:00-02:59 is the hour skipped in October and repeated in April. The pass criteria test 'the AEDT changeover night' with no expected behaviour.",
+   "fix": "Schedule every job in Australia/Sydney, keyed on the as_of date. State the expected behaviour: on spring-forward the jobs run once at 03:00/03:10 AEDT; on fall-back they run once at the first occurrence. Use the same rule in the sandbox and A20."
+  },
+  {
+   "severity": "medium",
+   "issue": "Sandbox scenarios trigger on the reference suffix ('-REJECT', '-SLOW', '-DRIFT+n', '-DUPLICATE'), but issue and adjust references must be real server-generated allocation or break ids. Challenge 2 (-SLOW on a finalised allocation) and the A20 drift fixture cannot be arranged without weakening validation.",
+   "fix": "Drive scenarios through A08's SandboxControl (/sandbox/registry/*, for example 'next instruction for vehicle X: reject|slow|drift n|duplicate'), visible from ADM-32 and packages/sim. Keep reference validation unchanged."
+  },
+  {
+   "severity": "medium",
+   "issue": "The scopes 'register:read', 'register:export', 'register:instruct' and 'register:certify.request' are not A03 action ids (scopeId === actionId). A09 registration throws on unknown scope ids, and A12 invents no scope names. The routes /register/..., /internal/register/issued and /internal/registry/ack are not under /v1, which A09 requires and its hidden oracle checks.",
+   "fix": "Map the routes to A03 M11 action ids (with an A03 follow-up for any missing), and update A47 and A64. Mount under /v1/register/... and /v1/internal/register/..."
+  },
+  {
+   "severity": "medium",
+   "issue": "An extract has one file_sha256 and one signature but three formats (csv, json, pdf), and the oracle demands a byte-for-byte round trip, which is not achievable for PDF.",
+   "fix": "Make the canonical CSV the signed artefact, with a signed manifest of per-format hashes. Require the byte-for-byte round trip for CSV and JSON only."
+  },
+  {
+   "severity": "medium",
+   "issue": "The cap table assigns the rounding remainder to the largest holder, and largest_holding_bps is named as a G07 holder-cap input. This can create a false cap breach or hide a real one.",
+   "fix": "Mark pct_bps as display-only. Expose exact integer units and total_units for G07 and A73, with the rule units*10000 <= cap_bps*total_units."
+  },
+  {
+   "severity": "medium",
+   "issue": "The dependency wiring is loose. A13 is a transitive dependency through A14, yet the spec says 'no-op when A13 is absent'. The allocation interface is read 'through A37's index.ts', but A37 depends on A18. A38 is the actual issue caller. Offering state (A36) is read with no named interface.",
+   "fix": "Name A13, A10, A12, A04 and A08 as interfaces used, and call A13 directly. Define AllocationReader and OfferingStateReader ports in modules/register/index.ts, implemented later by A37/A38 and A36 with fixtures until then. Name A38 as the issue caller."
+  },
+  {
+   "severity": "low",
+   "issue": "The wikilinks to A64, A73, A91, A93 and A98 use ':' and '/', but the files are named with '-', so the links do not resolve.",
+   "fix": "Emit links from the actual file names, or add aliases, and re-run the link check."
+  },
+  {
+   "severity": "low",
+   "issue": "The note has counsel questions but no 'This plan is not legal advice' line, and the undrawn ADM-17 panels do not link A51.",
+   "fix": "Add the disclaimer, and link [[A51 - Design extension B...]] for the cap table, snapshots, extracts and re-sync panels."
+  },
+  {
+   "severity": "low",
+   "issue": "The audit-count criterion ignores the extra audit events A12's middleware writes on token calls. The escrow challenge covers only Kent Street, while the design also shows Ann Street 2,800 and Unley Road 9,100 (escrow). TP-AUD is listed as an extract issuer despite being read-only.",
+   "fix": "Count only register.* actions. Cover all three escrow vehicles. Make REGO the extract issuer, with TP-AUD and TP-RE given read and verify access."
+  }
+ ]
+}

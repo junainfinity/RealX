@@ -1,0 +1,105 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "The G07 boundary contradicts itself. Brief item 2 says the post-action holding 'must be at or below holder_cap_bps', and the product map says 'may not exceed the cap', so 500 of 10,000 units (exactly 5%) passes and max_allowed = 500. But the oracle vectors and pass criteria require a 500-token order to FAIL with max_allowed_units = 499 (379 when 120 are already held), which means strictly below the cap. Whichever rule the builder implements, either the text or the hidden oracle fails.",
+   "fix": "At Specify, pick one rule and apply it everywhere. Recommended (product map wording): allowed iff units x 10,000 <= holder_cap_bps x total_units. The vectors then become: 500 passes, 501 fails, max_allowed_units = 500 from zero and 380 with 120 held. Update the oracle list, the pass criteria, the A19 summary in final-graph.json and the design-analysis test note. If strictly-below is chosen instead, change the brief text and note that a full offer then needs at least 21 holders."
+  },
+  {
+   "severity": "high",
+   "issue": "The member-count monitor blocks new holders at 20 for wholesale vehicles. Four problems: (1) s601ED(1)(a) applies at MORE than 20 members, so this is off by one. (2) s601ED(2) generally exempts schemes whose interests all needed no disclosure (wholesale). (3) The product map's ADM-16 mock shows wholesale trusts with 412 and 903 members in state 'ok'. (4) With a 5% cap, a 10,000-unit offer needs at least 20 or 21 holders, so the default block makes every offer unfillable. The pass criteria (breach at 20) also contradict the Human gates rule that counsel_pending turns blocks into warnings. The monitor-to-gate mapping is undefined, and member_count.count_basis is used but never defined.",
+   "fix": "Set member_count to counsel_pending: true with the block off by default (warn only). Define the trigger as distinct members > s601ED_trigger, and give count_basis a value. Add a monitor -> gate -> effect table: holder_cap -> G07; foreign_pct -> G06; valuation_age -> G20; proof -> G19; member_count and landholder_duty -> warning only until a per-vehicle pre-trade block is switched on. Rewrite the pass criterion as: warning at 18, breached at 21, nothing blocked while counsel_pending."
+  },
+  {
+   "severity": "high",
+   "issue": "The 'frozen' parameter key list is incomplete, so the oracle cannot test every threshold by key. Missing or without a value: aml.rescreen_max_age_days (no value); kyb.ubo_threshold_bps (2500 appears only inside the G03 text); the MIT withholding rate keys for foreign residents; member_count.count_basis; the G17 blocked-phrase list and its sources; landholder_duty by state, which ends in '...'; the meaning of foreign.block_bps 'none'; the G11 ticket parameters; and the list of parameters an override may change.",
+   "fix": "Replace item 1 with a complete table (key, type, unit, value, source, counsel_pending) that includes all of these, and freeze it at Specify."
+  },
+  {
+   "severity": "high",
+   "issue": "GateInput, ActionContext, ResolvedParams and the facts each gate needs are never defined. The FactProvider contract that A30, A32, A34, A35, A36, A41, A42, A43 and A44 must implement has no fact catalogue. The hidden tests call evaluate(input, params, now) directly, so any shape the builder picks differently breaks the oracle. 'FACT_MISSING_<name>' cannot be tested without fact names, and it conflicts with the G07 rule that absent associates mean none.",
+   "fix": "Add a Fact catalogue. For each gate, give the fact name, its type, the source node and interface (e.g. A30 isWhitelisted, A32 classificationFor, A35 getAcknowledgementFacts, A42 restrictionStatus, A41, A34, A36) and its FACT_MISSING code. Freeze the exact TypeScript types for GateInput, ActionContext, GateVerdict and ResolvedParams. Distinguish an explicitly supplied empty associate list (a fact) from an absent one (FACT_MISSING_associates)."
+  },
+  {
+   "severity": "high",
+   "issue": "Evaluator ownership conflicts with frozen downstream specs. A32 ships G04 and G05 evaluators 'registered with A19'. A41 ships evaluateG16, A42 registers G02 (payout) and G14, A43's checkClaims is 'A19's G17 hook', A21 ships evaluateG21 and writes its own rows, and A12 writes G22 rows. A19 claims to own g01 to g22 and offers no registration API. For a retail vehicle in P1, G05 differs: A32 returns fail G05_PHASE_OFF while A19 returns not_applicable, which A19's own phase-leakage challenge forbids. Replay will also report a Sev1 mismatch whenever an evaluator is legitimately replaced.",
+   "fix": "Add registerGateEvaluator({gate, actionKinds, evaluator, version, owner}). A19 ships baseline evaluators that the owning nodes replace. Store evaluator_id@version on each GateEvaluation row so replay re-runs the stored version. Align G05 so that retail with P2 off returns fail G05_PHASE_OFF. Make g21.ts an adapter over A21's evaluateG21, the same way g22.ts adapts A12's evaluator."
+  },
+  {
+   "severity": "high",
+   "issue": "Graph fit: the spec relies on A14, A18 and A21, but none of them is a dependency or an ancestor. A14 is needed for pack submit, the override 6E approval, G13's ApprovalRequest and SIMULATION_STALE, and A14's spec expects A19 to register G01-G21 precheck hooks. A18 owns RegisterEntry and the onHoldingsChanged same-transaction hook, but the spec wrongly credits them to A20, which is a dependent. A21 owns licence rows and G21, which the spec wrongly credits to A33. The nightly monitor job needs a worker path A19 does not own.",
+   "fix": "Add A14, A18 and A21 to deps (all AM1; no cycle; A13 comes in through them). Correct the attributions to A18 and A21. Register the precheck hooks with A14. Add the owned path <workspace>\\app\\services\\worker\\src\\jobs\\rules\\ and regenerate final-graph.json."
+  },
+  {
+   "severity": "high",
+   "issue": "A04 already defines rule_pack, compliance_rule, gate_evaluation, threshold_monitor and halt as core tables. gate_evaluation is insert-only and carries token_id and on_behalf_of_id; A12 and A21 write into it, and api_token_activity references it. A19 re-declares its own plural tables (rule_packs, gate_evaluations, halts and so on) through the module-schema registry, which A04 allows only for tables wholly owned by one module. The result would be two decision logs, and the G21 and G22 rows written by A21 and A12 would sit outside the replayable set.",
+   "fix": "Use A04's core tables. Register only genuinely new tables (investor_override, and evaluation_set if needed). Request the extra columns, the immutability trigger, the partial unique index and monthly partitioning through an A04 follow-up loop (A04.x)."
+  },
+  {
+   "severity": "high",
+   "issue": "The halt interface does not match its neighbours. A20's frozen spec calls registerHaltSource('recon_break', ...), which A19 never defines. A19 says instead that A20 uses openHalt. A48 later owns Halt records, turns A19's openHalt and closeHalt into forwarders, and requires reopening criteria and an end date that A19's openHalt does not demand.",
+   "fix": "Define registerHaltSource(name, fn) and make G10 the union of all sources, naming each cause in the verdict. Give openHalt and closeHalt A48's signature and rules (mandatory criteria and end date), writing A04's halt table until A48 takes over. Add an oracle vector for a vehicle halted only through a registered source."
+  },
+  {
+   "severity": "high",
+   "issue": "G22 conflicts with A12 in four ways. (1) A12's middleware already writes exactly one G22 row per token request, and that is one of A12's pass criteria; A19 writes a second. (2) A19's reason codes (vehicle_not_allowed; no code named for the cap) do not match A12's (G22_VEHICLE_NOT_ALLOWED, G22_LIMIT_EXCEEDED). (3) 'Same GateInput shape' is wrong, because evaluateG22 takes its own input. (4) G12 relies on an 'A12 mandate flag standing_disclosure_consent' that does not exist; A35 owns standing consent, which needs a passkey and the counsel parameter.",
+   "fix": "Put the middleware's g22_evaluation_id on ActionContext and adopt that row into the set. Write a new G22 row only for action-level facts that were not known at the route. Use A12's reason codes verbatim, with cap_cents and remaining_cents. Define how the adapter translates inputs. Make G12 read standing consent and the counsel flag from A35's getAcknowledgementFacts, and fail with a 'person must acknowledge' code when it is not allowed."
+  },
+  {
+   "severity": "high",
+   "issue": "Nothing binds a stored verdict to the action that is actually executed: the set has only object_ref. A service could evaluate 1 unit and execute 499, or execute on a stale set after a halt. The spec does not say that facts may not come from the POST evaluate request body, yet agent tokens are shown calling that 'internal' route. Forged facts would then produce a stored pass. Nothing stops the fixture provider from running outside tests.",
+   "fix": "Add action_sha256 to every set and an assertPassed(setId, actionSha256, {maxAgeSeconds, requireFresh}) that consumers call inside the executing transaction. Facts come only from server-side providers, and the route rejects a facts field with 422. evaluate is service-only (external and agent tokens get 403, or a dry run that stores nothing). The fixture provider works only when RUN_MODE is local or test. Add oracle vectors for each of these."
+  },
+  {
+   "severity": "high",
+   "issue": "InvestorOverride has no allow-list. Any gate_id or parameter can be overridden, so a 6E override could switch off G01, G02, G13, G14, G21 or G22 for one investor, and the oracle never probes this.",
+   "fix": "Add overrides.overridable_parameters to the pack (for example G07 holder_cap_bps and G08 lock_in_days, each with a maximum value). Refuse anything else with OVERRIDE_NOT_PERMITTED. G01, G02, G03, G13, G14, G21 and G22 can never be overridden. Add oracle vectors, and confirm the approval code against ADM-16 (CCO maker, LEGL checker) and A03."
+  },
+  {
+   "severity": "high",
+   "issue": "The gate sets are incomplete or wrong: (1) transfer and resale never check G04 for the buyer, although J07 step 4 lists it, so wholesale units could reach a non-wholesale holder; (2) P2 retail resale lacks G05 and G12; (3) withdrawal lacks G01; (4) these kinds have no gate set at all: recovery, allocation (J04 step 8), onboarding_status (ONB-10), offer submission (G19 'new offers', SPN-05), announcement (G17), tenant admission (G18), and forced or estate transfer; (5) G15 and G18 are in no set.",
+   "fix": "Put a complete gate-sets table in the spec, one row per action kind with its phase conditions. Add G04 to the buyer side of transfers and resales, G05 and G12 to retail resale, and G01 to withdrawal. Place G18 and G15 in sets. The oracle asserts the table exactly as written."
+  },
+  {
+   "severity": "high",
+   "issue": "'warn' has conflicting meanings. G06 'warn FIRB_CHECK_REQUIRED' keeps the order in draft, so it blocks, while G04 'expiring' and COUNSEL_PENDING warnings do not. The proceed rule is defined only for not_applicable. If warn means proceed, a foreign person buys commercial property without FIRB clearance; if warn means block, every investor with a certificate expiring within 30 days is stopped.",
+   "fix": "Add a 'hold' result that blocks without being a compliance failure. An action proceeds only if no gate is fail or hold and every not_applicable result is valid for the regime and phase. Make G06 without FIRB clearance a hold. Add vectors for both cases."
+  },
+  {
+   "severity": "medium",
+   "issue": "G04 covers only the certificate and A$500k bases. The product map's G04 and D04 also include sophisticated (s708(10)/s761GA) and professional (s708(11)) investors.",
+   "fix": "List every basis A32 records, with its validity rule, parameter keys and counsel flags, and add oracle vectors for each."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some parameters have two sources. A32 says A19 reads the certificate and ticket parameters from A32's classification_policy rows, and A34 keeps its own FIRB policy with a different sub-type vocabulary (new_dwelling, student, aged_care) from A19's property_type plus zone_flags. The drift has already started: A32 writes the A$500k ticket as 50_000_000_00 cents (A$50m), while A19 correctly uses 50,000,000.",
+   "fix": "Make the rule pack the only source, exposed through getEffectiveParams. Map A34's sub-types onto A19's matrix in one table, and have the orchestrator record the matching fixes in A32 (including the cents typo) and A34."
+  },
+  {
+   "severity": "medium",
+   "issue": "The simulator is open to investors and sponsors (and their agents), but its output lists every holder's id, units and breach, and nothing shapes the output by caller.",
+   "fix": "Shape the output by principal: an investor sees only their own verdicts; a sponsor sees pseudonymous holder references for its own vehicles; M10 staff see the full list. Declare a requiredScope for each shape and add a test that an investor cannot see other holders."
+  },
+  {
+   "severity": "medium",
+   "issue": "At order time, G07 ignores the holder's open orders. Repeated 499-unit orders each pass and sit in escrow until allocation, but ADM-08 says orders over the cap are 'never silently accepted'.",
+   "fix": "Count register units plus the open (unallocated, unrefunded) orders of the holder and associates plus the new order, and add an oracle vector."
+  },
+  {
+   "severity": "medium",
+   "issue": "Three ADM-16 actions have no behaviour and no owner: 'Publish pack version' (which notifies the sponsors using the pack), 'Turn on a pre-trade threshold block' (4E), and 'Set lock-up dates'.",
+   "fix": "Add a route for the pre-trade block toggle through A14 and an outbox event that notifies sponsors on publish, or name the owning nodes under Requirements covered."
+  },
+  {
+   "severity": "low",
+   "issue": "The G14 TTR warning fires on a 'cash-equivalent deposit', but a TTR applies to physical cash, and NPP/PayID transfers are not cash.",
+   "fix": "Use a physical_cash fact supplied by A17 and warn only when it is true and the amount is at or above aml.ttr_cash_cents."
+  },
+  {
+   "severity": "low",
+   "issue": "Some design quotes do not match the prototype. ONB-10 reads 'DVS match, 2 sources · liveness pass' with a comma. 'GateRows' and 'AcknowledgeCard' are not HTML keys (the keys are buyGates and toggleAck). The G01 row's text is paraphrased.",
+   "fix": "Quote RealX App.dc.html lines 822, 833 and 882 exactly and cite the real keys."
+  }
+ ]
+}

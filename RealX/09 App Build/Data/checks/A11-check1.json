@@ -1,0 +1,110 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The permission-matrix model contradicts the frozen A03 spec. A11 describes a role x module x action matrix with actions V/C/E/A/O/X, and its pass criterion counts '51 roles x 27 modules x 6 actions'. It gets 51 roles by taking VIS off the 52 ids, and it treats INV-W to INV-M as investor sub-types rather than roles. It names the files packages/domain/permissions.ts, sod.ts and non-delegable.ts, and says A11 'adds the sponsor, investor, partner and system rows ... with a reviewed diff'. A03 (AM0, oracle node, gated before A11) already defines the matrix as (roleId, actionId) cells with ten action kinds. In A03, 51 roles = 52 ids minus AGT-U, so VIS and INV-* are roles. A03 already has every investor, sponsor, partner and SVCA row, uses the files src/permissions/{matrix,delegable,scopes,sod}.ts, and says A11 calls checkSod and does not re-implement it. A11 also re-lists the SoD rules and adds pack rows #5, #8 and #16-#20 to A03's sod.ts. The builder cannot satisfy both specs. The matrix hash, the cell count and the SoD data hash cannot match A03's export, and A11 has no right to edit A03's owned path, which has already passed its gate.",
+   "fix": "Rewrite sections 5 and 6 and the pass criteria so A11 consumes A03 through @realx/domain:\n- Each route declares meta.scope = the A03 actionId (A09's x-realx-scope).\n- The generator emits one test per (roleId, actionId) cell in A03's exported JSON, and the frozen hash is A03's export hash.\n- requiresHuman is derived from A03's delegable.ts (false or 'counsel').\n- SoD checks call A03's checkSod.\n\nDelete 'adds rows', 'reviewed diff', the V/C/E/A/O/X vocabulary and the 51x27x6 count, and use 51 = 52 minus AGT-U. Extra SoD rows or missing cells go to an A03.x follow-up loop that this note names."
+  },
+  {
+   "severity": "high",
+   "issue": "The agent cap 'permissions(on_behalf_of) ∩ mandate minus every A and O cell', with O defined as 'execute or sign', breaks D04 parity. Investor and sponsor agents must be able to invest, request withdrawals and take other money actions within their mandate limits; A12 already pre-authorises order confirmation and withdrawal requests. A03 decides what cannot be delegated from the approve, ratify and sign kinds plus the delegable flag, not from execute. A builder who follows A11 literally strips every execute cell from agents. The property test 'no AGNT with an A or O cell' would then pass while agent parity silently fails, and A100 would only catch it much later.",
+   "fix": "Define the cap in A03 terms: an agent's effective set = the A03 cells of the principal it acts for ∩ the mandate scopes, keeping only delegable: true cells and removing only the approve, ratify, veto and sign kinds. Change the property test to 'no AGNT or SVCA holds an approve, ratify or sign cell, and no AGNT holds a non-delegable or counsel-pending cell'. Add oracle cases where an investor agent with invest-trade scope places an order and requests a withdrawal within its caps (both 2xx), next to the refusals for staff agents that try to approve or sign."
+  },
+  {
+   "severity": "high",
+   "issue": "Delegation from one person to another is used but never defined. SoD rule 1 says 'including via delegation', the section 6 request-time check mentions delegation, and the property test runs 'delegate' operations. A14 builds its maker identity set from 'A11 delegations, both directions', and the architecture brief's approvals oracle includes 'the maker cannot be the checker through a delegation'. A11 has no Delegation entity, endpoint, lifecycle, approval rule or export, so the builder will either invent one or skip it, and A14 has nothing to call.",
+   "fix": "Add a Delegation section:\n- A Delegation row {delegator, delegate, subset of cells (never approve, ratify or sign), valid_from, valid_to, reason, state}.\n- POST /iam/delegations as a 4E grant, using the same pending_approval plus activate-hook pattern as role grants.\n- Delegations are revoked on role change.\n- Export makerIdentitySet(principalId, at) for eligibleCheckers and A14.\n- Oracle cases in both directions, including a delegation that was active when the request was drafted but has expired at the decision."
+  },
+  {
+   "severity": "high",
+   "issue": "The graph has a cycle on the email adapter. Email verification and magic-link recovery need the sandbox email adapter with a local inbox. packages/adapters/email is owned by A43 (AM3), which depends on A14, which depends on A11. A11 (AM1) therefore cannot depend on it, so the builder will fake or hand-roll email inside modules/auth.",
+   "fix": "Either move the email adapter's interface and local-inbox sandbox implementation to A08 (AM0), with A43 adding templates and SMS on top, or have A11 define an EmailSender port with a local-inbox implementation in its own path that A43 later replaces through A08's adapter registry. Update final-graph.json and both notes to match."
+  },
+  {
+   "severity": "high",
+   "issue": "Schema and row-level-security interfaces do not match A04.\n- Missing tables: A11 needs tables A04 does not list (email_verification, fresh_assertion, view_as_tenant_grant, login_recovery_request, sod_exception, delegation) plus device-hash and last-login/dormancy columns.\n- No route for the database constraint: A11 needs the database to refuse bad rows on A04's role_assignment table (the direct-SQL SUPER + CFO challenge), but it names neither A04's module-schema registry nor an A04.x follow-up loop.\n- Missing session variables: A04's RLS policies read app.principal_kind, app.platform_access, app.view_as_tenant, app.investor_id, app.vehicle_scope, app.principal_role and app.sandbox_of, but A11 sets only app.tenant_id and app.principal_id.\n- Name clashes: A11 uses acting_tenant_id and iam.view_as_tenant.started, where A04 uses app.view_as_tenant and tenant.viewed_as.\n\nAs written, whether RLS fails closed or open depends on the builder's guesses.",
+   "fix": "Add a Schema bullet naming:\n- the tables A11 registers through registerModuleSchema, with their migrations under modules/auth;\n- an A04.x follow-up loop for the role_assignment constraint trigger (SoD rules 2 and 3) and the new session, passkey and account columns.\n\nIn section 4, list every RLS variable A11 sets and its value for each principal kind, and use A04's names. Add one RLS probe per variable to the pass criteria."
+  },
+  {
+   "severity": "high",
+   "issue": "The dormancy boundary is undefined and the challenge contradicts itself. Refusal depends on when the daily job runs. The challenge has the person sign in at day 30 23:59 and again at day 31 00:01, and expects the second sign-in to be refused. But if the first sign-in succeeded, it reset the clock, so the second must succeed. The oracle case 'dormancy at day 30 exactly' has no defined expected result, so a correct build can fail or a wrong one pass. Principals who were invited but never signed in are not covered.",
+   "fix": "Define the rule: an account is dormant when clock.now - last_successful_login_at >= 30 x 24 h. last_successful_login_at is set at activation, and the rule is checked at sign-in as well as by the daily job. Rewrite the challenge:\n- the last sign-in is at T0;\n- a sign-in at T0+30d-1min succeeds and resets the clock;\n- with no sign-in since T0, an attempt at T0+30d is refused with ACCOUNT_DORMANT;\n- the job then writes iam.account.dormant exactly once.\n\nState what happens to invited principals who never became active."
+  },
+  {
+   "severity": "medium",
+   "issue": "A11 uses the identity adapter's liveness check for recovery, but that adapter is A22, which is not among A11's direct or indirect dependencies. The scheduler can start A11 before A22 exists, and the builder would then stub liveness.",
+   "fix": "Add A22 to A11's deps in final-graph.json and in the Depends on line (both are AM1, so there is no cycle), and name A22's liveness interface and sandbox scenarios in section 9."
+  },
+  {
+   "severity": "medium",
+   "issue": "The break-glass section has gaps:\n- The elevated role sets come from packages/domain/runbooks.ts, which A48 (AM3) owns, so the file does not exist when A11 builds.\n- The board notice required by product-map SoD rule 10 is missing.\n- The 5-business-day review needs A13's clocks, but A13 is not a dependency.\n- The expiry formula mixes a point in time with a duration.\n- The 'on-call ENGO' is referenced but never defined.",
+   "fix": "Own the R1-R9 elevation sets in modules/auth/break-glass/elevations.ts, or move them to an A03.x loop. Add an iam.breakglass.board_notice event on activation. Add A13 as a dependency and open a 5-business-day clock. Write expires_at = activated_at + min(4 h, requested_duration). Define an on-call flag and its grant rule."
+  },
+  {
+   "severity": "medium",
+   "issue": "The worker jobs have no owned path: the dormancy lock, the quarterly review set, break-glass expiry, recovery cooling timers and clean-up of expired verifications. A11 owns only services/api/src/modules/auth/.",
+   "fix": "Add <workspace>\\app\\services\\worker\\src\\jobs\\auth\\ to A11's owned paths in the note and in final-graph.json, and list the jobs registered there through A09's registerJob."
+  },
+  {
+   "severity": "medium",
+   "issue": "The fresh-assertion contract does not match the nodes that use it:\n- A14 expects an assertion whose challenge is payload_sha256, checked through 'A11's hardware-attested verifier'.\n- A53's bulk approve expects a challenge derived from the sorted hash list.\n- A11 instead defines a server-nonce challenge, a stored row and route middleware.\n\nThe canonical payload hash is never defined, so the one-cent drift challenge depends on the builder's choice. Partners are also omitted, and the rule that the AAGUID allow-list is re-checked at assertion time (which the challenge requires) is not stated.",
+   "fix": "Export verifyAndConsumeFreshAssertion({principalId, payload_sha256, purpose, maxAgeMinutes}) returning an assertionId, and state that A14 must use it. Define the canonical payload as A10's canonical form (or RFC 8785 JCS) hashed with SHA-256. Define the bulk payload as sha256 of the sorted hash list. Cover PARTNER principals, and state that staff assertions re-check the credential's stored AAGUID against the current allow-list."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 4E steps that depend on A14 have no interim contract. Recovery confirmation by an SP-OWN or staff role, and dormancy unlock, are 4E actions through A14, but A14 depends on A11. Only role grants get the pending_approval plus activateGrant pattern.",
+   "fix": "Apply the same pending_approval plus internal activate-hook pattern to recovery confirmation and dormancy unlock, and add oracle cases showing the hooks refuse self-confirmation and agents."
+  },
+  {
+   "severity": "medium",
+   "issue": "The mandate intersection needs mandates from A12, which is built after A11, and no interface between the two is defined.",
+   "fix": "Define a MandateProvider interface (scopesFor(agentPrincipalId) returning action ids or null) that fails closed: with no provider, or a null result, an agent gets an empty set. Add a fixture provider for tests; A12 registers the real one."
+  },
+  {
+   "severity": "medium",
+   "issue": "The PARTNER list includes TP-CUS and TP-REG as principals that sign in. A03 marks both signsIn: false, and D04's partners who sign in are only RE/trustee, valuer, property manager, auditor, regulator observer and licensee.",
+   "fix": "Limit PARTNER to TP-RE, TP-VAL, TP-PM, TP-AUD, TP-OBS and TP-LIC. Treat TP-CUS, TP-REG, TP-KYC, TP-BANK and TP-SIGN as adapter counterparties or SVCA principals with no interactive sign-in."
+  },
+  {
+   "severity": "medium",
+   "issue": "Events that other nodes consume are missing from A11's event list. A12 subscribes to iam.role.revoked and A14 relies on a role-change event, but A11 never defines the role-change, delegation or account-closed events.",
+   "fix": "Add iam.role.granted, iam.role.revoked, iam.role.expired, the iam.delegation.* events and iam.account.closed, with their payloads, to section 10 and events.ts, and include them in the scripted end-to-end run."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several config keys would land in packages/config, which A08 owns: STAFF_AUTHENTICATOR_AAGUIDS, relying-party ids and origins, timeouts, cooling periods and auth rate limits. A11 names neither an A08.x loop nor a module-local config.",
+   "fix": "Either list these keys, with defaults, for an A08.x follow-up loop, or declare them in a module-local zod config under modules/auth that reads through A08's config registry. State which one the note uses."
+  },
+  {
+   "severity": "medium",
+   "issue": "Session cookie hardening is incomplete. SameSite=Lax cookies with no CSRF defence are specified for a platform that moves money, and the console gets no stricter policy. A build with no CSRF check would pass every listed criterion.",
+   "fix": "Specify __Host- prefixed cookies, SameSite=Strict on the console origin, and CSRF protection on every cookie-authenticated request that changes state (a double-submit token or an Origin/Sec-Fetch-Site check). Add a hidden oracle case for a cross-site POST."
+  },
+  {
+   "severity": "medium",
+   "issue": "Design references point to the wrong nodes. Undrawn screens are sent to A52 and A53, but the design-extension nodes are A50 and A51. The ACC-01 'Security 2 passkeys' row and the ACC-02 stepper come from design-analysis proposals, not from the prototype; RealX App.dc.html has neither. The prototype's ONB-01 Password field is not explicitly overridden.",
+   "fix": "Point undrawn screens to A50 (investor and sponsor) and A51 (console). Mark ACC-01 and ACC-02 as A50 extension layouts. Add one line saying the design's ONB-01 Password field is dropped in favour of passkey sign-up."
+  },
+  {
+   "severity": "low",
+   "issue": "The recovery challenge checks that every API token is gone, but tokens belong to A12, which is built after A11, so the check cannot run at A11's gate.",
+   "fix": "At A11's gate, assert that auth.recovery.completed is published once with the principal id, and move the token-revocation check to A12's challenges."
+  },
+  {
+   "severity": "low",
+   "issue": "Error-code and route conventions differ from A09 and the sibling nodes. A09 uses lower-case snake codes, and A10, A12 and A14 put their routes under /v1. A11 uses upper-case codes and routes without a version prefix.",
+   "fix": "Align A11 with A09's error registry and put its routes under /v1, updating the A52 and A53 references, or record the exception in A09."
+  },
+  {
+   "severity": "low",
+   "issue": "Sign-up and recovery-start responses are not specified to be the same for known and unknown emails, so the spec allows account enumeration.",
+   "fix": "State that /auth/signup and /auth/recovery/start always return the same 202 body with the same timing, and add an oracle case."
+  },
+  {
+   "severity": "low",
+   "issue": "The 8-12 h estimate looks low for about ten subsystems; A14 alone is estimated at 10-14 h.",
+   "fix": "Raise the estimate to about 12-16 h, or split the node into A11a (identity and sessions) and A11b (RBAC, SoD, delegation and break-glass)."
+  }
+ ]
+}

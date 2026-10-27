@@ -1,0 +1,105 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The agent cannot reach most of its negatives through MCP. A104 leaves every requires_human operation out of the MCP catalogue: the D04 personal acts, confirming a 428, changing the bank account, recovery and guardians, and closing the account. It also leaves out every agent_never_checker operation (decide, bulk-decide, ratify, certify, custody sign, SP-OWN sign-off) and lists them all in excluded.json. A82 calls these 'as tools by operation id' (section 3 steps 7-8, Scenario S step 3, Scenario O steps 3 and 5, Scenario P, the 'Checker by any route' and 'Confirmation hijack' challenges). It then requires identical codes 'over MCP and raw REST', and any tool name missing from the catalogue is a hard CATALOGUE_DRIFT failure. Over MCP these calls return 'unknown tool', never AGNT_NOT_ALLOWED or G22_AGENT_NEVER_CHECKER, so the suite cannot pass honestly.",
+   "fix": "Split the negatives into two classes. (1) Operations in the catalogue: expect identical envelopes over MCP (both transports) and raw REST. (2) Operations in excluded.json: over MCP, assert the tool is absent from tools/list, that a tools/call gets the MCP unknown-tool error, and that excluded.json lists it with the expected reason (requires_human or agent_never_checker). Prove the server-side refusal only through raw.ts with the same bearer token. Change CATALOGUE_DRIFT to fire only for names marked as expected tools, and add EXCLUSION_DRIFT for names expected in excluded.json. Update the G22 done-line and the Negatives pass criterion to match."
+  },
+  {
+   "severity": "high",
+   "issue": "A101's guard rules will put the acting tokens on hold partway through the scenarios, and the spec never plans for this. authority_probe fires on the first G22_AGENT_NEVER_CHECKER refusal of a staff token. So T9 is held after its first decide attempt in Scenario O step 3: its APR-2292 and bulk-decide attempts then return 423 AGENT_HELD, and the step-4 read is refused. T1 makes about 10 refusals in a row in section 3 step 8, which also exceeds 50% of its recent calls, so refusal_streak holds it. The 'Checker by any route' challenge exceeds 3 never-checker probes per non-staff token. A12's rate limits (investors 10 writes a minute) turn bursts of negatives into 429s. The expected codes therefore depend on timing and ordering.",
+   "fix": "Give each negative family a freshly issued token (or clear the hold through humans.ts between families), kept below A101's thresholds read from the rule-pack API. For staff tokens, give each never-checker probe its own token, and make the expected sequence 'G22_AGENT_NEVER_CHECKER, then AGENT_HELD from authority_probe'. Pace calls under the token's introspected rate_limit, and treat any unexpected 429 as a failure. Add these expected holds to Fable's hidden table."
+  },
+  {
+   "severity": "high",
+   "issue": "The anomaly-hold scenario cannot fire as written. T3 is an investor read-only token, and A12 caps investor tokens at 60 reads and 10 writes a minute. For a token under 7 days old, A101's burst rule needs more than 300 reads, or more than 20 writes, in 120 seconds. The rate limit allows at most 120 reads, or exactly 20 writes, in that window, so neither floor can be exceeded. Neither A101 nor A99 says whether 429-refused calls count toward the burst counter.",
+   "fix": "Use an anomaly rule a new investor token can reach within A12's limits: refusal_streak (10 refused calls in a row) or authority_probe (3 never-checker refusals within 24 hours), with parameters read from the rule pack. Or demonstrate the burst rule on a staff token (300 reads a minute). Or settle with A101 and A99 now whether rate-limited calls count toward burst. State in the spec which rule T3 trips and the exact call count."
+  },
+  {
+   "severity": "high",
+   "issue": "T1's mandate model does not exist in A12. A12 gives a mandate one per_action_cap_cents and one daily_cap_cents, counted in one mandate_usage row per Sydney day, and evaluateG22 reads the current (single) mandate. A82's T1 carries separate order caps (A$5,000 per order, A$8,000 a day) and withdrawal caps (A$1,000), and the checkpoint table keeps separate counters. Under A12 the A$1,000.01 withdrawal passes G22, because it is under the A$5,000 cap. The step-6 A$200 withdrawal also consumes the shared daily cap, so 'remaining = A$3,208.16' in step 8 and in the cap-race challenge would be A$3,008.16.",
+   "fix": "Either issue a separate withdrawal token (T1w: A$1,000 per-action and daily cap, withdrawals only) and keep T1 for orders, or raise a fix item on A12 and A04 for per-action-family caps before Specify and depend on it. Then re-derive every 'remaining' figure in section 3, the checkpoint table and the cap-race challenge."
+  },
+  {
+   "severity": "high",
+   "issue": "Spec point (c) contradicts A12's frozen spec. A12 §4 says: 'Above the caps, or for any confirmable action when no key is registered, the call returns 428 CONFIRMATION_REQUIRED'. A12's 'Signed payload replay' challenge requires 428 for a signed payload A$1 over per_action_cap_cents. A82 asserts 403 G22_LIMIT_EXCEEDED, and its summary, J15 done-line and G22 done-line depend on that. A12 gates first, so the built API will return 428 and A82 will fail. Deferring this to Specify leaves a known conflict between two frozen specs.",
+   "fix": "Resolve it now. Raise a fix item on A12 to remove its internal contradiction (its evaluator's cap check versus its §4 prose and challenge), and record one agreed behaviour in both specs. If the decision is 428, rewrite A82's negatives, the J15 and G22 done-lines and the summary to expect 428 with a confirmation_id and no row or reservation."
+  },
+  {
+   "severity": "high",
+   "issue": "The sandbox-first pass contradicts A99. A99's per-user partitions come from profiles with A$100,000.00 of fictional cleared funds for an investor. They contain fictional counterparts (a sandbox SP-OWN, CFO, CCO, TRSY, REGO and TP-RE) who act only through the person-set counterpart_mode, and each partition has its own clock. So in the sandbox, Alex's order skips awaiting_funds and the amounts differ. Mia, Dev, Helen, Jordan and the Meridian user cannot act inside Leo's or Grace's partition, and Scenario P's 'after Scenario O's fix' cannot hold across partitions. Yet section 7 requires the same transitions and the same amounts to the cent, and calls any amount difference a finding on A99.",
+   "fix": "Rewrite section 7. The sandbox pass runs each scenario inside the persona's partition with counterpart_mode set by the person in person, uses A99's sandbox events (receive_payment, drift_register) and the partition clock, and is checked against a separate sandbox checkpoint table derived from A99's profiles. Sandbox-versus-live parity compares only gate ids, verdicts and reason codes on the positive steps and the negatives. Drop 'an amount difference is a finding on A99'. Scenario P's trustee read uses the Meridian partition's own register."
+  },
+  {
+   "severity": "high",
+   "issue": "Scenario O's planted drift has no defined mechanism. No node defines a 'drift the registry' sandbox-panel verb for the live stack. A18's drift works only through an instruction whose reference ends in -DRIFT+n. A78's allowlist admits SandboxControl.trigger only for named A06 scenarios, and none is a HAW01 drift. A82 itself forbids calling adapters or writing the database. The J20 SM-00 maker path (propose-fix, then register.adjust under 6E) therefore depends on an interface nobody builds.",
+   "fix": "Name the mechanism and its owner. For example, raise a fix item on A06 for a named scenario 'haw01-drift-1' triggered through A08 SandboxControl.trigger (which A18's registrar applies as -DRIFT+1 on the next extract), add that trigger to this node's route allowlist, and freeze the scenario id at Specify. Also state how the clean re-run closes the break once A18 applies the adjustment."
+  },
+  {
+   "severity": "high",
+   "issue": "Scenario S cannot meet its own preconditions from preview:reset. The baseline has no October BAY01 property report or attestation, and no human step creates one ('Ravi has attested' is only asserted). The August report is seeded unattested and the September report does not exist. A40 needs a certified RegisterVersion at the record date (DST_SNAPSHOT_NOT_CERTIFIED), and nothing certifies one for 31 Oct. Moving the clock to 3 Nov also passes the KST01 (14 Oct) and ANN01 (2 Nov) closes, so the close, allocation, refund and certificate-expiry jobs all run. PRECONDITION_G19 will fire on every run. Also, 3 Nov 09:00 in NSW and VIC is AEDT (+11:00), not AEST.",
+   "fix": "Add human setup steps to humans.ts after the clock move: Ravi uploads and attests the August, September and October BAY01 reports, and the HCO trustee certifies the 31 Oct RegisterVersion. Or raise now a fix item on A06 for a named scenario 'bay01-october-open', and depend on it. Give the clock target as 2026-11-03T09:00:00+11:00 (Australia/Sydney), and list the other jobs the move triggers with their expected effects."
+  },
+  {
+   "severity": "medium",
+   "issue": "Two dependencies are missing. (1) PARITY_ROW_MISSING reads A100's matrix, but A100 is not an ancestor of A82, since both are AM8. (2) The tipping-off probe compares bytes with what the person sees on POR-05, and POR-05 is in the Playwright text-check list, but POR-05 is owned by A59, which is not an ancestor.",
+   "fix": "Add A100 and A59 to A82's deps; this creates no cycle. Alternatively, source the parity check from A104's loadCatalogue() plus A03's delegable data, and compare against the SDK operation POR-05 renders, naming it."
+  },
+  {
+   "severity": "medium",
+   "issue": "The comparison with the human twin will show differences the spec forbids. Only the agent path has the token create and approve steps, the 428 confirmation (agent.confirmation.* audit types), G22 refusals and never-checker negatives. A human twin of Scenario O's 'decide' step gets A14's APR_MAKER_IS_CHECKER. Yet section 9 allows differences only in actor, on_behalf_of, token_id, channel and ids, including audit event types, and calls anything else Critical.",
+   "fix": "List in fixtures the twinned step ids: only the positive journey steps. Exclude agent.* and agent.confirmation.* audit types and G22 rows by an explicit allowlist. State that negatives and token-lifecycle steps are not twinned."
+  },
+  {
+   "severity": "medium",
+   "issue": "The audit and gate-evaluation counts have no defined source. A104's server makes its own token-authenticated calls with the agent's bearer token (introspection, the catalogue), and each writes G22, activity and AGNT audit rows the scripted agent never recorded. 'G22 rows equal token-authenticated requests' is therefore not measurable as written.",
+   "fix": "Define the count source: the api_token_activity rows for the scenario's token ids in the run window equal the G22 gate_evaluation rows and the AGNT audit events. The agent's recorded request_ids must be a subset, and the remainder must carry X-RealX-Client realx-mcp with an introspection or catalogue operation id."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G12 fallback has no basis in the frozen specs. Step 4 says a 'counsel' delegable row makes the order return 428, which Alex's passkey completes. A12 treats 'counsel' as non-delegable (SCOPE_PENDING_COUNSEL), and A104 leaves such operations out of MCP. So the scenario has two undefined paths.",
+   "fix": "Freeze the path at Specify from the delegable.ts hash. If the row is 'counsel', Alex acknowledges the KST01 IM and fees in person through humans.ts before the agent orders. If it is true, the agent acknowledges under standing consent. Remove the '428 for counsel' wording."
+  },
+  {
+   "severity": "medium",
+   "issue": "A design reference is misattributed. DESIGN contains no 'agent' or 'on behalf' text at all. 'agent treasury-drafter on behalf of Priya N.' is A06's seed, not the prototype's APR-2291 at line 655 onwards, and DESIGN line 888 shows 'Priya N. (Treasury) · Proposed'.",
+   "fix": "Cite A06 (the seeded maker line) and A51 (the 'agent <prefix> on behalf of <person>' rule) as the wording source. Keep DESIGN adApprovals and adAudit as layout references only."
+  },
+  {
+   "severity": "medium",
+   "issue": "Kill-switch release is unspecified and may be impossible. A48 releases agents.traffic under 4E: a SECO or CCO maker and the other of CCO or CEO as checker. The engager (Jordan, CCO) may be neither (KS_ACTOR_CANNOT_RELEASE), and the release criteria may require zero open Sev1 breaks while the seeded GYM01 Sev1 break is open. A82 says only 'released by the right human'.",
+   "fix": "Name the release actors per tier: user = Alex with a passkey; tenant = Mia with a passkey; platform = Aisha (SECO) maker and the CEO persona as checker. List which agents.traffic release criteria apply and how each is met. Add KS_ACTOR_CANNOT_RELEASE as a negative."
+  },
+  {
+   "severity": "medium",
+   "issue": "The state-coverage pass criterion is not enumerated, and SM-08's in_review→approved transition is missing from Scenario S step 4. The Scenario I stdio repeat has no preview:reset before it, so the checkpoint figures would change on the repeat.",
+   "fix": "Add an explicit transition list per machine from data_states.py (SM-05, SM-08 draft to closed including approved, and the SM-00 register.adjust path per A14). Require preview:reset before the stdio repeat, with the same checkpoint table."
+  },
+  {
+   "severity": "medium",
+   "issue": "The node claims full D04 coverage, but several D04 controls are not exercised: the per-token kill switch, A101's per-user-type tier, and the sensitive-action notices to the person (agent.money_action for the order and withdrawals, agent.token.created).",
+   "fix": "Add a staff-placed per-token hold (with GUARD_HOLD_PLACED_BY_STAFF when Alex tries to clear it) and a type-tier engage and release. Add checkpoints for exactly one money-action notice per order or withdrawal and one token-created notice per token, in the owner's captured inbox and never in the agent's webhook log."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 6-10 agent-hour estimate is too low for five scenario files, two transports, a raw-REST replay, twins, sandbox and live passes, the tier matrix, 10 revocation samples, three seeded runs and text checks on 10 screens. A79, a single-family investor e2e, is estimated at 10-14.",
+   "fix": "Re-estimate at 12-18, or split into A82a (investor and guards) and A82b (sponsor, operator, partners and the sandbox pass), both unlocking A88."
+  },
+  {
+   "severity": "low",
+   "issue": "The tipping-off challenge cites 'A01's jitter bound', which does not exist.",
+   "fix": "State a numeric bound here (for example a median difference under 50 ms over 20 paired samples) or drop the timing clause."
+  },
+  {
+   "severity": "low",
+   "issue": "Some expected codes are unnamed or ambiguous. Mia's self-approval refusal is unnamed (A14's code is APR_MAKER_IS_CHECKER). Checker-route refusals may carry several reason_codes (G22_SCOPE_MISSING, G22_AGENT_NEVER_CHECKER, APR_CHECKER_MUST_BE_HUMAN, P9_TOKEN_CREDENTIAL), but A82 expects single codes. Step 5 ties auto-matching to the A$10,000 manual-match threshold, but auto-matching comes from the payer-name match.",
+   "fix": "In the fixture table, name every expected code with the rule 'reason_codes contains X'. Reword step 5."
+  },
+  {
+   "severity": "low",
+   "issue": "D04's on-chain rule (investor agents act only through delegated session keys) is never checked: revoking T1 is not shown to revoke its smart-wallet session key.",
+   "fix": "Add to the revocation guard an assertion that the mandate's session key is revoked on the local chain (A29 revokeSessionKey)."
+  }
+ ]
+}

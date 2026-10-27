@@ -1,0 +1,65 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The ACC-05 route and path ownership are unresolved, and the note misstates the facts. Spec point (a) says A52's table puts ACC-05 at `/account/api-tokens`. A52's frozen route table (line 82) actually says `/account/agents`. That URL sits inside A59's owned folder `(investor)\\account\\`. A60's owned folder `(investor)\\agents\\` serves `/agents`, and A60 proposes changing A52 instead. Both are AM5 nodes built in parallel, so one of them will write outside its owned paths, or `screens.generated.json` will disagree with A52. The agent-marker links in the ledger rows and the ACC-03 agent notices say 'ACC-05 filtered to that token' by token prefix. But A60 (lines 33-35) allows only the `TOK-` id as a path parameter (`/agents/[tokenId]#activity`), and A52's parameter allow-list rejects prefixes.",
+   "fix": "Settle it in final-graph.json now, not at Specify. Either (1) keep A52's `/account/agents`, move A60's owned path to `(investor)\\account\\agents\\` and add an explicit carve-out in A59's owned_paths; or (2) change A52's row to `/agents` with a 308 redirect from `/account/agents`. Correct the A52 quote in spec point (a). Make every agent link `href('ACC-05', { tokenId })` using the `TOK-` id. Request `token_id` in the investor `placed_by` from A16, A39, A47 and A43 as a follow-up. Never pass the prefix in the URL."
+  },
+  {
+   "severity": "high",
+   "issue": "'Cancel recovery' on the guardian step has no state-machine transition behind it. The spec shows Cancel on both the guardian and wait steps and says the result is `disputed`. The SM-13 generated test asserts the control is 'present only in the guardian and wait steps'. But SM-13 (data_states.py line 260) and A29 (line 67) define cancel only as `timelock -> disputed`. The guardian step maps to `compliance_approval` or `checker_approval`, where a cancel would get `SM13_ILLEGAL_TRANSITION`. The builder must either ship a button that always fails or invent a transition. This is the control a victim uses to stop a hijacked recovery.",
+   "fix": "Render Cancel only when `GET /v1/wallets/recovery/{id}` returns `cancellable: true` (request this field from A29), which today means `timelock` only. Change the SM-13 display test to match. Raise a follow-up to A29 and A03 for an additive 'holder withdraws or objects before the timelock' transition from `requested`, `triage`, `identity_reverification`, `compliance_approval` and `checker_approval` to `disputed`. Until it lands, record the design's step-2 Cancel as a deviation in A59.qa.md."
+  },
+  {
+   "severity": "high",
+   "issue": "Wholesale renewal (J17 step 5, G04) and tax edit have no owner. ACC-01's 'Renew' links to 'A56's ONB-06 page in renewal mode' and treats a missing mode as a follow-up to A56. But A56 states (line 86) that 'renewal is never started from onboarding' and that the expiring and expired states are A59's job. So each node points at the other, and nobody builds the renewal form: fresh certificate upload, accountant fields, the passkey-signed declaration, and `POST /v1/classification/{id}/renew`. J17 step 5 ('reflects the renewed date afterwards') cannot pass. The `expired` state also offers no action, although A32 provides `POST /v1/classification/{id}/reapply`. Tax 'Update' has the same problem: it points to an 'edit mode' of ONB-05 that A56 does not define.",
+   "fix": "Choose one owner in the note and the graph. Either (a) A59 builds `/account/wholesale/renew` (and a reapply path for `expired`) under `features/wallet-account/profile/`, reusing A56's exported form components through `index.ts` with A56 added as a dependency; or (b) A56's spec is reopened to add renewal and edit modes, with A59 depending on A56. Add pass criteria covering: renew from `valid` and `expiring` under `withFreshAssertion`; reapply from `expired`; the declaration refused to an agent token; the renewed `valid_until` shown after CLSR approval in Playwright."
+  },
+  {
+   "severity": "high",
+   "issue": "Dependencies do not cover the interfaces the spec uses. The transitive closure of A59's deps (A52, A39, A29, A43, A44, A50) does not include: A32 (`classification/me`, renew); A41 (`me/tax-profile`); A47 (`units_total` contract test, `placed_by` table); A06 (the seed personas every hidden test uses: Alex Morgan, the AML-118 holder, an overdue complaint, an agent mandate); A23 (the Docker stack every Playwright journey runs on); A56 (LivenessCapture for guardian add and recovery re-verify, the ONB-08 and ONB-10 links); A60 (the confirmation page the withdrawal banner hands to, the ACC-05 target); A58 (the shared `placedByLabel` table); A104 (the MCP half of parity). The scheduler works from deps, so A59 can start before its SDK operations, seed or stack exist.",
+   "fix": "In final-graph.json, add A32, A41, A47, A06 and A23 to A59's deps. Add A56 as well, or require LivenessCapture to be lifted into `packages/ui` through a scheduled A05 loop before AM5. For A60 and A58 (same milestone), either add them as deps or limit A59's tests to asserting `href()` targets, with the follow-through tested in A79. List these nodes in 'Depends on'."
+  },
+  {
+   "severity": "medium",
+   "issue": "The parity manifest misclassifies actions and hand-types its delegable flags. It lists 'withdrawal step-up signature where the mandate has no signing key' as person-only and expects `AGNT_NOT_ALLOWED`. A12 (line 63) and A39 say that call returns `428 CONFIRMATION_REQUIRED` with a confirmation id, which is the path the spec's own agent-banner challenge relies on. 'Cancel recovery' (delegable per A29 line 81) is missing from the delegable list. 'Read and mark notifications' is listed as delegable without exception, but A43 refuses marking `agent` and `security` rows read under a token (`COMMS_AGENT_CANNOT_ACK_NOTICE`, `skipped_protected`). So 'every delegable row succeeds under a token' is false as written. 'Sign out other sessions' is declared person-only with no upstream source.",
+   "fix": "Derive each row's `delegable` value and expected refusal from A03's `delegable.ts` and the OpenAPI `requiresHuman` flag, and fail the build on any mismatch, as A60 does. Change the withdrawal row to expect `428 CONFIRMATION_REQUIRED` without a signing key, success with one, and `G22_LIMIT_EXCEEDED` above the band. Add cancel recovery as delegable. Split notifications into 'mark ordinary rows' (delegable) and 'mark agent or security rows' (refused `COMMS_AGENT_CANNOT_ACK_NOTICE`). Add `COMMS_AGENT_CANNOT_ACK_NOTICE`, `CONFIRMATION_REQUIRED` and `G22_LIMIT_EXCEEDED` to errors.ts."
+  },
+  {
+   "severity": "medium",
+   "issue": "The formatting rules contradict the upstream contract. The spec says every money figure is the API's `formatted` twin, and the lint bans `Intl.NumberFormat` and any `_cents` arithmetic. Yet it must render 'A$x reserved for withdrawals' from `reserved_cents.withdrawals`, the threshold sentence from `withdrawal_policy.second_approval_cents`, and the Limits list 'as the API formats them, each with its plain sentence'. A16's `GET /v1/me/wallet` (line 98) returns `formatted` only for `available` and `awaiting_investment`, and gives no plain sentences for the limits. The builder must either break the lint or render raw cents, and a correct build cannot pass.",
+   "fix": "Request from A16 or A39, as a follow-up before Build: `formatted.reserved_withdrawals`, `formatted.second_approval`, `formatted.auto_max`, and the policy sentences. Alternatively, explicitly allow A02's `formatAud` from `packages/domain` for fields that have no twin, and state the exception in the lint rule and pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "The D04 journey and gate coverage has a gap. A60 (line 123) assigns J22 step 3 ('Gets a push notice of the agent's purchase' on ACC-03, gate G22) to A59. But A59's journeys list omits J22, no pass criterion covers it, and the spec removes the Push channel (renders it as 'In app'). The node's gate list also omits G22, although the node renders agent markers, locked agent notices and session-key revoke. It omits G01 (the product map's ACC-01 'Update details' and ACC-02 'Start recovery' carry G01) and G04 (J17 step 5) as well.",
+   "fix": "Add J22 step 3 to A59's journeys with a Playwright criterion: an agent order placed through A12 or A104 produces an unread, unmutable agent notice on ACC-03 and an email or SMS in the sandbox inbox. Record that 'push' is delivered as in-app plus email or SMS until a push channel exists, as an explicit deviation against J22. Add G22, G01 and G04 to the node's gates with display-side done-criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some pass criteria cannot be measured at this node's gate. 'A100's harness reports no UI action on POR-05, POR-06 or ACC-01 to ACC-04 without an API equivalent' needs A100, an AM8 node with no A59 edge (A100 depends on A61, A65, A78, A12, A104, A99, and A61 excludes A59). 'A79 and A81 can drive these pages without a change request' is also future-dependent. A59 is gated at AM5, so these criteria are either unsatisfiable or waved through.",
+   "fix": "Replace them with a local parity check that A59 runs itself: every `parity.json` row is called under a session and under a scoped and an unscoped token against the Docker stack, and every SDK call seen during Playwright appears in the manifest. Move the A100 cross-check into A100's pass criteria and add A59 to A100's deps (or to A61's) so the suite actually covers these screens."
+  },
+  {
+   "severity": "medium",
+   "issue": "ACC-02 cannot be reached in the product map's core case ('Lost all devices'). The page sits in the session-gated `(investor)` group, and the spec's 'Can't sign in?' link is on a page that a person without a login passkey can never open. The J09 step 1 Playwright test runs 'as the seeded investor' who is already signed in, so a build with no working path from zero devices would pass.",
+   "fix": "Require a handoff: completing A52's `/recover-login` (A11 §9) lands on `/account/recover` with 'Start wallet recovery' pre-selected (a follow-up to A52 if not already there). Put the 'Can't sign in?' link on A52's sign-in error state, not on ACC-02. Add a Playwright case that starts with no login passkey and no wallet passkey, runs login recovery, then starts ACC-02, and asserts that the fresh assertion used is the new login passkey."
+  },
+  {
+   "severity": "low",
+   "issue": "Several interface names disagree with upstream notes. A02 exports `parseAud`, not `parseAudToCents`. A52's `defineScreen` takes `{ code, design }`, not `{ map, design, title }`. The spec says 'Sign out everywhere else' makes one call per session 'until A11 offers a bulk route', but A11 (line 49) already has `DELETE /auth/sessions`. The pending-confirmations list `GET /v1/agent-access/confirmations?state=pending&kind=withdrawal` is not among A12's listed routes (only `confirmations/{id}` get, confirm and cancel).",
+   "fix": "Use `parseAud`, `defineScreen({ code, design })` and `DELETE /auth/sessions`. Record the confirmations list route as a spec point and follow-up to A12. Until it exists, either derive the banner from `GET /v1/me/withdrawals` rows with a `pending_confirmation` status (requested from A39) or omit the banner."
+  },
+  {
+   "severity": "low",
+   "issue": "POR-05 does not show the product map's 'cash reserved for open orders' (purpose and component 'Funds available and funds reserved'). The spec shows only the withdrawals reservation, even though A16 returns `reserved_cents.orders`. The ACC-04 'AFCA option' on `response_issued` is undefined: A44 has no investor-side AFCA route, because `POST /complaints/{id}/afca` is staff-only.",
+   "fix": "Add a mono line 'A$x reserved for open orders' when `reserved_cents.orders > 0`, from a formatted twin requested from A16. Define the AFCA option as the AFCA contact card from `GET /v1/support/afca` (an external link and phone number, no API call), and test that no investor-side AFCA write is made."
+  },
+  {
+   "severity": "low",
+   "issue": "The oracle flag is inconsistent with the process the note requires. The node is `oracle: false`, but the note requires Fable to write hidden tests to `gauntlet\\hidden\\A59\\` before the build, and pass criterion 1 depends on that folder. If the orchestrator schedules the Oracle stage only for `oracle: true` nodes, the folder will be empty and criterion 1 passes vacuously.",
+   "fix": "Set `oracle: true` for A59 in final-graph.json (it fronts withdrawals, bank change, wallet keys and recovery). Alternatively, state in the App Gauntlet that non-oracle UI nodes still get a pre-build hidden challenge stage, and make an empty hidden folder a gate failure."
+  }
+ ]
+}

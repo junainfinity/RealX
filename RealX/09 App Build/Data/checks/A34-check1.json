@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Invented scope names. Section 8 declares scopes properties:read, properties:write, properties:submit, valuations:submit, valuations:review, rent_roll:import and attestations:prepare. A03 says scopeId === actionId, drawn from actions.ts ids such as 'M05.allocate'. A12 invents no scope names. A09 refuses at registration any route whose requiredScope is not in A03's enum. As written, every A34 route either fails to register or forces the builder to edit A03, which A34 does not own. The G22 and parity tests (A100, A104) would then check against names that do not exist.",
+   "fix": "Replace the scope list with a route table: each route, its A03 action id (M03.* and M22.* ids from the ADM-05, ADM-06 and ADM-22 actions and the SPN-03, SPN-04, SPN-10 and SPN-11 acts), kind (read, draft, submit, sign, approve) and delegable flag. Any action A03's sources lack (rent-roll import, attestation item fill, obligation record, due-diligence review) goes on a list that A03 must add before A34's Specify freezes. Reopen A03 now instead of discovering this in the fix loop."
+  },
+  {
+   "severity": "high",
+   "issue": "Most approval policy rows the spec depends on do not exist. A03 seeds A14's approval_policies only from the 49 MAKER_CHECKER rows in data_admin.py. Only three of A34's eleven action codes are among them: IC approval 6E, title verification 4E and valuation publish 6E. The other eight have no seeded row: property.amend, property.flag_distressed (a screen action only), property.remediate, property.record_court_order, property.discharge_court_order, property.court_directed_sale, property.record_sale and valuation.submit. The code names also differ from A03's id format. The pass criterion 'zero disagreements with A14's seeded rows' is therefore unsatisfiable, or trivially satisfied if the builder hard-codes policies in the module.",
+   "fix": "Add a policy table to the spec: action code in A03 format, policy code, maker roles, checker role sets and risk for all eleven. Make adding the eight missing rows to A03's maker-checker-baseline.ts a precondition of A34's Specify step, with an upstream reopen of A03 and A14 recorded in the graph. Change the binding-matrix pass criterion to assert the rows exist in the seeded table, with a named test that fails if any is absent."
+  },
+  {
+   "severity": "high",
+   "issue": "Several SM-03 transitions have no named driver. title_verified -> spv_formed (the 'RealT lesson' transition that the structural guards and the check constraint protect) has no route, no actor and no approval anywhere in the spec. ic_review -> rejected has no driver: the IC request's rejection effector is not described. Nothing says which route drives title_verification -> rejected when the search names another proprietor. The pass criterion 'every transition exercised through its named driver' and the spv_formed challenges cannot be run against a defined interface. The builder will invent one, and Fable cannot tell a wrong invention from a right one.",
+   "fix": "Name each missing driver. For example: POST /v1/properties/{id}/form-vehicle (LEGL or INVM, linking an A33 Vehicle; decide whether it needs a 4E request, since it binds the trust to the title); the property.ic_approve reject hook moving ic_review -> rejected with state_reason 'ic'; and the defect path's route and actor. Add the internal service route's exact path and principal list. Then list all 25 transitions in one table with their driver so the coverage test is generated from it."
+  },
+  {
+   "severity": "high",
+   "issue": "Due-diligence gating contradicts the seed and the downstream offer node. Item 1 refuses sourced -> screening with PROP_DD_INCOMPLETE unless every required item (insurance_certificate included) is uploaded or accepted. Yet the build seed puts Marine Parade in due_diligence with the insurance certificate missing, which the rule makes unreachable. Item 1 also says this submit 'is the call A36's listing submission makes first', but A36 (a direct dependent) requires the property to be at spv_formed or later before POST /v1/offerings/{id}/submit. J12 also sends the listing through the sponsor owner (two people at the sponsor, G13), while A34's submit has no sponsor approval. The first integration with A36 or A06 breaks, and one of the two nodes' tests must be wrong.",
+   "fix": "Pick one order, consistent with J12 and A36, and state it in both nodes. For example: sourced -> screening needs master data and a submitted listing send from A36 (under A36's sponsor 4E); due_diligence -> ic_review needs every required item accepted; A36's offer submit reads a getDueDiligenceStatus(property) interface (no missing or expired items). Seed Marine Parade in the state the rule allows (for example sourced, with submission refused by PROP_DD_INCOMPLETE, which reproduces the design's SPN-04 'Missing'). Delete the claim that A36's listing submission calls properties/submit, or fix A36 to match."
+  },
+  {
+   "severity": "high",
+   "issue": "G06 default foreign policy duplicates and contradicts A19's matrix and A36's field. defaultForeignPolicy hard-codes the exempt flags and includes new_dwelling, but A19's parameter firb.exempt_flags = [build_to_rent, student, aged_care, redevelopment_20_plus] does not. It also ignores firb.established_residential_ban_until, the date that is data in A19's pack. It returns 'blocked' and says A36 copies it into ComplianceRule.foreign_policy, but A36's field is residency_rule with values residents_only | after_firb_check | open, and A36 says the default comes from A19's G06 matrix. A build can pass A34's own G06 criteria and still disagree with the gate evaluator and the offer node.",
+   "fix": "Make defaultForeignPolicy read firb.exempt_flags and firb.established_residential_ban_until from A19's effective pack, or delegate to A19's G06 matrix function. Return A36's vocabulary (residents_only | after_firb_check). Name A36's residency_rule field. Either drop new_dwelling or add it to A19's exempt list with counsel_pending. Add a test asserting that A34's default equals A19's G06 matrix for every property_type, sub_type and zone-flag combination."
+  },
+  {
+   "severity": "medium",
+   "issue": "Interfaces are used without a dependency or a stub. A16 (the cash check against the ledger balance), A18 (top_holder_bps), A20 (register_chain on the public proof), A35 (every doc_id), A43 (sponsor notifications and tasks), A28 (mint and burn events) and A24 (the title hash anchor) are not in deps [A33, A14, A19] or their ancestors. Stubs are named only for A20, A35, A40 and A28. A16, A18 and A43 have no stub.",
+   "fix": "Add A16, A18, A20, A35 and A43 as deps (all cycle-free: none depends on A34). Otherwise, name a fixture stub and interface signature for each (getCashBalance(vehicleId, asOf), getTopHolderBps(vehicleId), getLastRecon(vehicleId), documents.get(id), notify via outbox event). Leave the A24 anchor and the A28 events as explicitly named stubs."
+  },
+  {
+   "severity": "medium",
+   "issue": "Forward reference to a downstream node. The spec defers which due-diligence kinds TP-VAL and TP-PM may upload to 'A98's role table', and defers valuer scoping to 'A98 scoping'. A98 depends on A34, so neither exists when A34 is built. The scoping pass criterion and the TP-PM agent-import challenge depend on them.",
+   "fix": "Define the partner permissions here as A34 data (TP-VAL: valuation items and drafts for its engagements; TP-PM: the listed due-diligence kinds plus the rent_roll, maintenance_log and arrears_vacancies items). Test with PARTNER fixture principals from A03 and A11. State that A98 consumes this table."
+  },
+  {
+   "severity": "medium",
+   "issue": "Alert codes do not match A13's catalogue. A34 emits valuation.due, valuation.stale and proof_of_property.overdue. A13 seeds property.valuation_stale (which also carries the due pre-warning) and property.proof_overdue. A13 has no types for the Sev2 rates or land-tax overdue alert, the distress-signal alert or the Sev4 obligations-calendar task. A13 treats an unknown type code as a startup error.",
+   "fix": "Use A13's codes. List the new types (for example property.rates_overdue Sev2, property.land_tax_overdue Sev2, property.distress_signal Sev3, property.obligations_missing Sev4) with owner, sponsor_visible and target screen. Add them to A13's catalogue upstream before Specify."
+  },
+  {
+   "severity": "medium",
+   "issue": "The attestation lifecycle and the G19 fact are under-specified and diverge from A19. The attestation states have no exit from 'flagged' (J14's re-attest needs one). The pause-lift rule leaves open whether a flagged review lifts the pause. A19's G19 is 'latest attestation within period plus grace and no item failed', but A34 exposes a different tenant fact (sponsor.attestation_overdue) and has no 'failed' item state. ATT_PERIOD_CLOSED has no trigger.",
+   "fix": "Write the full attestation transition table (including flagged -> prepared -> attested). State that the pause lifts only when no tenant attestation is in overdue or flagged. Specify the exact FactProvider facts and shapes A19's G19 reads, and align them with A19 at Specify. Define ATT_PERIOD_CLOSED."
+  },
+  {
+   "severity": "medium",
+   "issue": "The valuation committee's 'independent member' is not a principal anywhere. None of the 51 roles is a committee member. J13 says CFO is the committee's second member (VALO plus CFO), while the ADM-06 mock shows VALO -> CFO -> Independent. The challenge requires CFO and the independent member to decide, which cannot be set up.",
+   "fix": "Record this as a spec gap to settle with A03 and A14 before Specify. Either add a role or user attribute that A14's checker sets can name, or adopt J13's VALO + CFO reading and change the challenge. Put the result in the policy table."
+  },
+  {
+   "severity": "medium",
+   "issue": "Parameter hygiene and some boundaries are not measurable. The spec says 'three new keys' but lists five. The 90-day title-search age has no key. The pass-criteria grep for the literals 3 and 10 will match unrelated code. The -STALE adapter scenario has no expected result, and VAL_TOO_OLD has no trigger. The 183/184 and 92/93 day-count basis (civil Australia/Sydney days or elapsed hours) is undefined.",
+   "fix": "List every key, adding title.search_max_age_days = 90 and a proof-score penalty key. Replace the grep with a numeric-literal lint over the rule files outside the defaults file. Specify -STALE -> VAL_TOO_OLD at submit. Define age in whole Australia/Sydney civil days."
+  },
+  {
+   "severity": "medium",
+   "issue": "The build brief and the challenge disagree on protecting title_verified_on. The brief specifies only a check constraint on lifecycle_state, with an elided '...' state list, and that constraint does not stop a direct UPDATE of title_verified_on. The challenge expects a 'companion trigger' refusing 'UPDATE properties SET title_verified_on = now()'.",
+   "fix": "Enumerate the post-title states in the constraint. Specify the trigger: title_verified_on may only be set when a verified title_verifications row with a matching approval_id exists for the property, and only through the effector's function."
+  },
+  {
+   "severity": "medium",
+   "issue": "The basis of change_bps conflicts with the PAD01 vector. The spec computes change_bps on the previous property_value_cents, but PAD01's +18.4% is the token-valuation change ($102.40 -> $121.22, from ADM-06), and PAD01 has no previous property value. The ±10% comparables trigger depends on the basis chosen.",
+   "fix": "State the basis for change_bps and the ±10% rule. Either supply PAD01's prior property value or define the change on nav_per_unit_cents."
+  },
+  {
+   "severity": "medium",
+   "issue": "SPN-11's 'Commission' action and valuer engagements are missing. The product map's SPN-11 is 'Commission or upload an independent valuation' with a panel valuer picker. A34 only uploads, and scopes a valuer to its own uploads, so a valuer cannot see the property it was engaged for.",
+   "fix": "Add a ValuationEngagement record and POST /v1/properties/{id}/valuations/commission (SP-FIN or VALO; agents may prepare). Scope TP-VAL to its engagements plus its uploads."
+  },
+  {
+   "severity": "low",
+   "issue": "Nine of the eleven node links in the note are broken. The link text uses ':' and '/' where the file names use '- ' and '-' (A19, A36, A50, A51, A54, A63, A64, A70, A97, A98).",
+   "fix": "Regenerate the links from the file-safe titles and add a link check to the generator."
+  },
+  {
+   "severity": "low",
+   "issue": "Small internal inconsistencies. SM-03 is given 25 transitions in one place and 26 in another. The ADM-07 G20 description is 'valuer name' in one place and the literal 'Panel valuer' in another. due_at is '23:59 AEST', which is wrong during AEDT. The product map's 'or pause the token' on a distress flag is not addressed.",
+   "fix": "Use 25 transitions everywhere (26 only if the initial entry is counted, and say so). Pick one G20 description source. Use Australia/Sydney local time. State that a token pause is A48's or A28's action."
+  }
+ ]
+}

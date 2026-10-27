@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The controls depend on upstream fields that do not exist. Section 6 renders every ADM-09 header action 'only when the API's actions[] lists it', but A44's GET /v1/investor360/{id} header contract has no actions[] field. ADM-11's Revoke and the decision-surface pass criterion rely on the review response's options[], but A32's GET /v1/classification/reviews/{id} returns no options[]. A30's review returns 'the decision options the caller may take', with no blocked-with-code shape and no per-hit disposition list, yet the spec needs both (confirm_match offered only when listed; Approve disabled with KYC_OPEN_HIT or KYB_OWNERS_PENDING). None of these is listed among spec points (a)-(g). A builder must either invent client-side role rules, which the spec forbids, or fail the decision-surface pass criterion.",
+   "fix": "Add a spec point (h), settled before Fable writes the hidden tests: A44 header returns actions[] {code, enabled, blocked_code, policy_code}; A32 review detail returns options[] (approve, request_info, reject, revoke, accountant_check) with blocked codes; A30 review returns options[] as {verb, enabled, blocked_code} plus per-hit dispositions[] (including confirm_match only for the MLRO). Record each as a follow-up loop on A44, A32 and A30, and name them in the Specify list."
+  },
+  {
+   "severity": "high",
+   "issue": "The parity.json delegability contradicts the upstream nodes. Section 7 classifies 'estate' and 'revoke requests' as agent-maker. A44 makes POST /v1/investors/{id}/estate requiresHuman. A32 refuses classification revoke to any AGNT with CLS_DECIDER_MUST_BE_HUMAN before scope evaluation. The human-only list omits both. The file A100 consumes would then be wrong, and the parity pass criterion either fails against a correct API or rewards a wrong one.",
+   "fix": "Move estate and classification revoke to human-only (keep A31's on-chain eligibility deletion as agent-maker, which A31 allows), and name the two revokes separately. Generate the delegable column from A03's delegable.ts and the OpenAPI requiresHuman / x-realx-scope flags instead of a hand list. Add a test that fails when a parity.json row disagrees with the operation's requiresHuman flag."
+  },
+  {
+   "severity": "high",
+   "issue": "The tipping-off rules contradict the required design. Section 8's lint bans string constants naming sanctions, AML or SMR outside components that render only MLRO or CCO content, and the tipping-off challenge fails the node if 'sanction' or 'freeze' appears in any non-compliance DOM, with the KYCA among the scanned viewers (A44 puts the KYCA in the 'onboarding' slice, not 'compliance'). Yet section 3 requires the six kycChecks rows exactly, including 'Sanctions (G02)' and 'PEP screen (G02)', rendered from labels.ts to the KYCA, and the hit cards show list codes. No build can satisfy both.",
+   "fix": "Define the protected facts (the existence of a true match or confirm_match request, the restriction reason, the AML case id or count, SMR, freeze, the MLRO note) and the protected viewers (SUPP, IRCM, the investor, investor agents, sponsor users). Screening labels on ADM-10 may appear to the onboarding and compliance slices. Put the ADM-10 checks and hits components on the lint allow-list, gated on the API returning onboarding or compliance content. The KYCA diff compares a true-match investor with a referred investor that has an ordinary open hit, not with a clean one."
+  },
+  {
+   "severity": "medium",
+   "issue": "Hit dispositions are under-specified. A30 requires a mandatory reason_code on every disposition, and need_info moves the case to rfi_pending with a coded RFI list. The spec gives a reason-code picker only to False positive, and True match and Need info have no reason field and no RFI items, so the UI would receive KYC_REASON_REQUIRED on those calls.",
+   "fix": "Every hit action opens a panel with a mandatory reason code from A30's catalogue. Need info also takes one or more coded RFI items and shows the 30-day consequence, the same as the case-level Request info. Add these paths to the hidden-test list and the state matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "The human-only refusal pass criterion names the wrong codes. It says every human-only row is refused with AGNT_NOT_ALLOWED or CLS_DECIDER_MUST_BE_HUMAN, but the checker and ratify steps on the same list are refused by A14 with APR_CHECKER_MUST_BE_HUMAN (the spec's own challenge expects it) or by A12 with G22_AGENT_NEVER_CHECKER. An agent confirming its own draft is refused by A12 for lack of a passkey. A correct API would fail this criterion.",
+   "fix": "Give each parity.json row an expected_refusal_code taken from the owning contract, and change the pass criterion to assert that code per row, before scope evaluation."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec contradicts itself on client-side guards. The build brief says the screen 'adds no rule of its own' and renders options[] as given. The done-when, the hidden 'UI guards' and the pass criterion (Approve never enabled with an open hit, a pending entity person or an EDD requirement, as a property test over 1,000 generated review responses) need a client-side guard whenever a generated response is internally inconsistent. The builder cannot tell which behaviour Fable will test.",
+   "fix": "Choose one and write it down. Either (a) generated responses must satisfy A30's schema invariants and the test asserts the UI mirrors options[], or (b) add a named defensive guard in case-review/ that disables Approve when any hit is open, any KYB person is unverified or edd_required is set, even when options[] enables it, and log the mismatch."
+  },
+  {
+   "severity": "medium",
+   "issue": "Unmask on ADM-10 is not specified. The PII challenge has a KYCA unmask date of birth and document number on ADM-10, and section 3 says extracted values stay masked until a grant exists. But section 3 names no Unmask control, no field-group picker and no re-read of GET /v1/kyc/cases/{id}/review with X-Unmask-Grant. A44 defines the header only for Investor 360 tab reads.",
+   "fix": "Add an Unmask (reason) control to the extracted-vs-entered card and the subject card, reusing the section 6 unmask component and its in-memory grant rules. State that the review route is re-read client-side with X-Unmask-Grant (confirm this with A30 as part of spec point (d)). Add the ADM-10 unmask to the state matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "The product map requires ADM-11 'Expiring in 60 and 30 days' (M07). The spec makes the 30-day view an optional follow-up that renders only if A32 later serves it, and M07's done-when lists only 'expiring 60 d'. A build with no 30-day view would pass.",
+   "fix": "Make the 30-day view a Specify blocker. Either A32 serves expiring_30 with a count, or the chip maps to the SM-02 state 'expiring', which A32 defines as starting at T-30, through a server filter. Add it to the ADM-11 and M07 done-when and to the state matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 30-day request-info expiry is not testable. The done-when says 'request info shows the 30-day expiry', but the body allows the panel to show only a clock policy name when A30 has no preview field, and A30 defines none. J02 step 5 and ADM-10's 30-day timer could pass with the string 'rfi_30d'.",
+   "fix": "Require A30's request_info option to carry the RFI policy duration (30 calendar days) and the decision response to carry rfi_expires_at from A13's clock. The panel shows 'expires after 30 days if no reply' before submit and the date after. The test asserts both texts."
+  },
+  {
+   "severity": "low",
+   "issue": "SM-02 labels are incomplete. The pass criteria need all 9 SM-02 states rendered with a tone, but the ADM-11 state list maps only reviewing, valid, expiring, expired, rejected and revoked, plus awaiting_cco and 'refer CCO', which are review flags, not states. requested, evidence_submitted, under_review and rfi have no label or tone.",
+   "fix": "Give labels.ts a full 9-state table (label and tone) plus a separate table for the review flags awaiting_cco and referral_cco, and write both into the spec."
+  },
+  {
+   "severity": "low",
+   "issue": "The directory filters go beyond A30's contract. A30's GET /v1/investors supports type, state, residency, risk and tenant consent. The spec also filters on restriction, with a vocabulary (none/restricted) that differs from A44's none|under_review|estate|suspended. Only the classification and wallet columns are noted as follow-ups.",
+   "fix": "Add restriction to the A30 follow-up request, together with the columns, and align it with A44's vocabulary, which each slice's view then collapses to the words that viewer may see."
+  },
+  {
+   "severity": "low",
+   "issue": "The graph misses dependencies. Hidden tests and fidelity use A06's seed, and Playwright runs against the A23 Docker stack, but neither is a dependency or an ancestor of A68. The node also deep-links to ADM-15 (A72) and ADM-35 (A77), which are same-milestone nodes that are not dependencies.",
+   "fix": "Add A06 and A23 as dependencies, or state that AM7 starts only after the AM1 exit. Render the ADM-15 and ADM-35 links through A53's nav and route registry so an unbuilt target shows the shell placeholder, and assert that in a test."
+  },
+  {
+   "severity": "low",
+   "issue": "The time-zone label is a fixed example. The spec gives '08:14 AEST' as the format, but Sydney observes AEDT from early October to early April, so a hard-coded suffix would be wrong for half the year.",
+   "fix": "State that the formatter derives AEST or AEDT from the instant in Australia/Sydney, and add a fixture on each side of a daylight-saving change."
+  },
+  {
+   "severity": "low",
+   "issue": "ADM-11 does not show the on-chain result of an approval. The product map says approval adds the wholesale claim with its expiry to the investor's on-chain identity (J02 step 8), but the review page shows no claim state after approval.",
+   "fix": "After approval, show A32's claim_state (pending_identity / issued / revoked) or A31's claim row on the ADM-11 review, as a read-only status row."
+  }
+ ]
+}

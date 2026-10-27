@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Route table and folder ownership are not reconciled with the dependents, although §2 says the frozen paths 'follow the routes the dependent specs already use'. Conflicts: ACC-05 /account/agents sits in A59's owned (investor)/account/ while A60 owns (investor)/agents/ (and A60 says A52 names /account/api-tokens); SPN-08..SPN-12 use short paths while A64 owns only (sponsor)/s/[tenant]/operations/; SPN-07 /s/[tenant]/offers/ has no owner; SPN-01 /s/apply has no owner; SPN-13 /s/[tenant]/meetings has no owner; INV-05/INV-06 /invest/[code]/sell|board sit inside A57's folder while A92 owns (investor)/resale/ and wants INV-06/INV-07 whenOff 'preview'; ONB-07 /onboarding/target-market sits in A56's folder while A90 owns (investor)/target-market/; the /s chooser page and A59's public /recovery/cancel have no home. The defineScreen test (page path must equal table path) then fails the dependents' gates or forces them to write outside owned paths. The pass criterion only checks paths cited by A54-A58.",
+   "fix": "Settle every row in A52 now. Add an 'owning node and folder' column to the frozen table and make each path sit in its owner's folder: ACC-05 /agents (A60) with 308 from /account/agents and /account/api-tokens; SPN-08..12 under /s/[tenant]/operations/... with 308 from the short and /sponsor/* forms; INV-05/06 /resale/[code]/sell|buy (A92) with 308 from /invest/..., INV-06/07 whenOff 'preview'; ONB-07 /target-market (A90). In final-graph.json, add (sponsor)/s/apply/ to A62, (sponsor)/s/[tenant]/offers/ to A63 and (sponsor)/s/[tenant]/meetings/ to A93. Extend the pass criterion to: every path cited by every dependent (A54-A64, A90, A92, A93, A95, A97, A105) resolves to its row and lies in that node's owned folder."
+  },
+  {
+   "severity": "high",
+   "issue": "Owned paths collide in the graph. A52 creates the four thin files in app/(public)/, but final-graph.json gives A54 the whole app\\(public)\\ folder. A52 also writes the (investor), (sponsor)/layout.tsx and (sponsor)/s/[tenant] thin files, which are not in its own owned_paths. So A52 fails the standing criterion 'only owned paths changed', and A54 may legitimately overwrite (public)/layout.tsx.",
+   "fix": "List each thin file explicitly in A52's owned_paths: the four files in (public), (investor) and (sponsor)\\s\\[tenant], plus (sponsor)\\layout.tsx and (sponsor)\\s\\page.tsx. Narrow A54's owned path to app\\(public)\\ minus the four A52 shell files. Record the change in both notes and in final-graph.json."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec contradicts itself on /signup. ONB-01's product-map route is /signup (data_investor.py line 161), and §2 registers a 308 from every mapRoute that differs from its path. That gives /signup -> /onboarding/account, which removes A52's own /signup page (the 'Get started' target, smoke step 2, J02).",
+   "fix": "State that a mapRoute that is also an (auth) page path gets no redirect; the /signup card itself satisfies ONB-01's mapRoute. Add a unit test that no redirect source equals any (auth) page path or any other row's path."
+  },
+  {
+   "severity": "high",
+   "issue": "Dependencies do not cover the interfaces the spec and its pass criteria use. None of these is a dependency, even transitively: A21 (/v1/perimeter/public, licence bindings), A06 (Alex Morgan, Mia Chen, HCO/NLC seed), A12 (the sandbox AGNT token in the D04 challenge), A22 (the liveness sandbox in recovery), A23 (the compose stack), A33 (tenants, memberships, slugs), A30/A32 (the classification role line), A14 (the 4E sponsor-owner confirmation in recovery), A99 (sandbox tokens). The scheduler can start A52 before them, so the G21, tenant and D04 checks could pass on mocks.",
+   "fix": "Add A06, A12, A14, A21, A22, A23, A32 and A33 (and A99 if sandbox tokens come from it) to A52's deps in final-graph.json and to the 'Depends on' line. State in the pass criteria that the G21, tenant-enumeration and AGNT probes run against the real compose services, not SDK mocks."
+  },
+  {
+   "severity": "high",
+   "issue": "withFreshAssertion relies on an interface no upstream node defines, and it mixes two mechanisms. A11 §8 takes {payload_sha256, purpose} from the client and refuses with FRESH_ASSERTION_REQUIRED; it does not return a hash, a purpose or a payload summary. A12's 428 CONFIRMATION_REQUIRED is the agent-confirmation flow (a confirmation_id the human confirms in A60), not a human step-up. 'Retries once' is undefined against A09 idempotency, which replays the stored response for the same key, so a same-key retry may replay the refusal forever. This helper carries D04's non-delegable passkey step-up for token creation, bank-account change and sponsor approvals.",
+   "fix": "Define the contract. Either the SDK computes the canonical payload hash with A11's canonicaliser (exported from packages/domain), or A11 returns {payload_sha256, purpose, summary} (raise A11.1). Render the summary from the exact bytes that are hashed. Remove CONFIRMATION_REQUIRED from the helper. Fix the retry rule: reuse the same Idempotency-Key only if A09 guarantees freshness refusals are not stored (raise A09.x); otherwise use a new key. Add unit and e2e tests for the retry, hash-mismatch and stale cases."
+  },
+  {
+   "severity": "high",
+   "issue": "Sponsor and partner entry paths are missing. A33 and A98 route invitees through A11's verify-email then passkey path, which is A52's /verify-email and /signup/passkey. But A52 always redirects to /onboarding/account after the first passkey, so invited sponsor users (J11 SPN-14), valuers, property managers and partners would be pushed into investor onboarding. A62 expects an anonymous applicant to sign up and come back to /s/apply, but no intent value allows that, and the access rule of (sponsor)/layout.tsx for /s/apply and /s is never defined.",
+   "fix": "Make /verify-email handle invitation tokens. After the first passkey, land by principal: a sponsor_user goes to /s/[tenant] or its identity-check state, a partner to /p, an investor sign-up to /onboarding/account. Add intent 'sponsor-apply' (-> /s/apply). Open /s/apply to any signed-in HUMAN, and send anonymous visitors to /sign-in?return=/s/apply. Add smoke steps for an HCO invitee accepting an invitation and for an applicant reaching /s/apply."
+  },
+  {
+   "severity": "high",
+   "issue": "There is no web surface to cancel a login recovery. A11 §9 relies on a cooling period with a one-click cancel from any signed-in device as the defence against account takeover. A52's Wait step only says a signed-in device can cancel; no page, banner or route does it. A59 also asks A52 to mount a public /recovery/cancel route for the wallet-recovery cancel link, and A52 does not.",
+   "fix": "Add a public (auth) /recovery/cancel page that posts the single-use token once and shows the same neutral result either way. Add a shell banner on every signed-in investor and sponsor frame ('A sign-in recovery was started · Cancel') that calls A11's cancel. Mount A59's wallet-recovery cancel component on its own route. Add a challenge: cancel from a second signed-in session and from the link, and assert the request ends 'cancelled' and no new passkey can be registered."
+  },
+  {
+   "severity": "medium",
+   "issue": "Signed-out sponsor users get a 404. The pass criteria make anonymous requests to /s/* return 404, which conflicts with the SESSION_EXPIRED redirect in §4. A sponsor whose session expired, or who follows an A43 email deep link to a tenant page, sees 'Page not found' instead of the sign-in card.",
+   "fix": "Send every anonymous or expired request to any /s/* path, real or not, with the same 307 to /sign-in/sponsor?return=<path>. Keep the 404 only for signed-in principals who are not members; enumeration stays closed because the answer does not depend on the slug. Update the challenge and the pass criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "The /sponsor/* -> /s/<the user's tenant>/* redirect depends on the session but is declared as a permanent 308, which browsers cache. A person with two memberships, or another user on a shared browser, is then sent to the wrong tenant or to a cached 404.",
+   "fix": "Use 308 only for static mapRoute redirects. Use 307 with no-store for any redirect computed from the session (/sponsor/*, /s). Add a table test that no session-dependent redirect is a 308."
+  },
+  {
+   "severity": "medium",
+   "issue": "It is unclear where the licence-bound flag state comes from. useFeature reads /v1/meta, whose flag snapshot comes from A08 (static defaults plus FLAG_<KEY> env overrides allowed in local/test). A21's effective, licence-bound state is on /v1/flags, which only staff can read. So the 'flag on, binding removed' challenge depends on which source A09 wires, and an env override could switch a P2 route on with no licence.",
+   "fix": "Require /v1/meta to return A21's effective evaluation (flag AND licence binding AND phase); raise a follow-up on A09/A21 if needed. Add a test that FLAG_resale.board=on with an unsatisfied binding still reads off in /v1/meta and in useFeature."
+  },
+  {
+   "severity": "medium",
+   "issue": "The strict per-request nonce CSP (no unsafe-inline) forces dynamic rendering in the Next.js App Router. That contradicts the 60-second static revalidation of public pages that §3 and A54 rely on and that the cached-public-page probe assumes.",
+   "fix": "Pick one approach and write it into the spec: either public pages render dynamically and cache only their data for 60 s, or public routes use a hash- or SRI-based CSP while the private groups use the nonce. Update A54's note and the probe to match."
+  },
+  {
+   "severity": "medium",
+   "issue": "The (investor) group's access rule is incomplete. It does not cover a new sign-up with no investor record who lands on /onboarding/account, or a sponsor applicant with no membership. NoInvestorAccount ('You're signed in to the sponsor console') would be wrong for both. The Account lifecycle tests also miss A11's invited and closed states.",
+   "fix": "Define the rule by principal state: a HUMAN with no investor record and no sponsor membership proceeds to /onboarding/account, and NoInvestorAccount is shown only when a sponsor membership exists. Add invited and closed to the lifecycle redirect table with one test each."
+  },
+  {
+   "severity": "medium",
+   "issue": "SponsorSidebar shows all twelve items and hides only flag-off 'hidden' rows. A62 and A64 rely on the sidebar hiding items for roles without a permission cell in /iam/me (SP-OPS and SP-IR on Billing; SP-VAL and SP-PM).",
+   "fix": "Filter nav entries by the /iam/me permission cells mapped from each row's screen code. Add a component test for each seed role (SP-OWN, SP-FIN, SP-OPS, SP-IR, SP-VAL, SP-PM). The API remains the control."
+  },
+  {
+   "severity": "low",
+   "issue": "Small accuracy and measurability gaps. service_unavailable and confirmation_required are not A09 core codes, and A12's code is uppercase. The footer ignores A21's car_active flag, for which A21 asks for an 'offers unavailable' state. 'Timing within noise' has no threshold. An in-process rate limiter in middleware assumes the Node runtime, but Next middleware defaults to Edge. The 6-10 h estimate looks low for this scope.",
+   "fix": "Take error codes only from openapi.json. Render car_active=false as the 'offers unavailable' footer state. Set a numeric timing bound (median difference under 20 ms over 100 probes). Pin the middleware runtime to Node or move the limiter into a route handler. Re-estimate at 8-14 h."
+  }
+ ]
+}

@@ -1,0 +1,110 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Section 2 says every persona comes 'from A06's baseline', but A06's staff list has no PART, INVM, VALO, PROP, ASTM, IRCM, MKTG or valuation-committee independent member. The journeys, C2 and the SoD probes need each of these as a distinct human. A65 asks A06 only for loop A06.1 (insurance-lapse). A80 says A65 asked A06 to add these personas, which A65 never does. A builder would either insert persona rows itself or give one person several roles, and either way a wrong build could pass.",
+   "fix": "At Specify, open loop A06.2 (or extend A06.1) to add these personas, each with a sandbox hardware-key passkey, a role row and SoD data, and name them in section 2. Add a harness stop `PERSONA_MISSING <role>` before step 1 that never borrows another persona's role. Make the Challenge check one distinct person_id per role."
+  },
+  {
+   "severity": "high",
+   "issue": "The self-approval negatives test the wrong rule. Ravi Nair (SP-OPS, J12) and the J11 SP-OPS cannot reach SPONSOR_SELF_APPROVAL. A36 grants `offerings:owner_approve` to SP-OWN only, and A33 checks 'holds a required role' before 'is not the submitter', so both attempts fail on role. The oracle hook 'sponsor users cannot approve their own submissions' is therefore never exercised.",
+   "fix": "Have an SP-OWN (Mia, or the J11 owner) submit a listing and then try to approve it herself, expecting SPONSOR_SELF_APPROVAL. Keep Ravi's attempt as a separate negative expecting the role refusal code from A11/A33. Add the A33 variant where the approver's own agent drafted the submission."
+  },
+  {
+   "severity": "high",
+   "issue": "Two failure paths need a listing that can be submitted, and the spec never builds one. (a) The J11 watchlist-hold path expects 'the same submission' to pass once the hold clears, but the tenant is new and has no property. (b) The j19-late-report path expects a 'new HCO listing' to pass once PROP reviews. A36 accepts a submission only with the property at `spv_formed`, a complete DD pack, a current valuation, complete documents and a fresh simulation. Without those, the refusal is the property blocker rather than the pause, and 'then passes' is impossible. The order of checks between A33's TENANT_LISTINGS_PAUSED and A36's OFR_SPONSOR_PAUSED_G19 is also unresolved.",
+   "fix": "Build the precondition in each file. Either run J12 steps 1-4 for an extra sim property up to `spv_formed` with a ready draft, or request an A06 scenario delta that holds such drafts. Confirm the check order with A33 and A36 at Specify, then name one expected code per pause. If the two nodes conflict, file a spec defect."
+  },
+  {
+   "severity": "high",
+   "issue": "The only SPN-16 screen run of D04 cannot pass. Leo Park (SP-FIN) requests a token with 'attestation item cells', and his agent then 'fills a September attestation item (allowed)'. A34 grants attestation items under properties:write only to SP-OPS and SP-OWN. A12 and A60 cap token scopes at the member's role, so the request is refused SCOPE_EXCEEDS_OWNER at creation.",
+   "fix": "Give Leo's token only cells SP-FIN holds, such as distribution draft or propose, and make one of those the allowed write. Alternatively, run the issue-and-revoke flow with Ravi as requester and Mia as approver. Keep the attestation-sign attempt, which expects ATT_SIGNER_NOT_HUMAN. Add a creation-time negative expecting SCOPE_EXCEEDS_OWNER that names the attestation cell."
+  },
+  {
+   "severity": "medium",
+   "issue": "J12 version 2 cannot reach go-live. Under A36, resubmission creates a new review, and go-live needs that review `cleared` with all three sign-offs present. The brief signs off only version 1 (step 6) and then goes straight to go-live at step 11.",
+   "fix": "After step 8, add a step in which CAPM, LEGL and VALO, three different people, sign off the version 2 review and it reaches `cleared`. Assert that version 1 sign-offs do not carry over, and add the step to expect-table.ts."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G17 go-live blocker is never tested on its own. At step 6 the refusal is recorded as OFR_TOKEN_NOT_CONFIGURED while the G17 flags are also open, so 'open flags block go-live' passes even if the precheck ignores G17.",
+   "fix": "Either configure the token before the return, so the refusal is G17-only (OFR_BLOCKERS_OPEN naming both phrases), or assert that the refusal envelope lists both blockers. Add a probe in which the token is configured and a flagged phrase remains, and go-live is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "The listing-valuation age limit conflicts between nodes. A34 sets 92 days with VAL_LISTING_TOO_OLD, while A36 refuses SPN-06 submission after 90 days (`listing.valuation_max_age_days`, with an A36 code). A65 asserts the 92-day version, so the code expected at SPN-06 is undetermined.",
+   "fix": "File the 90 vs 92 conflict against A34 and A36 at Specify. Pin the boundary probes to whichever value wins, and name the code returned through SPN-06."
+  },
+  {
+   "severity": "medium",
+   "issue": "Public reads are cached on wall time: A34's proof read for 60 s and A54's page revalidation for 60 s, stacked. The suite 'never sleeps on wall time', yet the public checks depend on these caches: J14 'within one job cycle', the J19 public flag, and the J12 404, Coming soon and Open offer flips. The spec gives no way to observe them.",
+   "fix": "Define the mechanism: either a bounded wall-clock poll with a ceiling recorded in evidence (for example 125 s), or a cache-expiry test hook on the allowlist keyed to A09's clock. Redefine 'one job cycle' to include both cache layers, and apply the same rule to C6 and J12 step 12."
+  },
+  {
+   "severity": "medium",
+   "issue": "The J19 distribution chain skips A40's funding step. A40 needs the sponsor's payment into the Distributions client-money account with reference run_id, then `distribution.run.fund` with TRSY as maker and CFO as checker (4E), and client-money delta 0. The brief says only 'TRSY funds', and the driver has no checker, so C2 misses an approval.",
+   "fix": "Add the sponsor's funding payment through the sandbox bank panel. Make `fundDistribution` TRSY maker with a CFO checker (4E) and delta 0 as a precondition. Put execute, reconcile and closed with paid = approved in expect-table.ts."
+  },
+  {
+   "severity": "medium",
+   "issue": "The hired-RE variant asserts a trustee countersign on HAW01's monthly run. A40 names a TP-RE countersign only for the exit waterfall, and A105 only 'where the policy names the trustee'. No policy row is cited for a monthly run.",
+   "fix": "Cite the A14/A40 policy row that names the trustee for monthly `distribution.run.approve` on HAW01. If none exists, file it against A40/A06, or use an approval type that A105 lists for the trustee, such as `register.certify`."
+  },
+  {
+   "severity": "medium",
+   "issue": "The applicant-agent negative is ill-defined. It expects SCOPE_PENDING_COUNSEL when the applicant's agent submits the application. A12 defines no token path for applicant principals, and SCOPE_PENDING_COUNSEL is a creation-time refusal, not a call-time one.",
+   "fix": "Rewrite the negative as token creation that includes the application declaration cell and is refused SCOPE_PENDING_COUNSEL. Confirm with A12/A60 that applicants can hold tokens. If they cannot, file it against A12 as a D04 gap."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several negatives have no single expected code, although the pass criteria require zero tolerance: 'SPONSOR_APPROVER_MUST_BE_HUMAN or G22_AGENT_NEVER_CHECKER'; NLC's agent approval (no code); the 366-day comparable (no code); submit before spv_formed (no code); the CAPM SoD refusal (no code).",
+   "fix": "Give each negative one primary code, or an explicit 'envelope contains' set, taken from the owning node's error list. State the precedence where A12's middleware runs before A33's handler."
+  },
+  {
+   "severity": "medium",
+   "issue": "One pass criterion cannot be met: it requires a pass and a refusal for G03 'through the browser path', but every G03 refusal in the brief goes through the SDK operator driver.",
+   "fix": "Either allow 'browser or operator driver, with the channel recorded', or add a browser G03 refusal, such as an SPN-06 submit after KYB has been reopened."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 6-10 agent-hour estimate is not credible. verify:sponsor is three runs of up to 45 minutes each, plus Fable's fourth seed, and up to three fix loops each re-run three seeds. The suite has 11 spec files, the J12 mint tail, the fidelity checks and the DST probes. A80, which covers similar ground, is estimated at 10-14.",
+   "fix": "Raise the estimate to about 10-16 agent-hours, or move the J12 funded tail to A49/A80."
+  },
+  {
+   "severity": "medium",
+   "issue": "Scenario and clock side effects are not reconciled. The `late-property-report` scenario loads with the attestation already 11 days late, so the DST boundary probe (30 Sep AEST to 10 Oct 23:59 AEDT) cannot run in that file. In the j14 rates file, the 30-day clock advance also makes the August attestation overdue, which adds a G19 pause, signals and alerts. That breaks 'one Sev2 alert, raised once' and the exact audit counts.",
+   "fix": "Run the DST boundary on the baseline in its own test. For every clock advance, list the collateral alerts, pauses and signals in the expect table, or sign August first. Scope the Sev2 assertion to the rates obligation's alert key."
+  },
+  {
+   "severity": "low",
+   "issue": "The D04 done-line claims the valuer agent was exercised, but no step uses a TP-VAL token, even though A06 seeds `valuer-upload`.",
+   "fix": "In J13, have the TP-VAL agent upload the valuation (allowed and audited on behalf of the valuer), then attempt submit or publish and be refused with a named code."
+  },
+  {
+   "severity": "low",
+   "issue": "C5's exact count covers only transitions, decisions and uploads. Exports, partner opens, logins, token calls and notices are also audited, so C5 either fails a correct build or gets loosened.",
+   "fix": "Compare against a per-step list of expected audit event types in expect-table.ts, plus the hash-chain verification."
+  },
+  {
+   "severity": "low",
+   "issue": "C7's PII rule ('outside the persona's own record') would flag data the persona is entitled to see, such as holder names on SPN-08 for Leo.",
+   "fix": "Define an allow-list per screen and read contract, and scan for everything outside it."
+  },
+  {
+   "severity": "low",
+   "issue": "The fidelity order is contradictory. fidelity.spec runs first on the untouched baseline, but the SPN-03 to SPN-06 comparisons need a draft with the design's values. Creating that draft adds a row to SPN-02's Listings table and needs a title search issued 12 Sep 2026.",
+   "fix": "Capture SPN-02 and SPN-10 first. Then create the draft through the browser with issued_on 12 Sep, capture SPN-03 to SPN-06, and run stack:reset before the journeys."
+  },
+  {
+   "severity": "low",
+   "issue": "Go-live is 4E+Q with a custody V1 quorum (A36), but decideGoLive lists only the CAPM maker and CCO checker. A build that skips the quorum leg would pass C2.",
+   "fix": "Add the V1 signer step on the signer panel, with the expected signer count in the expect table and in evidence."
+  },
+  {
+   "severity": "low",
+   "issue": "The J19 catalogue step 'SP-FIN submits the distribution' is never performed live, because the BAY01 run is seeded as already proposed by Leo's agent. The parity manifest therefore records no human propose.",
+   "fix": "Add a browser propose by Leo on another run, or state in evidence that the seed covers this step and name A64 as its owner."
+  }
+ ]
+}

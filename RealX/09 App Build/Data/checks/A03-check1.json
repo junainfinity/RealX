@@ -1,0 +1,105 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Trigger identity is undefined, so the engine API, audit names and the oracle's (state, trigger) sweep cannot be written the same way by builder and oracle. The engine is transition(machineId, currentState, trigger, ctx) and audit names are sm.<machine>.<trigger>, and the spec says the trigger text is the label. But 66 of the 219 catalogue transitions in data_states.py have no label, and 7 (from, label) pairs are ambiguous: SM-01 manual_review 'KYCA' goes to approved or rejected; SM-08 executing '' and partially_failed ''; SM-09 open '' and settling ''; SM-10 tallying ''; SM-11 post_filing_monitoring ''.",
+   "fix": "Give every transition a canonical trigger id by a stated rule, for example triggerId = '<from>__<to>' (unique because no (from, to) pair repeats), or key the engine on the target: transition(machineId, from, to, ctx). Keep the label as display text only. Make audit names sm.<machine>.<triggerId>, list the collisions and the unlabelled edges, and define the oracle sweep over (state, triggerId)."
+  },
+  {
+   "severity": "high",
+   "issue": "Guards are named but not bound to transitions, and the ctx shape is not defined, so hidden guard vectors and '219 of 219 accepted' cannot be written independently. recon_clean, payment_matched, soft_cap_reached, hard_cap_reached, end_date_passed, allocation_locked, snapshot_locked, halt_active, identity_reverified and evidence_complete have no transition, and no ctx field names are given. Implied guards are missing: lock-in passed (SM-07), 30 days before expiry (SM-02), at least 3 retries before busted and halt too long (SM-09), funds not received (SM-05). eligibility_check -> awaiting_funds has no negated retail_regime_p2 guard, so a retail P2 order can skip the reflection period.",
+   "fix": "Add a guard table with one row per guard: guard id, the machine and transition(s) it binds to, its ctx fields with types, and the exact pass condition at each boundary. Include the missing guards and the negated guard on the no-timer edge. Define a happy ctx per transition for the acceptance sweep."
+  },
+  {
+   "severity": "high",
+   "issue": "SGL+R act-first is modelled as a blocking guard. ratified_within_2h sits on SM-06 active -> paused and SM-11 investigating -> account_restricted. Ratification comes after the act, so the guard either blocks an emergency pause or freeze until someone ratifies it, or needs a future fact. This contradicts the architecture brief section 6.1 and A14, which act at once and handle a lapse with a sweep and an AUTO revert.",
+   "fix": "Remove ratified_within_2h from the act transitions. Say the act transition fires immediately for an actor holding a protective SGL+R cell. Track ratification and its lapse on the SM-00 request (A14 and the A13 clock), with the revert through its own policy row. Add an oracle vector: pause at t0 with no ratification succeeds."
+  },
+  {
+   "severity": "high",
+   "issue": "The SM-00 veto extension ('queued -> {approved-for-execution | vetoed}') adds two states that are undefined, not snake_case and not connected onward. It contradicts A14, which reads it as queued -> queued_for_custody and queued -> cancelled. A14 also proposes extension (c) (prechecked -> rejected 'checker rejects', prechecked -> expired, queued_for_custody -> expired), which A03's 'exactly (a) and (b)' oracle forbids. (c)'s prechecked -> rejected also duplicates an existing pair, which breaks the rule that a pair identifies a transition.",
+   "fix": "Spell every extension edge exactly, with states, triggers, guards, actors and terminal flags (recommended: approved -> queued, queued -> queued_for_custody on timelock elapsed or waiver, queued -> cancelled on veto). Settle A14's (c) before Fable writes the oracle and add it if accepted. Resolve the duplicate-pair identity. State the post-extension counts."
+  },
+  {
+   "severity": "high",
+   "issue": "The delegable (D04) list is incomplete and has no deny-by-default. A00's agent-access.json freezes 'creating, widening or extending API tokens and session keys', but A03 omits extending expiry and session keys (ACC-05 'Allow on-chain actions'). Also unflagged: POR-06 'Add device' (adds a passkey, which gives the agent full account control), SPN-16 'Set sponsor agent policy', ADM-35 'Change platform agent policy' and 'Suspend all agent access', and ACC-01 contact-detail changes (which can redirect the sensitive-action notifications). The action kinds have no 'veto' and no SGL+R 'act'. The default for unlisted actions reads as delegable. Nothing checks delegable.ts against agent-access.json.",
+   "fix": "Make delegable an explicit value on every action with no default. Set to false: expiry extension, session-key grant and widen, add or remove a passkey or device, agent-policy changes, agent kill-switch activation, contact-channel changes. Put PayTo creation on the counsel list or set it to false. Add kinds veto (non-delegable, a checker act) and act. Add an oracle test that delegable.ts false and 'counsel' codes are a superset of agent-access.json nonDelegable and counselFlagged."
+  },
+  {
+   "severity": "high",
+   "issue": "SoD rule 2 counts an agent as its human only for rules 1 and 4, but D04 says segregation of duties counts the agent as its human with no exceptions. Under the narrower rule, an agent of SUPER drafting 'grant role to SUPER' passes no_self_grant (rule 9), and an agent of ASTM can certify its human's vote (rule 7).",
+   "fix": "Define checkSod over identity sets (agent-of-X is X) for all ten rules, and add oracle vectors for rules 9, 7 and 4 with agents."
+  },
+  {
+   "severity": "high",
+   "issue": "The matrix invariants contradict the catalogue and D04, so the completeness check and the invariants cannot both pass. TP-AUD and TP-OBS are read and export only, TP-LIC reads M21 and M23 only, and SUPP holds no cell that changes a record. But data_roles.py gives TP-AUD, TP-OBS and TP-LIC 'Manage API tokens', SUPP 'Issue personal agent tokens', and ADM-35 'Revoke any token: SECO or SUPP'. SUPP also fires SM-13 requested -> triage and is the intake on maker-checker row 28, and VIS has 'Create an account'.",
+   "fix": "Add explicit carve-outs to the invariants: own-token self-management cells (own-records) for every signed-in principal, SUPP intake and triage, SUPP revoke-any-token as a protective cell, and VIS create-account. List them in the spec so the invariant tests and completeness tests agree."
+  },
+  {
+   "severity": "high",
+   "issue": "The 49 maker-checker rows cannot be resolved to role cells as required. The role fields are free text ('Custody quorum', 'Ratification', 'Second approver', 'senior manager', 'Valuation committee (CFO + independent)', 'board', 'Scrutineer', 'Admin quorum 3-of-5', 'pauser', 'RE board delegate'), and codes are compound ('SGL+R or 4E+Q', '— / 4E', 'SGL+R / 4E'). The 'maker and checker cell' invariant fails for AUTO row 17, the SGL+R rows and row 19. A14 needs checker_role_sets, ratifier_roles and one policy_code per row.",
+   "fix": "Add a normalised resolution table (action id, maker roles, checker role sets, ratifier roles, a single policy code, with 'X or Y' rows split into variants, vault, function and timelock key), with explicit mappings for the non-role text. Exempt AUTO rows from the checker invariant."
+  },
+  {
+   "severity": "high",
+   "issue": "The grep test for 'no threshold, amount, date or vendor string in the package' cannot pass. packages/domain holds A02's defaults.ts (50 bp, 4700 bp). A03 itself hard-codes ttlHours 72, ratifyWithinMinutes 120, guard names with 48h, 2h, 30d and 3, vault timelocks and quorums, and break-glass 4 h and 5 business days, and copies maker-checker notes such as 'A$500k', '48 h timelock' and 'T-REX factory'. A14 keeps the same hours as versioned policy rows, which makes two sources of truth.",
+   "fix": "Scope the grep to A03's folders with exact regexes. Parameterise durations and counts through ctx, or allow-list the structural constants with one owner (A14's rows win and A03 holds seeds only). Keep the free-text notes outside the grep scope or move them into parameter keys."
+  },
+  {
+   "severity": "high",
+   "issue": "The role and permission vocabulary conflicts with the consuming nodes. A03 builds 51 roles as the 52 ids less AGT-U. A11 says 52 less VIS, uses V/C/E/A/O/X action letters and names packages/domain/permissions.ts and non-delegable.ts. A14 tests 'the 51-role list plus AGNT, SVCA'. A00's ids.json does not say which id is dropped.",
+   "fix": "Declare A03's role list and kinds canonical, export a mapping from kinds to V/C/E/A/O/X and a nonDelegable view at the path A11 uses, record which id is excluded consistently with ids.json, and raise spec fixes for A11 and A14."
+  },
+  {
+   "severity": "high",
+   "issue": "A03 needs to change files owned by A02 or by no node. zod is needed at runtime, but A02's package.json has 'dependencies: {}'. The barrel src/index.ts is owned by A02, yet the spec says A03 'registers them in the package index without changing A02's files'. The domain:export script and coverage thresholds live in A02's root files. The docs/domain/* output path has no owner.",
+   "fix": "Amend A02 to add zod, export the three folders (barrel or subpath exports), and declare the domain:export script and A03's coverage thresholds. Add <workspace>\\app\\docs\\domain\\ to A03's owned paths in the spec and in final-graph.json."
+  },
+  {
+   "severity": "medium",
+   "issue": "Engine refusal precedence is unspecified, but the oracle expects SM_FORBIDDEN for every pair outside the table. For a terminal state or an unknown trigger, the builder may correctly return SM_TERMINAL or SM_UNKNOWN_TRIGGER and fail the oracle.",
+   "fix": "Specify the order (SM_UNKNOWN_STATE, SM_UNKNOWN_TRIGGER, SM_TERMINAL, SM_FORBIDDEN, SM_PHASE_OFF, SM_ACTOR_NOT_ALLOWED, SM_GUARD_FAILED) and write the oracle expectation per class."
+  },
+  {
+   "severity": "medium",
+   "issue": "The label projections are not testable character for character. The prototype says 'Tokens delivered to your wallet', not 'Tokens delivered'. 'Offer reaches soft cap' is SM-04, not SM-05. 'Units issued by trustee' is a fact inside a transition, not a state. SPN-09's 'Sponsor owner approves' has no SM-08 state, and 'RealX approval' is 'Treasury + compliance' against SM-08's 'FINA then CFO'. The ADM-30 list has no status pills. 'GateRow' and 'DistributionChain' do not exist in the design; the keys are buyGates, orderTimeline and distChain.",
+   "fix": "Add an explicit mapping table (design key, exact text, tone) -> (machine, state, event or derived fact). Handle the SM-08 sponsor-owner step as a projection or as an escalated catalogue gap. Correct the strings and key names."
+  },
+  {
+   "severity": "medium",
+   "issue": "Scope refusal codes and the signature differ from A12: A03 has validateTokenScopes(requested, owner) with SCOPE_NOT_DELEGABLE and SCOPE_COUNSEL_PENDING; A12 has (owner, requested) with SCOPE_NON_DELEGABLE, SCOPE_PENDING_COUNSEL and SCOPE_AGENT_NEVER_CHECKER. A14 uses SM00_ILLEGAL_TRANSITION.",
+   "fix": "Fix one signature and one set of code names in A03's reason-codes.ts, and have A12 and A14 import them."
+  },
+  {
+   "severity": "medium",
+   "issue": "SMR and complaint SLA clocks are written as 'within the clock' on transitions, which a builder could make blocking guards that refuse a late SMR filing. The SM-00 criterion 'a confirmed transaction that does not reconcile reaches failed' is impossible because no confirmed -> failed edge exists.",
+   "fix": "State that the SMR and IDR clocks are A13 monitors, not guards. Say an unreconciled SM-00 request stays in confirmed with a recon break raised, and bind recon_clean to confirmed -> reconciled."
+  },
+  {
+   "severity": "medium",
+   "issue": "Action completeness cannot be checked. There is no rule for turning free text into action ids. 'At least 175' does not match 49x2+126 with overlaps and leaves out the 54 investor and 22 sponsor screen actions. data_investor.py has no 'acts' list. Investor and sponsor actions have no M-module, yet 'every action belongs to exactly one module'.",
+   "fix": "Define the id grammar and dedup rule, freeze a source-to-action mapping fixture, set an exact count, and define the module (or pseudo-module) for investor and sponsor actions."
+  },
+  {
+   "severity": "medium",
+   "issue": "SoD rules 3 and 4 need custody signer roles per vault, but vaults.ts has none, and V1 includes 'an independent', which is not a role.",
+   "fix": "Add signerRoles[] per vault and derive rule 3's exclusive set from that list."
+  },
+  {
+   "severity": "medium",
+   "issue": "requirements-lists.json is cited without a path; the only copy is in an ephemeral session scratchpad. A00's charter files ids.json and agent-access.json are not used as fixtures.",
+   "fix": "Point the fixtures at app\\docs\\charter\\ids.json and agent-access.json plus the product-map files, and freeze their hashes."
+  },
+  {
+   "severity": "low",
+   "issue": "The wikilinks to A19, A50 and A51 use ':' where the file names use '-', so they do not resolve.",
+   "fix": "Use the real file names or aliases, and fix the generator."
+  },
+  {
+   "severity": "low",
+   "issue": "The counsel-flagged SPN-06 sponsor declaration and ONB-05 FATCA/CRS self-certification go beyond A00's CQ-01 list.",
+   "fix": "Add them to A00's counsel-questions and agent-access counselFlagged, or record a new CQ id under HG-LEGAL."
+  }
+ ]
+}

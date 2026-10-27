@@ -1,0 +1,55 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Missing graph dependencies. The spec uses interfaces and pass criteria from nodes that are neither direct dependencies nor ancestors of A91 in final-graph.json: A42 (restrictionStatus as G14, the surveillance intake, case creation), A43 (notices and confirmations), A37 (the confirmation shape, and the check that resale bid and primary order verdicts are identical), A90 (G05 target market and TMD for P2 retail buyers; A90 is in the same milestone AM9, so it can land after A91), A101 (agent kill switches, S7), A104 (the MCP catalogue pass criterion), A98 (S5 insiders) and A23 (the Docker stack and Hardhat chain the oracle runs on). With these missing, the scheduler can start A91 before they exist, and G05, G14 and the MCP parity criteria cannot be met.",
+   "fix": "Add A42, A43, A37, A90, A101 and A104 to deps (A23, A98 and A47 as well, or state that fixture providers stand in and that the dependent criteria are re-run when those nodes land). Regenerate final-graph.json and the Depends-on line."
+  },
+  {
+   "severity": "high",
+   "issue": "The bid reservation can be smaller than the amount the match locks. Section 4 reserves units x limit + fee(units x limit), with one rounding on the total. Section 6 charges the buyer fee per trade, half-up, so the sum of per-fill fees can exceed the fee on the total. Example: 2 units at 101c filled as two 1-unit trades gives fees of 1c + 1c = 2c, but the reservation only covered 1c. resale.lock then fails or overdraws investor_cash. The agent cap value 'gross plus fee' has the same ambiguity.",
+   "fix": "Reserve an upper bound on the per-fill fees (for example units x limit + ceil(gross x bp / 10000) + (max fills - 1) cents), or charge the buyer fee once per order. Use one formula for MKT_INSUFFICIENT_FUNDS, the A16 reserve and the G22 cap value. Add an oracle property that the sum of locks never exceeds the reservation, including many 1-unit fills."
+  },
+  {
+   "severity": "high",
+   "issue": "Spec point (e) contradicts the settlement prechecks. A48 mirrors manual, meeting and valuation_stale halts on chain through HaltModule.setHalt. The section 6 precheck needs every explainTransfer module row to be ok, and the A25.1 guard asserts canTransfer, but HaltModule is not ok during a meeting halt. The trade that the 'Halt versus a filled trade' challenge says must settle will fail its precheck, retry and head to a bust.",
+   "fix": "Either exclude the HaltModule row from the RESALE precheck and the A25.1 assertion for the value-neutral causes only (manual, meeting, valuation_stale, circuit_breaker), written into the A28.1 and A25.1 upstream rows, or make every halt block settlement with the trade waiting in filled. Align the challenge and oracle case 10."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec gives two different responses for an agent order above its per-action cap. Section 9 (matching A12's contract and A12's own challenge) says 428 CONFIRMATION_REQUIRED. Oracle case 9 and the 'Agent at the edge of its mandate' challenge expect 403 G22_LIMIT_EXCEEDED for the A$10,029.90 bid over the A$10,000 per-action cap. Whichever the builder implements, either A12's test or A91's test fails.",
+   "fix": "Align with A12. Over the per-action cap with a signing key: 428 CONFIRMATION_REQUIRED with a confirmation_id, and no order, freeze or reservation until the person confirms with a passkey. Over the daily cap, vehicle or time window: 403 G22_LIMIT_EXCEEDED (or the matching G22_* code) naming the cap and what remains. Rewrite oracle case 9 and the challenge."
+  },
+  {
+   "severity": "high",
+   "issue": "Settlement does not stop a seller who was frozen after the match. The prechecks check the seller only for G02, G10, their frozen amount and explainTransfer, and the vendored forcedTransfer ignores address freezes. A court freeze (SM-07 frozen) between the match and settlement lets V2 move the frozen person's tokens. A18 then refuses the transfer instruction with REG_HOLDER_FROZEN, which opens a Sev1 break. The seller's proceeds under a G14 restriction are also undefined.",
+   "fix": "Add seller prechecks at settlement: SM-07 not frozen, the A18 holder not frozen, and A42 restrictionStatus. A failure puts the trade in the halt-wait path (waiting in filled with no attempt counted, then HALT_WAIT_EXCEEDED and the bust path). Add a challenge: freeze between match and settle; there must be no chain move, no register instruction and no break, and the buyer is refunded by the bust."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec uses transitions that are in neither SM-09 nor its declared extensions. HALT_WAIT_EXCEEDED moves a trade from filled to settlement_failed, which the state-coverage criterion would refuse with MKT_ILLEGAL_TRANSITION. An order in awaiting_cosign has no exit after 24 hours. The text says 'four extensions' but lists eight.",
+   "fix": "Add filled -> settlement_failed and new_order -> rejected or cancelled (COSIGN_EXPIRED) to the A03.x extensions, correct the count, and cover both in the state test."
+  },
+  {
+   "severity": "medium",
+   "issue": "The A18 transfer instruction is assumed to be prepared 'in the same transaction' after the register mirror releases the frozen units. That mirror is updated asynchronously by A18/A28 handlers that A91 does not own, so A18's check for enough unfrozen units can see stale data, return REG_INSUFFICIENT_UNITS and cause a false break.",
+   "fix": "Either wait for A18's frozen-units or register.changed event for the seller before preparing the instruction (with a timeout that goes to R17), or request an A18.x row letting a trade-referenced transfer consume the frozen units bound to that order id. Add a challenge that delays the mirror event."
+  },
+  {
+   "severity": "medium",
+   "issue": "D04 gaps for agent bids. resale_bid includes G12 and G05, but the spec does not say how an agent meets G12 through the holder's standing consent, or how joint-account co-signing and entity signatory rules apply to orders placed by an agent.",
+   "fix": "Specify it: an agent bid passes G12 only with a current standing consent for the current PDS/IM/TMD version, otherwise 428 CONFIRMATION_REQUIRED. G05 answers stay non-delegable (counsel row). For signing_rule=both, agent orders wait in awaiting_cosign for the co-holder's passkey. Add these cases to the gate matrix."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec attributes the ADM-21 surveillance text 'same device, 6 round trips / 48h · 0.91' to S1, but the product map labels that row S2 (wash-trade pattern), and the spec's own design section cites rows S2 and S3.",
+   "fix": "Keep the product map's S2 and S3 codes and trigger texts, or record a mapping row, and align the fidelity test."
+  },
+  {
+   "severity": "low",
+   "issue": "The oracle rule says the breaker lifts 'exactly 30 minutes later', while oracle case 2 and the pass criteria allow up to 60 s late.",
+   "fix": "Reword the oracle rule: 'lifts at the first tick at or after fired_at + 30 min, never early, at most 60 s late'."
+  }
+ ]
+}

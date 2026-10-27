@@ -1,0 +1,50 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Previous high finding 1 is only half fixed. The spec now enforces the expected owners and escalates when they are missing, but final-graph.json (last written 23 Sep 21:54) is unchanged. A82.journeys lacks J22. No node lists ADM-36 to ADM-40, including A51, A53, A67, A68, A69 and A72. A100.gates holds only G13 and G22. Data/app-graph.json and Data/requirements-lists.json do not exist yet. As written, A00 is guaranteed to fail and escalate on these rows until plan assembly edits the graph.",
+   "fix": "At plan assembly, before freezing: add J22 to A82.journeys, and to A12, A60, A100 and A104 as supporting nodes. Add ADM-36 to A53, ADM-37 to A67, ADM-38 to A68, ADM-39 to A69 and ADM-40 to A72, and add all five to A51.screens. Set A100.gates to G01-G22. Copy requirements-lists.json to 09 App Build/Data and check its SHA-256 (6d281f45...). Run a script that asserts these listings and record its output before marking the plan frozen."
+  },
+  {
+   "severity": "high",
+   "issue": "The token rules in agent-access.json contradict A04's frozen schema and A12. A00 freezes the prefixes rx_live_, rx_sbx_ and rx_test_, SHA-256 at rest, and environment binding by prefix. A04's CHECK and A12 use rx_inv_, rx_spn_, rx_ptr_, rx_stf_ and rx_sb_, an environment column (live or sandbox, where sandbox forces rx_sb_), a 12-character lookup and Argon2id. A12 line 213 says 'A00's data file is reconciled by its owner'. Effects: (1) A01's secret scanner reads its prefixes from agent-access.json, so committed real rx_inv_ tokens go unflagged. (2) A00's environment-binding rule and its challenge test prefixes that no token ever carries, so a wrong build passes. (3) A12 records AGNT as the actor of every user token, contradicting A00's separate AGT-U principal, and A00's checker never looks outside its own JSON.",
+   "fix": "Rewrite the token rules to match A04. Prefixes by owner type: rx_inv_, rx_spn_, rx_ptr_, rx_stf_, plus rx_sb_ for sandbox. A stored environment (live or sandbox), with rx_sb_ if and only if sandbox; local and test runs are identified by deployment config. Token format rx_<type>_<lookup>_<secret>, hashed with Argon2id and a per-row salt. Restate the environment binding in these terms. Once A04 and A12 exist, have verify:charter assert that the prefix set in agent-access.json equals the set in A04's CHECK, and that A12 records user-token actors as AGT-U, never AGNT. Raise the actor defect against A12."
+  },
+  {
+   "severity": "medium",
+   "issue": "The new kill-switch rule, 'lifting is 4E by two humans' (enforced by the checker), conflicts with A101 lines 170-173 and A77. In A101, a person who paused their own user tier (source = person) resumes it alone with a fresh passkey, and an SP-OWN resumes a tenant tier alone. A101 also adds a fifth 'type' tier to the four levels A00 freezes. So either the charter data fails its own checker or A101 violates the charter unnoticed.",
+   "fix": "Freeze the lift rule by who engaged the switch. A switch engaged by staff, by the agent guard or by tenant suspension is lifted by 4E: two humans, neither of whom engaged it. A self-protective pause engaged by the person on their own user tier, or by an SP-OWN on their own tenant tier, may be resumed by that human (or, for a tenant, another SP-OWN) with a fresh passkey step-up. No agent principal ever lifts any switch. Either add the 'type' tier to the frozen levels or have A101 drop it, and make the checker test each source and tier pair."
+  },
+  {
+   "severity": "medium",
+   "issue": "The exact-string design-code rule cannot be met as written. The spec says `buy` displays 'INV-02', but the prototype's literal is 'INV-02 · Buy'. The public screens show strings from the `codes` map such as 'PUB-01 · Home'. Wallet shows 'INV · Wallet', statements shows 'INV · Statements', and `onb` renders eight strings (ONB[i].code + ' · Onboarding') from one key. The spec also does not say which string each row gets when one key feeds several rows: buy (INV-01, INV-02), spNew (4 rows), onb (8 rows) and prop (PUB-04, PUB-05). The builder will fail the checker or improvise.",
+   "fix": "Define the design-code column as the exact literal the prototype renders: the `codes[key]` value, or the page's `code:` field, or for onb each step's ONB[i].code + ' · Onboarding'. Correct 'INV-02' to 'INV-02 · Buy'. Give the value for every row of a multi-row key: INV-01 and INV-02 carry 'INV-02 · Buy'; SPN-03 to SPN-06 carry 'SPN-03–06'; PUB-05 carries 'PUB-04 · Property page'. The checker extracts these literals from the prototype file, not from a typed list."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some owned paths in the graph are annotated rather than plain: A01 '(root files only: ...)', A02, A04, A07, A09, A52 'apps\\web\\ (root files only)' and A53 'apps\\console\\ (root files only)'. The spec compares 'normalised path prefixes' but does not define how to treat these. If the annotation is stripped, A52 and A53 contain every web and console route: every screen gets two owners, hundreds of overlaps appear, and A00 escalates. If the raw string is kept, root files are never checked for overlap.",
+   "fix": "Define the marker in the spec. An entry ending in '(root files only[: list])' covers only files directly in that folder (not subfolders), or only the listed files. It never contains a route folder, and it overlaps another entry only when that entry is a file directly in the same folder. The checker parses the marker explicitly, and Fable adds a fixture in which another node claims apps\\web\\page.tsx against A52."
+  },
+  {
+   "severity": "low",
+   "issue": "The route rule cannot choose between a UI node's own routes. Four nodes own two app routes each: A59 (wallet, account), A60 (investor agents, sponsor agents), A92 (web resale, console market) and A93 (web votes, console governance), covering 17 screens. ACC-05 could be recorded under the sponsor agents path, or ADM-21 under web resale, and still pass, because the checker only tests that the route is contained.",
+   "fix": "Choose the route by surface: admin screens under apps/console/app, investor and sponsor screens under apps/web/app. Give an explicit mapping for A59 (POR-05 and POR-06 -> wallet; ACC-01 to ACC-04 -> account) and for A60 (ACC-05 -> (investor)/agents; SPN-16 -> (sponsor)/s/[tenant]/agents). The checker asserts that each route matches its screen's surface."
+  },
+  {
+   "severity": "low",
+   "issue": "A03 claims its five principal kinds (HUMAN, PARTNER, AGNT, AGTU, SVCA) match A00's principalTypes. A00 actually freezes seven (INVESTOR, SPONSOR, PARTNER, STAFF, AGNT, AGT-U, SVCA) and spells AGT-U with a hyphen, so anything that joins on these ids will mismatch.",
+   "fix": "In agent-access.json give each principal type a `kind` (INVESTOR, SPONSOR and STAFF map to HUMAN). State that the canonical id is 'AGT-U' and that 'AGTU' is its code identifier alias. The checker asserts the mapping."
+  },
+  {
+   "severity": "low",
+   "issue": "A15's note title, its spec and its graph title still say 'P1-P10'. A00 only notes that A15 must adopt CP01-CP10, and nothing enforces it, so the clash with the P1/P2/P3 phase names survives into the build.",
+   "fix": "Rename the rules to CP01-CP10 in the A15 note and in its graph title at plan assembly. Add a checker rule that fails if 'P1-P10' appears in any title or summary in app-graph.json."
+  },
+  {
+   "severity": "low",
+   "issue": "A01 runs the checker from the repo root (`py docs/charter/check_charter.py`) and passes the graph path in REALX_APP_GRAPH. A00 names only the fixed vault path and an absolute script location. A checker built to the A00 spec may ignore the variable, or break when run from the repo root.",
+   "fix": "Specify the lookup order for the graph path: --graph, then REALX_APP_GRAPH, then the documented default. check_charter.py resolves its own data files relative to its own location."
+  }
+ ]
+}

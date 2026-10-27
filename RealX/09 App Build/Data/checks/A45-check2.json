@@ -1,0 +1,69 @@
+{
+ "node": "A45",
+ "check": 2,
+ "reviewer": "Opus 5.5, independent third-party audit",
+ "date": "2026-09-24",
+ "pass": false,
+ "check1_followup": {
+  "critical_1_aml_double_ownership": "fixed (read-only aml_projection over A42, no AML filing kinds, no-leak rule, oracle invariant 1)",
+  "high_2_tax_duplication": "fixed in substance (A41 is the single source), but the consumer names an event A41 does not emit (see new medium finding)",
+  "high_3_adapters_direction": "fixed (adapters written in reporting/sources over closure modules; fixture barred from production registry)",
+  "high_4_auditor_attest_blocked": "fixed (option b, signed audit_signoff letter, CFO->CCO 4E); A98 line 46 still says TP-AUD attests (stale, low)",
+  "high_5_A03_catalogue": "NOT fixed: the M19/M24 rows are still only in A45; A03's spec has no M19 rows and A51 marks them 'no A03 row'",
+  "high_6_sealing_leaks": "fixed (summary excludes aml for all, no alerts/queue/audit about AML items, generated leak test over alerts, queues and A10 reads)",
+  "high_7_consumer_contracts": "NOT fixed: graph edges were added, but A45's public contract still contradicts A47, A54, A55, A43 and A33 (see new high findings)",
+  "high_8_G17_claims": "partly fixed: A43 is a dependency and checkClaims runs on metric strings, but sponsor-declared public facts still have no publication or claims path"
+ },
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The public-metrics contract still contradicts every consumer. A45 says A55 reads GET /v1/public/metrics with 'the shape A55 fixed', and that A54 reads A45's public figures. In fact A55 (lines 16, 125, 205) and A54 (lines 77, 109) read only A47's GET /v1/public/transparency, whose totals[] need a per-metric attestation {kind:'auditor', ref, attested_at}. A47 (line 57) reads 'A45's attested-metrics interface (the data behind GET /v1/metrics/public)'. A43 (line 344) names the route GET /v1/metrics/public and hooks its precheck on the action id metrics.publish, not M19.metricPublication.publish. A45 also says A43's public_kpi_set rows cite MPI ids, but A43 (line 693) says there is no public_kpi_set. A47 is an A45 dependent in the graph, yet A45 exports no function for it and does not list it under Unlocks. A45's challenge 'matches A55's shape field for field' checks a shape that no consumer reads, so a build can pass while PUB-01 and PUB-08 have no data.",
+   "fix": "Choose one contract and record it in A45. Recommended: keep A47 as the PUB-01 and PUB-08 composer. A45 exports from index.ts a function such as latestPublishedMetrics(scope), returning per figure {key, value, unit, as_of, basis, metric_snapshot_id, attestation:{kind:'auditor', ref: audit_letter_doc_id or marked_audited_approval_id, attested_at}}. Either drop GET /v1/public/metrics or state that it serves the same data and that no page reads it. Correct the route and action names in the A43 and A47 references (M19.metricPublication.publish; one route name). Delete the public_kpi_set sentence. Add A47 (and A99) to Unlocks. Replace the 'A55 shape' fidelity check with a contract test against A47's totals[] reader."
+  },
+  {
+   "severity": "high",
+   "issue": "The PUB-05 and ADM-29 split with A33 contradicts A33's spec, and it leaves a G17 gap. A33 section 7 (lines 344-372) says: (1) sponsor-declared facts (about, Trusts managed, Assets managed, years_operating) and trusts[] rows are served only from A45's metric_publication, read through a PublishedSponsorProfileProvider port that A45 registers; (2) the performance lines are served by A33 at GET /v1/public/sponsors/{slug}, named distributions_on_time_pct and proof_of_property_score; (3) A45 composes ADM-29 from A33's sponsor_metric_snapshot via sponsorSnapshotSeries and from A33's sponsor_watchlist; (4) 'Trusts on RealX' is A33's live fact of record. A45 does the opposite on each point. It serves its own GET /v1/public/sponsors/{slug}/performance, uses _bps names, computes its own ADM-29 figures with its own watch rule, publishes trusts_on_realx, and says it 'never stores, promotes or serves' a sponsor-declared figure. It never mentions registering PublishedSponsorProfileProvider. So no node publishes or claims-checks the sponsor-declared public facts, and A33's public profile stays empty or unreviewed.",
+   "fix": "Adopt A33's split, or amend A33, and record the choice in both specs. If A33's split: A45 registers PublishedSponsorProfileProvider with A33. The metric_publication includes a per-tenant sponsor_profile block (about, the declared facts with source: sponsor_declared, trusts[], and the performance lines), and every string in it goes through checkClaims in the 6E precheck. ADM-29 reads A33's sponsorSnapshotSeries and watchlist, and the rule-pack watch rule is removed from A45. Fix one unit convention for public fields (bps, or pct as a named display field) across A33, A45 and A54. Remove A45's own /v1/public/sponsors/{slug}/performance route, or declare it the one A33 proxies. Add a challenge: a sponsor-declared 'Assets managed' fact containing a banned phrase is refused at the 6E precheck and never reaches /v1/public/sponsors/{slug}."
+  },
+  {
+   "severity": "high",
+   "issue": "The M19 and M24 permission rows are still missing from A03 (carried over from check 1, high 5). A45's table (about 30 action ids, with delegable flags and policy codes) is marked 'a planned change to A03's actions.ts, matrix.ts and delegable.ts, which must be written into A03's spec'. A03's spec has no M19 row at all. A03 derives actions only from its frozen product-map mapping (433 references, exact counts in its oracle). A51 lines 141 and 143 mark 'Grant regulator or auditor access' and 'Change a metric definition' as 'no A03 row'. A45's Specify item (a) blocks the build until the rows exist. A03 is an AM0 oracle node with fixed counts, so reopening it means re-running its hidden oracle. No plan document schedules that work, so A45 cannot start and oracle invariant 5 ('exactly the M19 cells listed') has no source of truth.",
+   "fix": "Write the M19 and M24 rows into A03's spec now: its section 6 actions, section 7 delegable flags, the baseline and resolution rows for the 4E and 6E pairs (waive, editSeed, dataRoomGrant request and extend, metricDefinition.change, metricValue.markAudited, metricPublication.publish), and the updated exported counts in its pass criteria. Mark each row PM or proposal. Then update A51's rows 141 and 143, and add a graph-revisions entry recording the A03 re-run. Alternatively, name a plan-level 'A03 action requests' ledger that the orchestrator applies before AM3, and cite it from A45's Specify step."
+  },
+  {
+   "severity": "high",
+   "issue": "A45 never implements A98's GrantSource, so grant-scoped data-room access fails closed. A98 (lines 49, 68, 110) defines GrantSource {listActiveGrants(principalId, at), subscribe(onGrantChanged)} and requires A45 to register it at start-up through registerGrantSource. Until then A98's scope hook treats every partner as having no grants: a TP-OBS has no scope, and A12 caps token rights from partnerScope().grant_ids. A45 only says it calls onGrantChanged(grant) and never mentions registerGrantSource or listActiveGrants. A build that follows the spec leaves partnerScope() without grants, so every grant-path read by TP-OBS (and TP-AUD beyond its engagement) is refused, and token expiry is not capped at the grant end. A98 also moves its grant re-runs (grant-scoped reads, expiry, revoke, TP-OBS agent parity, token cap at grant end) onto A45's challenges, which A45 does not list.",
+   "fix": "Under Scope and the data-room section, add: A45 implements GrantSource over data_room_grant (listActiveGrants reads active grants at the injected clock, and subscribe delivers onGrantChanged from the grant effector, revoke and reporting.dataroom_sweep), and calls registerGrantSource from the reporting module's start-up. Add a boot test showing that the real source replaces FixtureGrantSource outside the test profile. Add A98's named grant re-runs to A45's Challenge list, including the token-expiry cap at the grant's ends_at, and add registerGrantSource and listActiveGrants to the Specify interface list."
+  },
+  {
+   "severity": "medium",
+   "issue": "The A41 intake subscribes to an event A41 does not emit. A45 says A41 publishes TaxFiling rows through the job tax.calendar_publish 'and its tax.amma_due event'. A41's outbox (line 129) lists tax.amma.issued, tax.profile.status_changed and tax.filing.calendar (for A45). There is no tax.amma_due. A consumer bound to that name would receive nothing, and the 1,000-event replay test would be written against a fake event.",
+   "fix": "Name A41's event tax.filing.calendar (payload: filing_type, period, due_rule, owner_role, state, evidence_document_id, TaxFiling id) as the only intake event, and bind the idempotency key and the replay test to it."
+  },
+  {
+   "severity": "medium",
+   "issue": "The AML projection leaves out AUSTRAC regulatory orders. A42 (line 174) says 'M19's filing calendar (A45) reads aml_filing, aml_regulatory_order and aml_reportable_breach'. A42 (line 182) also requires A45 to re-run a case in which 'a late SMR, TTR, IFTI or regulatory order appears on the calendar'. A45 projects only aml_filing and aml_reportable_breach. Regulatory-order deadlines (for example AUSTRAC notices to produce information) would not appear on the MLRO's and CCO's calendar, and A42's upstream re-run would fail.",
+   "fix": "Add aml_regulatory_order to aml_projection.ts under the same MLRO/CCO-only, read-only, no-alert and 404 rules, with A42's due date and state. Include it in oracle invariant 1, the G14 'done' text and the leak test, and list A42's named re-run in the Challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "The public 'Trusts on RealX' figure conflicts across nodes and can reveal a hidden listing. A45 seeds and asserts trusts_on_realx = 3 for Harbour & Co from the design and publishes it on the public performance endpoint. A54 (line 433) requires 2, counting only publicly visible trusts, because the design's 3 counts the hidden Marine Parade listing and 'would leak its existence' (logged at HG-REVIEW). A33 defines the fact as a live count of active vehicles. A45's definition ('vehicles with a live or closed offer') is written for staff-only ADM-29 and is reused for the public figure.",
+   "fix": "Give trusts_on_realx one owner (A33's live fact, per the A33 split above) and a public definition that counts only publicly visible trusts. Keep the ADM-29 trusts column (3/3/2) as a staff figure. Change A45's seed and fidelity challenge so that no public response returns 3 for Harbour & Co in the base seed."
+  },
+  {
+   "severity": "low",
+   "issue": "The graph text is stale. Unlocks lists 8 nodes, but app-graph.json gives A45 10 dependents (A47 and A99 are missing), and the Gate says 'Pass unlocks the eight dependents'. The text says 'the orchestrator adds them to the graph' for edges that already exist. design_refs in the node data list only design-ext:ADM-26, while the spec also relies on design-ext:ADM-29 and design:PUB-05.",
+   "fix": "List A47 and A99 under Unlocks with the interface each one reads, change 'eight' to 'ten', delete the 'orchestrator adds' sentences, and add design-ext:ADM-29 and the PUB-05 key to the node's design_refs."
+  },
+  {
+   "severity": "low",
+   "issue": "Stale references in other nodes contradict A45. A98 line 46 says 'Attesting a metric as audited is A45's person-only act for TP-AUD', which contradicts the signed-letter model. A76 line 129 gives M19.calendar.read to SUPER, which A45's table does not. A66 line 191 uses the old scope name reports:export.",
+   "fix": "Record these as upstream corrections in A45's Specify list and in the plan's revision log: A98 changes to 'A45 cites the auditor's signed letter; TP-AUD is read-only'; A76 matches A45's role list (or A45 adds SUPER as a proposal); A66 changes to M19.boardPack.export."
+  },
+  {
+   "severity": "low",
+   "issue": "Two audit and fidelity rules are ambiguous. The audit rule covers listed pages (partner.read) and downloads (dataroom.item_downloaded), but not a single item view (GET .../items/{itemId}), and A105 line 152 assumes one partner.read per item view. The sponsor-performance response is called 'exactly the ADM-29 columns' but lists 11 fields against the design's 8, and the fidelity check says 'ADM-29 field set exactly'.",
+   "fix": "State that an item view writes exactly one partner.read carrying the item ref, and a download writes only dataroom.item_downloaded. Rename the sponsor-performance fields 'the 8 ADM-29 columns plus late_distributions_6m, incidents and complaints', and assert that exact set."
+  }
+ ]
+}

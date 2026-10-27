@@ -1,0 +1,105 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "SMR, TTR and IFTI filing is owned twice, and the two nodes contradict each other. A42 is a dependency and an oracle node. It already owns `aml_filing` (kinds smr, ttr and ifti), the MLRO-only hardware-key `smr-decision` and `/file` with `external_ref`, the TTR and IFTI filed or decided_no_file decisions, and lateness as `aml_reportable_breach` plus a Sev1 `aml.smr_clock`. A42 line 104 says A45 only reads `aml_filing` and `aml_reportable_breach`. A45 instead expects A42 to call `openFiling`, which is impossible because A42 is built first. A45 also creates its own smr, ttr and ifti filings with a second submit path, and raises its own Sev2 `reporting.filing_overdue` for the same lateness (challenge 4 demands exactly one Sev2, while A42 raises a Sev1). It lets LEGL and CCO submit TTR and IFTI, although A42 shows those items to MLRO and CCO only and gives LEGL nothing on M20. Because A45 seals only `smr`, TTR and IFTI rows would be listed to LEGL, CFO, SUPER, CEO and to auditors and regulators through the data-room `filings` collection. That breaks need-to-know and risks tipping off. It also duplicates the legal record of an AUSTRAC report, and the build fails A42's hidden oracle.",
+   "fix": "Remove smr, ttr and ifti from A45's filing kinds and from `filings:write`. Inside its own path, A45 registers a read-only obligation adapter over A42's public index (`aml_filing`, `aml_reportable_breach`). The adapter shows AUSTRAC transaction reports on the calendar to MLRO and CCO only, links to A42's clock ids, raises no alert of its own and never offers submit. Rewrite the G14 'done' text, challenge 4 and the sealing pass criterion around this projection. Keep A45 filing kinds only for reports that are not AML reports."
+  },
+  {
+   "severity": "high",
+   "issue": "CRS/FATCA and the tax calendar are duplicated with A41, and the interface points the wrong way. A41 already files CRS/FATCA itself: `tax.crs_fatca.file`, 4E TAXO -> CCO, lodged through the `tax_authority` sandbox adapter. It also pushes its TaxFiling rows (AMMA, CRS/FATCA, AIIR and remittance) to A45 as an outbox event from its job `tax.calendar_publish`. A45 seeds the same rows again. It expects A41 to call `openFiling`, which A41 cannot do. It relies on an A41 'report batch in approved state' that A41 does not define, and it adds a second, human-typed CRS lodgement submitted by LEGL or CCO. The result is duplicate calendar rows and two lodgement records for one ATO report.",
+   "fix": "Make A41 the single source. A45 consumes A41's `tax.calendar_publish` rows as derived obligations (`source: tax`, `source_ref` = the TaxFiling id) and does not seed its own AMMA, AIIR, CRS or remittance rows. Either drop the `crs_fatca` filing kind or make it a read-only mirror of A41's `tax.crs_fatca.file` request and adapter acknowledgement. Replace `FIL_BATCH_NOT_APPROVED` with a check on A41's real states, and fix the G16 'done' text to match."
+  },
+  {
+   "severity": "high",
+   "issue": "Provider registration runs the wrong way, so the real data sources are never wired and the node can pass on fixtures. The spec says other modules call `registerObligationSource`, `registerDataRoomCollection` and `registerMetricSource`. But A16, A18, A20, A21, A33, A34, A40, A41 and A42 are dependencies that are built before A45, and none of them calls these functions. A36, A37, A39, A44 and A48 do not depend on A45. A65 owns only `e2e\\sponsor\\`, so it cannot add registration code to other modules. The prudential model, the register_extracts, recon_runs and financials collections, capital_raised, on-time distributions, proof score and sponsor performance would all ship on fixtures, and no node is obliged to replace them.",
+   "fix": "State that A45 writes these adapters itself, in its own path, over the public index.ts of every module in its dependency closure (A16, A18, A20, A21, A33, A34, A40, A41, A42). Add a pass criterion that none of those sources is served by a fixture outside RUN_MODE=local tests. For sources outside the closure (A36/A37 allocations, A39, A44, A48), either add them as dependencies or name the later node or follow-up loop that registers the adapter. Add a Fable check that the fixture provider is absent from the production registry."
+  },
+  {
+   "severity": "high",
+   "issue": "The only way to get an audited figure is blocked by A98. A45 makes `POST /v1/metrics/values/{id}/attest` a TP-AUD write, and every publication precheck refuses values that are not audited. A98 line 86 refuses every write route called by TP-AUD, TP-OBS or TP-LIC (or their agents) through A11's matrix, and its structural test asserts that those kinds have no A03 cells except read and none. A03's matrix has no attest action. So basis can never become audited, `metrics.publish` can never pass, and neither the seeded publication nor challenge 1 can be produced.",
+   "fix": "Resolve this at plan level now. Option (a): add an A03 cell for metric attestation by TP-AUD (person-only, non-delegable), amend A98's structural test to allow exactly that one write cell, and record the change in both specs. Option (b): model attestation as a signed auditor letter that CFO uploads, bound to the value hash, which TP-AUD confirms read-only (this is the HG-VENDOR/HG-LEGAL question the spec already names). Align A105's use of the attest endpoint with whichever option is chosen."
+  },
+  {
+   "severity": "high",
+   "issue": "The permissions and action codes are not in the domain catalogue this node depends on, and A45 does not own that catalogue. A03 derives actions and scopes from the product map (scope id equals action id, `M19.*`). ADM-26 has only four actions, and ADM-01's board-pack export is CFO and CCO only. A45 uses a different scope scheme (`reporting:read`, `filings:write`, `dataroom:grant`, `metrics:attest`, `reports:export`). It adds approval codes and policies that are not in the product map (`obligation.waive` CCO->LEGL 4E, `obligation.edit_seed` LEGL->CCO 4E, `dataroom.extend`), single-actor acts (complete, assign, revoke, attest, withdraw), and export rights for CEO and LEGL. A14 takes action codes only from A03's catalogue. The builder would have to edit A03's path, which A45's own escalation rule forbids, or its permission tests would disagree with the note.",
+   "fix": "List every M19 action in A03's id scheme with its kind, roles, policy code and delegable flag. Record the additions as a planned change to A03's `actions.ts`, `matrix.ts` and maker-checker baseline, written into A03's spec now. Mark which items are product-map rows and which are proposals for the founder, and use the A03 ids as the scope names in the HTTP section."
+  },
+  {
+   "severity": "high",
+   "issue": "Sealing leaks through alerts, queues and the audit log. A13 lets CCO, SECO and CEO see every alert, and TP-AUD and TP-OBS can read alerts. A45 raises `reporting.filing_overdue` for sealed filings with a `filing:<id>` subject. It also registers rows due within 7 days as an A13 QueueSource, which becomes a `queue.sla_breach` visible to SECO and CEO. Events for sealed filings carry an AML case reference but are not placed under A10's need-to-know ACL, so ADM-31 readers can see them. The sealing pass criterion does not test alerts, the queue, the ADM-01 tile or the event type itself, so a leaking build would pass.",
+   "fix": "Add a rule: A45 never emits an alert or queue item whose subject is a sealed or AML-derived row (A42's clocks already cover those). Every event about such rows is written under A10's need-to-know ACL, so readers outside MLRO and CCO see it redacted. Add alerts, A13 queue items, the calendar summary for each viewer, and A10 audit reads to the generated leak test and the pass criteria."
+  },
+  {
+   "severity": "high",
+   "issue": "Consumer contracts disagree with this node, and the consumers do not depend on it. A55 (PUB-08) expects `GET /v1/public/metrics` with a flat shape: `{as_of, basis: 'audited'|'unaudited', capital_raised_cents, distributions_paid_cents, investors, trusts, ...}`. A54 reads a `public_kpi_set` through A43 that cites `metric_snapshot_id` from A47 or A20, and takes sponsor facts from A33's `/v1/public/sponsors`. A66 expects a summary field named `unassigned`. A90 calls `recordOutsideTmdDealing`, and A48 opens a filing task in A45. None of A54, A55, A66, A90 or A48 has A45 in its dependency closure. Meanwhile A45 serves `GET /v1/metrics/public` returning `{published_at, figures: []}`, uses a basis vocabulary of audited and management, and fixes a caption that differs from A54's and A55's. The screens will be built against a contract A45 never ships.",
+   "fix": "Fix one contract in A45 now: the public metrics path and exact shape (field names, basis vocabulary, caption text, empty state), the sponsor-facts split with A33, and A66's summary field names. Then add the edges A45 -> A54, A55, A66, A90 and A48 and list them under Unlocks, or record the follow-up loops in which those nodes move from fixtures to A45."
+  },
+  {
+   "severity": "high",
+   "issue": "The G17 'claims reviewed' step for public KPIs and the track record is not wired to any node. The product-map publish action's result is 'Claims reviewed', and A43 owns the claims library in AM3. A45 defers the claims check to 'once A43 registers', but A43 is not a dependency and no node is named to wire it. G17 is declared done on forbidden labels and audited-only rules alone. Sponsor-declared public facts and metric definition texts would reach the public site with no claims approval.",
+   "fix": "Add A43 as a dependency (no cycle: A43 depends only on A14 and A35). Make the `metrics.publish` precheck and every sponsor-declared public fact call A43's claims check on the exact rendered strings. Add a challenge: a publication of approved numbers whose caption contains a banned phrase must be refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "The agreed cross-path change to A13 breaks A13's own gate. A13's pass criterion says it serves exactly 17 catalogue alert types plus 10 extension types. Adding `reporting.filing_overdue` to A13's catalogue during A45's build makes A13's regression fail and breaks the standing rule that only owned paths change. A45 also needs an A13 policy row `queue.obligation_7d`, which A13 does not seed and A45 does not declare.",
+   "fix": "Amend A13's spec now to seed `reporting.filing_overdue` (Sev2, CCO, ADM-26) as an eleventh extension type and `queue.obligation_7d` as a policy row. Then remove the cross-path exception from A45."
+  },
+  {
+   "severity": "medium",
+   "issue": "Australian DDO fact: a distributor reports significant dealings outside the TMD to the issuer within 10 business days, and the issuer reports to ASIC. Product-map G05 says 'reported to the issuer', and the ADM-26 mock says 'ASIC via issuer'. A45 gives the outside_tmd filing `regime: ddo`, with lodgement 'on the regulator's own portal' and no recipient.",
+   "fix": "Add a `recipient` field to filings. For outside_tmd, set the recipient to the issuer/RE (TP-RE), with the lodgement reference being the issuer's acknowledgement. Add a derived, issuer-owned ASIC row visible to TP-RE. Mark all of it set_with_counsel."
+  },
+  {
+   "severity": "medium",
+   "issue": "In P1 RealX is a corporate authorised representative, so the reportable-situation report to ASIC is the licensee's obligation; RealX's duty is to notify its licensee. A45 seeds a RealX `reportable_situation` filing, lodged on the ASIC portal, CCO -> LEGL.",
+   "fix": "In P1, model this as a licensee_car notification to TP-LIC, plus a derived licensee row for the 30-day ASIC report visible to TP-LIC. Only the P2 rows should have RealX or the RE lodging. Mark all of these set_with_counsel."
+  },
+  {
+   "severity": "medium",
+   "issue": "A45 conflicts with A98 on data-room access and audit. A98 lets TP-AUD engagements list A45 collection codes that can be read outside a data-room grant, while A45 says a partner with no grant has no data-room endpoints. A98 also writes a `partner.read` event for every page, while A45 writes `dataroom.item_viewed` and requires exactly one audit event per read.",
+   "fix": "Decide whether engagement-scoped reads exist, and if so name the endpoint and scope filter. Specify a single audit event per read, carrying the grant or engagement id, and state which node suppresses the other event."
+  },
+  {
+   "severity": "medium",
+   "issue": "The J21 final-report interface does not match A48. A48 opens a `filing.wind_down_report` task in A45 (LEGL, due in 30 days) and owns `trust_retention` and `retentionHold()`. A45 expects a wind-down provider, uses the kind `regulator_final_report`, and writes its own seven-year retention flags. A48 does not depend on A45.",
+   "fix": "Export `openWindDownReport` from A45, or have A45 consume A48's `wound_down` event, and add the edge in the right direction. Use one name for the kind. State that retention belongs to A48 (`retentionHold()`) and A10, and that A45 only references it."
+  },
+  {
+   "severity": "medium",
+   "issue": "The M27 platform fee schedule has no owner. A21 says fee schedules are A45's, A45 says they are A21's or the settings node's, and A69 records the CFO->CEO 4E fee-schedule change and the PUB-06 schedule as having no owning service.",
+   "fix": "Assign ownership now: A45 takes the platform fee schedule (CFO->CEO 4E, notice period, PUB-06 read endpoint), or A21 does, or another named node. Then update A45's M19/M27 sentence to name the owner."
+  },
+  {
+   "severity": "medium",
+   "issue": "The prudential dashboard has no NTA figure. ADM-26's product-map component is 'Prudential dashboard (NTA where applicable)', but `GET /v1/reporting/prudential` has no NTA or financial-requirement figure.",
+   "fix": "Add an nta block to the response: value from the ledger, the requirement, the basis, an `applicable` flag marked set_with_counsel, and a 'not applicable in P1 as a CAR' state. Include it in the design-fidelity check."
+  },
+  {
+   "severity": "medium",
+   "issue": "The D04 agent rules are incomplete. The spec sends no sensitive-action notices to the person, and no A101 anomaly events, when an agent drafts a data-room grant, a metric definition change or a publication, exports a board pack, or when a partner's agent reads the data room. The person-only rule 'revoking a data-room grant aimed at the token's own person' is unclear and cannot be tested as written.",
+   "fix": "Add notices through A43 and A101 for these agent actions, with tests. Rewrite the third person-only rule in concrete terms (for example: a token may not revoke or extend a grant whose grantee is its own person) and keep it as a set_with_counsel row."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag and the estimate do not fit the risk and size. The node decides which public figures are published (G17), keeps AUSTRAC report existence sealed (tipping off), and grants regulators and auditors access to records, all of which is authority, yet it is oracle: no. Its scope (3 lifecycles, about 45 endpoints, 4 jobs, a formula evaluator, renderers, property tests over 2,000 grants and 20,000 requests) is larger than A42's, which is estimated at 8-12 hours, but A45 is estimated at 4-8.",
+   "fix": "Set oracle: yes for the sealing, data-room scope and publication-precheck invariants, or record why not. Raise the estimate to 8-12 agent-hours, or split the node into calendar and filings versus data room, metrics and publication."
+  },
+  {
+   "severity": "low",
+   "issue": "The wikilinks do not resolve. Links use ':' and '/' (A41, A51, A76, A98, A100, A105), while the file names use '-'. Sibling notes have the same pattern, so the generator is the cause.",
+   "fix": "Emit links using the sanitised file name, with the title as the alias, across all node notes."
+  },
+  {
+   "severity": "low",
+   "issue": "`PATCH /v1/reporting/obligations/{id}` has no field list, so a build could change the due date or basis on seeded or derived rows and bypass the obligation.edit_seed 4E.",
+   "fix": "List the fields PATCH may change. Refuse due-date and basis edits on seed and derived rows with a named error code, and add a test."
+  },
+  {
+   "severity": "low",
+   "issue": "Percentage metrics are stored as integer pct, which loses precision (for example 97.5 percent). Data-room register extracts carry investor PII, and the spec states no masking or minimisation rule.",
+   "fix": "Store percentages as basis points. State that data-room and investor-level exports apply A04 mask() or A102 minimiseForExport, and add a PII grep to the challenge."
+  }
+ ]
+}

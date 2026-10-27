@@ -1,0 +1,60 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Dependencies do not cover the interfaces the spec uses. None of A48 (halt state reads, G10 causes), A98 (the TP-RE/TP-REG/TP-AUD principals needed for the trustee approval of the 6E adjustment in the J20 fixture, for certification, for the REG_ADJUST_TRUSTEE_MISSING challenge and for extract issuers), A72 (pre-filled freeze, forced-transfer and lock-up forms; 'Set lock-up dates' is in ADM-16's done list), A104 (MCP server used by the parity Docker test) or A06 (seed and scenario simulator used by every fixture) is a dependency or in A73's transitive closure (deps closure: A00-A05, A08-A14, A16, A18-A20, A51, A53). The list scheduler can start A73 before them. The spec's own fallback ('other halt causes unavailable') would let a build pass without A48.",
+   "fix": "Add A06, A48, A72, A98 and A104 to A73's deps. All are in AM7 or earlier and none depends on A73, so no cycle. Remove the A48 fallback as a way to pass (keep it only as runtime degradation, with a test that hits A48). Record the A72 deep-link contract (route plus id-only query params for freeze, forced transfer and lock_up with vehicle, wallet, lot and BRK reference) as a contract request to A72 in section 6."
+  },
+  {
+   "severity": "high",
+   "issue": "The J20 fixture contradicts the seed and A78, which reuses it 'unchanged'. The seed (A06) already has APR-2292 (GYM01 register adjustment +2, maker Grace L., checkers CCO + CFO + trustee) as the Gympie break's proposed fix, and APR-2285 already pending in the inbox, where A78 rejects it. A73's script instead proposes a new 6E adjustment and drafts APR-2285 so that it is 'blocked, cannot be submitted'. Spec point (a) proposes an order (draft and submit, then propose-fix) that contradicts A20's fixed contract: propose-fix produces the payload that A14 turns into the 6E request, and the approval id is stored on the break.",
+   "fix": "Rewrite the J20 steps 3-4 fixture on the seeded objects. APR-2285 shows as a pending parameter change with its simulation and its 'Licensee notified' prerequisite state. The Gympie break shows fix_pending with APR-2292; CCO, CFO and trustee approve it, REGO submits the instruction, and the targeted run closes the break. Move 'propose a new 6E adjustment' to a separate planted-break fixture. Settle point (a) now by A20's contract (propose-fix creates the request server-side, then A53's flow opens it) instead of deferring it to the user."
+  },
+  {
+   "severity": "high",
+   "issue": "The 'simulation attached / breach list shown first' rule is proved only in the UI (Submit disabled over 50 random edit sequences). Agents submit through the SDK and MCP, and A19/A14 define only SIMULATION_STALE at approve time. No test proves the server refuses a parameter-change, pack, override or threshold-block request that has no simulation, that carries a simulation hash from a different draft, or whose breach list was not acknowledged. A wrong build could pass on the UI-only check.",
+   "fix": "Add a section 6 contract request to A19/A14 for server-side refusals, for example SIMULATION_MISSING, SIMULATION_DRAFT_MISMATCH and BREACH_LIST_NOT_ACKNOWLEDGED (acknowledged count must equal the simulation's breach count). Add a pass criterion that calls these through the SDK and the MCP server, with a staff token and with a human session, and asserts each refusal code. Add the same case to the section 4 parity table."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ADM-35 link in the G22 preset, and the matching decision-log leak challenge, are gated on V on M25. ADM-35 belongs to M26 (Integrations & API) in the product map (data_admin.py M26 screens ADM-32, ADM-35), and A77 gates its oversight pages on M26.",
+   "fix": "Gate the link on V on M26. Change the challenge to 'a REGO without V on M26'."
+  },
+  {
+   "severity": "medium",
+   "issue": "The SoD challenge cannot prove what it claims. Grace L. (REGO) is not an eligible checker for register.adjust (the checkers are CCO, CFO and trustee), so her in-person approval is refused for role ineligibility and APR_MAKER_IS_CHECKER is never exercised. Her agent drafting a second register.adjust on GYM01 also collides with the seeded APR-2292.",
+   "fix": "Use an action where the human is an eligible checker. Example: LEGL's agent drafts an investor override (6E, CCO + LEGL), then LEGL approves in person and gets APR_MAKER_IS_CHECKER. Run the REGO-agent register.adjust draft on a planted break with no existing fix."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'Trusts matched 7 of 8' KPI is not defined. With Marine Parade shown grey 'Not issued' and Gympie in break, only 6 rows are green. A06 counts MPA01 as matched, A20 says it is 'neither matched nor breaking' yet 7 of 8, and A78 expects 8 of 8 afterwards. The builder or Fable could 'correct' the count or flag it as a defect.",
+   "fix": "State that the KPI prints A20's trusts_matched unchanged and that the API counts not_issued as matched, consistent with A06 and A78. Add a check that the UI never recounts rows. Record the wording conflict between A20 and A06 for the owners."
+  },
+  {
+   "severity": "medium",
+   "issue": "Sev2 breaks are unspecified. The Halt column turns red only for Sev1, but the product map says a break halts resale for the trust (its ADM-17 mock shows a Sev2 WLG01 break with 'Resale for WLG01 halted until resolved'). A20's Sev2 breaks block distribution approval and execution and board_open, and R17 pending_ack starts as Sev2. The console could show no restriction while actions are refused.",
+   "fix": "Render the API's blocked-action list for Sev2 breaks (for example amber 'Pre-flight blocked: distributions, board opening') on the row, the drill-down and the break-panel banner. Add a Sev2 case to the tone-mutation test and the planted-drift run."
+  },
+  {
+   "severity": "medium",
+   "issue": "The product-map action 'Force re-sync with the registry: re-submits instructions' (runbook R4) is dropped and recorded only as a design difference. A18 allows a timed_out instruction to be re-submitted as a new instruction that references the old one, but A73's Instructions tab is read-only and no node is named as owner.",
+   "fix": "Add 'Re-submit timed-out instruction' on the Instructions tab under the policy A14 resolves (REGO to head of operations), via A18's route, with a parity row. Otherwise name the owning node and record it as a contract request, not a design difference."
+  },
+  {
+   "severity": "low",
+   "issue": "The rules.monitors badge counts warning and breached rows in the browser from a cursor-paged endpoint. This contradicts section 5 (no count the API does not return) and section 6 (never fetch everything and filter in the browser).",
+   "fix": "Add to A19.1 a counts field on GET /v1/rules/monitors, or a summary route, and read the badge from it."
+  },
+  {
+   "severity": "low",
+   "issue": "SM-07 coverage omits the eligible_empty and deregistered states and treats locked as a unit count rather than a state.",
+   "fix": "List every SM-07 state (eligible_empty, active, locked, partially_frozen, frozen, recovered_out, deregistered) with how the cap table and break panel render each, and add a seeded or planted fixture per state."
+  },
+  {
+   "severity": "low",
+   "issue": "G08 (lock-in) is a product-map gate on ADM-16 (the 'Set lock-up dates' action) but is missing from the node's gates list.",
+   "fix": "Add G08 to A73's gates, noting that A72/A28 enforce it, or state explicitly in 'Requirements covered' that A72 covers G08. Verdict file: <workspace>\\RealX\\09 App Build\\Data\\checks\\A73-check1.json"
+  }
+ ]
+}

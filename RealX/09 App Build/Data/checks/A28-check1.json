@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The mint register step contradicts A38 and this node's own register-first rule. The catalogue row and Build brief section 2 'Register step' have A28 send an A18 `issue` instruction after the mint is confirmed. But the same row, the TOP_REGISTER_FIRST precheck and A38 F5 all require the trustee's register entry to exist already (A38 issues and gets the ack BEFORE it calls A28). Built literally, the spec either issues twice on the register or, if A18 refuses the duplicate approval id, sends every AM2-exit mint to `broken`. A build that silently skips the step would also pass.",
+   "fix": "For `mint` and `batch_mint`, make the register effect 'verify only': send no A18 instruction and skip `register_pending`. At `confirmed`, read A18 `GET /internal/register/issued?approval_id` and require its lines to equal the minted lines; otherwise go to `broken`. Keep the redeem, transfer and lot-update instructions for burn, forced transfer, recovery and lock-up. Change the AM2 exit scenario and the property test to assert that the mint step leaves register units unchanged. Align event names with A38: A38 F7 listens for `custody.op.confirmed` and correlates on trigger_ref = custody_op_id, so state which event A28 emits."
+  },
+  {
+   "severity": "high",
+   "issue": "Graph fit: A28 is in AM2 but relies on AM3 nodes that are not dependencies and cannot become dependencies under the milestone rule. These are A43 notifications (execution is refused with TOP_NOTICE_NOT_SENT until A43 confirms delivery), A37 locked Allocation files (the supply guard and the AM2 exit), A35 evidence document ids, and the A30/A31 'off-chain identity registry record' used by the destination guard. The builder cannot satisfy the forced-transfer and recovery path, the supply guard or the AM2 exit without inventing interfaces.",
+   "fix": "Declare ports inside the owned path with fixture providers for AM2, as A18 already does for A37: AllocationSource (A37; fixture until A37 lands), EvidenceDocs (A35; fixture hash store), HolderNotifier (A43; sandbox notifier that records delivery attempts), IdentityLookup (A29's wallet-identity link now, A30/A31 later). Specify how each fixture behaves. Add pass criteria in A37, A35, A43 and A31 that re-run A28's notice, evidence, supply and destination tests against the real providers."
+  },
+  {
+   "severity": "high",
+   "issue": "SM-13 transitions have no API. transfer_requests must move through triage, identity_reverification, legal_review, rejected, compliance_approval (CCO), checker_approval (CFO + trustee), disputed (holder objection) and back to legal_review, but section 6 exposes only GET and POST /transfer-requests and GET /transfer-requests/:id. A72's agent-parity table expects A28 to accept 'triage; legal-review recommendation; record holder objection' for court-order, estate and error requests; A29 covers only lost-wallet intake. The pass criterion 'every SM-13 transition exercised' can be met with internal functions while ADM-15 and agents still have no way to drive the transitions.",
+   "fix": "Add POST /transfer-requests/:id/triage, /legal-review, /reject, /compliance-approval and /checker-approval (the last two as A14 requests with the map's role sets), plus /objection (moves timelock to disputed and cancels the op). Give each route RBAC, G22 maker scope where allowed (agents may draft triage, legal-review and objection records as maker, never approve), error codes and audit events. Add a pass criterion that every SM-13 transition is reachable through the HTTP API."
+  },
+  {
+   "severity": "high",
+   "issue": "Checker sets for forced transfer and recovery do not match SM-13 and J09. SM-13 requires compliance_approval (CCO) and then checker_approval 'CFO and trustee' before old_wallet_frozen, and J09 has the CFO approve the timelock step. The catalogue's `recovery` row is 'SUPP intake -> KYCA -> CCO + custody quorum', with no CFO and no trustee. The `forced_transfer` row says '(+ trustee where the row says so)' without saying when. The catalogue-equals-map test would pass a build that executes recoveries with no CFO or trustee approval.",
+   "fix": "Seed `recovery` as SUPP/KYCA -> CCO (compliance_approval) -> CFO + trustee (checker_approval) -> custody V2 quorum. Seed forced_transfer and estate transfers as LEGL -> CCO -> CFO + trustee. State that the trustee is always required, as SM-13 draws. Add an oracle case in which a recovery approved only by the CCO is refused. If the founder prefers the ADM-15 action-row wording, list the difference in the Specify spec-gap next to the mint question."
+  },
+  {
+   "severity": "high",
+   "issue": "Partial freeze is missing from the catalogue. Several product-map items need a partial-freeze operation: ADM-14's 'Freeze wallet or partial freeze' action (freezePartialTokens, with the mock reason RESALE_LISTING), the V2 key rule, the investor 'List for sale' action, and the SM-07 transitions active->partially_frozen, partially_frozen->active and partially_frozen->frozen. The spec maps freezePartialTokens only to lock_up, which SM-07 treats as the separate `locked` state. So the M09 and SM-07 done criteria cannot be met, and A91 (the resale board, a child of A28) has nothing to call.",
+   "fix": "Add `partial_freeze` and `partial_unfreeze` kinds on V2 (legal holds: CCO -> LEGL 4E+Q; resale listings: the market module's row once settled). Tell them apart from lock_up and unlock by a reason field recorded on the op. Map each SM-07 transition to exactly one kind in a table that the state-coverage test reads."
+  },
+  {
+   "severity": "high",
+   "issue": "The seed and a challenge contradict the V2 quorum. The 'Agent parity and SoD' challenge requires OP-7730 to read signatures_have=2, signatures_need=3, state=awaiting_signatures, with the third signature flipping it to signed. Section 2 and A15 set V2 at 2-of-3, and the prototype switches Sign to Broadcast once n>=2. A build that keeps the 2-of-3 quorum fails the challenge. A build that passes it has quietly made V2 3-of-3, which departs from the product map. A15's design-fidelity challenge has the same defect.",
+   "fix": "Seed OP-7730 as signatures_have=2, signatures_need=2, signers_total=3, state=signed, action Broadcast; or re-seed it at 1 of 3 if an 'awaiting' example is wanted. Add signers_total to the GET /operations contract so the meter's 'n of 3' caption does not reuse signatures_need. Raise the same fix against A15."
+  },
+  {
+   "severity": "high",
+   "issue": "J08 step 10 says '4E+Q; owner quorum for final burns', but the burn row is TOKO -> CFO 4E+Q on V2 only, and the wind-down burn requested by A48 gets no extra approval. The spec claims J08 step 10 as covered, and the catalogue test cannot catch the omission.",
+   "fix": "Add a `burn_final` row (wind-down, burn equal to total supply) that carries the owner-quorum approval named in J08. List its conflict with the V1 key rule ('never moves value') as a Specify spec-gap question for the founder, next to the mint question. Add an oracle case in which a full-supply burn approved only by the CFO is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "`unlock` is specified as AUTO through V2, but V2 needs 2 distinct human signers and A15 P9 says an SVCA principal can never sign on V1-V3. The row cannot be built without weakening P9, and a builder under pressure might do exactly that.",
+   "fix": "Choose one of two options: rely on the on-chain LockInModule release date (no transaction; SM-07 locked->active becomes a read-model transition), or queue date-passed unlocks automatically as REGO -> CCO 4E+Q ops for human signing. Remove AUTO from the V2 row."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec makes lost-wallet recoveries unwaivable, calling this an 'SM-13 invariant', and a challenge refuses a valid CCO + CEO court-order waiver on a lost_wallet request. The product map says only that the timelock can be waived by CCO + CEO with a court order; it does not rule out lost-wallet waivers. This is an unflagged rule change.",
+   "fix": "Mark the rule as proposed and add it to the HG-LEGAL and founder questions. Seed it as a catalogue flag (waivable_types) so the answer changes a row, not code. Make the oracle case depend on the settled row."
+  },
+  {
+   "severity": "medium",
+   "issue": "The SM-13 path for court-order, divorce, error and sanctions-directive transfers is inconsistent. Section 4 requires old_wallet_frozen only for recovery and estate transfers, so other types would go checker_approval -> timelock, which is not an SM-13 transition. The SM-13 waiver edge runs from checker_approval to executing, but the spec's waiver acts on an op that is already queued.",
+   "fix": "Require old_wallet_frozen before timelock for every request type, as SM-13 draws. Allow the court-order waiver at checker_approval (-> executing) as well as while queued. Cover both paths in the state-coverage test."
+  },
+  {
+   "severity": "medium",
+   "issue": "The seed's OP-7731 is '1 of 3 V2 with a timelock', but A15 P10 refuses any signature before executable_at, and this spec moves an op to awaiting_signatures only after the timelock ends. A seeded row with a signature inside an active timelock cannot exist, so either the seed breaks P10 or the seed test fails.",
+   "fix": "Choose one: seed OP-7731 with timelock_until before the seed's as-of date (timelock elapsed, notice sent, old wallet frozen) and 1 of 3 signatures, or with 0 signatures in the queued state. Say which in the seed section and the pass criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "A29 is used but is not a dependency. Only a RecoveryRequest that A29 marks `unrecoverable` may open a lost_wallet transfer request, and the destination guard needs the wallet-to-identity link that A29 owns. A29 is in AM2 and does not depend on A28, so the edge is allowed.",
+   "fix": "Add A29 to the dependencies (A27, A15, A18, A20, A29) and name the A29 interfaces used: recovery request lookup and the wallet identity link."
+  },
+  {
+   "severity": "medium",
+   "issue": "Indexer event handling overlaps A27 and uses a break type that A20 does not define. A27 already matches every Executed(approvalId) event to its CustodyOp and raises unmatched events as `unbound` Sev1 breaks. A28 re-matches the raw Executed events on its own internal route and opens `unknown_execution` breaks, which is not one of A20's break types. The two consumers can disagree or open duplicate breaks.",
+   "fix": "Consume A27's matched or unbound outcome (or the A15 CustodyOp state) instead of re-matching raw events, and use A20's existing break types. If a new type is really needed, list it at Specify as a change to A20."
+  },
+  {
+   "severity": "medium",
+   "issue": "The mint checker rows have three different versions, and the spec-gap note covers only the CEO question. The product map says 'TOKO -> CFO (+CCO if not from a locked allocation file), 4E+Q' and 'Deliver tokens: TOKO -> custody quorum, 4E+Q'. The node summary says 'CFO, plus CCO + CEO when not from a file'. The spec table uses CFO + CCO 6E+Q for mints from a file. The supply challenge assumes one of these.",
+   "fix": "Extend the Specify spec-gap to set out all three versions, including 4E+Q versus 6E+Q and the 'Deliver tokens' row. Make the supply challenge's expected refusal depend on the settled row."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec says the state-to-pill table 'ships in the SDK', but packages/sdk is generated and owned by A09. Writing a table there by hand breaks the 'only the owned path changed' criterion.",
+   "fix": "Expose the pill mapping as an OpenAPI enum or extension, or as a constant in the module's public contract that A09's generator emits. Do not hand-edit packages/sdk."
+  },
+  {
+   "severity": "low",
+   "issue": "Minor dependency and wording slips. `broadcast` accepts SVCA for 'A31's V4 auto path', yet V4 kinds are refused here with TOP_UNKNOWN_KIND. The OP-7729 seed references A42's seeded case, but A42 is a child of A28. The spec says actions are 'reported to A101', yet A101 (AM3) cannot be a dependency. The oracle uses 'the Hardhat chain from A23', which is not an ancestor. The design key in the node data is 'design:adToken ops and Recent table', but the note writes 'design:adToken Token ops and Recent table'.",
+   "fix": "Drop the A31 SVCA mention. Seed AML-118 as a plain string that A42 links later. Say that the node 'emits the G22 anomaly event that A101 consumes'. Use A27's local chain in the oracle. Make the design key text match the graph data."
+  }
+ ]
+}

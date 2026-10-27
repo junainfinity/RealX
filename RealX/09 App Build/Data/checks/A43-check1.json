@@ -1,0 +1,100 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The dependencies do not cover the interfaces the spec uses. A43's ancestors are only A00-A04, A08-A14 and A35. Its routing table, recipient resolver, tasks and seed need frozen event contracts and reads from nodes that are not dependencies: A34 (attestation, valuation), A36 (listing review, submit, offer open and close; the spec wrongly says the listing-review event comes from A34), A37 (orders), A39 (withdrawals), A40 (distributions), A33 (billing, tenant users), A28 (transfer notice), A29 (recovery), A42 (tipping-off rules), A48 (halts, kill switches), A47/A18 (holders of a vehicle) and A98 (TP-VAL and TP-PM assignees). The Specify step freezes only the A12, A13, A14 and A35 contracts. Worse, the spec says A34, A40, A33 and A12 call comms.openTask/closeTask and A28/A29 call comms.noticeConfirmed. They cannot: none of them descend from A43, and A12, A28 and A29 are in earlier milestones.",
+   "fix": "Add an 'Event contracts consumed' section that gives, for each routed type, the producer node, the outbox event name and the payload. Tasks open and close only from those producer events, never from producers calling A43. Either add A34, A36, A37, A39, A40, A47, A48, A33 and A98 as dependencies (none of them depends on A43, so no cycle) or freeze their event schemas in packages/domain (A03) with a contract test per producer. For A28 and A29, use an outbox pair notice.requested / notice.confirmed. Resolve legal-notice recipients from A18's register through an injected HolderResolver, with a fixture until A47 lands."
+  },
+  {
+   "severity": "high",
+   "issue": "Routine property updates publish with no RealX person involved: an automatic (AUTO) approval decided by the service account SVCA. The requirements (D14, ADM-28, SPN-12) say IRCM publishes them and they go to RealX communications compliance. The spec's AUTO condition, claims_clean_and_ruleset_current, is not in A14's closed list of four auto_condition values. Adding it means changing A14's code, which A43's own escalation trigger forbids.",
+   "fix": "Seed comms.publish_routine as a human IRCM decision: 4E, IRCM as checker with a hardware-key assertion, and the claims precheck registered through A14's registerPrecheck. If the founder wants AUTO instead, record that as a decision plus a counsel question and add an A14.1 loop that adds the condition, as a prerequisite of A43."
+  },
+  {
+   "severity": "high",
+   "issue": "The claims-lint severities contradict the design seed this node must reproduce. 'guaranteed income' and 'beats the market' are seeded as block phrases. The design (spNew, adListing, APR-2290) shows them as amber review flags, '2 phrases flagged for review', on a listing that was already submitted. With block severity the submission is refused and the tone and summary cannot match, so either the block rule or the seed-fidelity challenge fails. A36 also treats G17 flags as warnings at submission and blockers at go-live, while A43 and A63 block at submission.",
+   "fix": "Make severity depend on the kind of item (severity_by_kind): review for listing_copy and IM text, which then block go-live through A36's precheck; block for announcements, campaigns and site copy. Define the summary string for every combination of counts. State that the Marine Parade seed gives two review flags, and align A36 and A63 in the same fix."
+  },
+  {
+   "severity": "high",
+   "issue": "The matcher's behaviour is underspecified, yet Fable's blind clean set allows zero false positives. As written, the lint would flag compliant disclaimers such as 'not guaranteed', 'not capital protected' and 'not risk-free', and substrings such as 'safeguard', 'secured' and 'unsafe'. The rule to collapse spacing can join ordinary words. There is no rule for overlapping phrases ('guaranteed' inside 'guaranteed income'), yet a challenge requires exactly one flag. Offsets are not defined (original or normalised text, code points or UTF-16). 'Backed by real estate as a safety claim' cannot be decided by literal matching.",
+   "fix": "Specify: word-boundary matching after normalisation. Collapse spacing only in runs of single letters. Check a bounded negation and disclaimer allow-list before block phrases (a negator within 3 tokens), with test vectors. The longest match wins and overlapping matches give one flag. Offset and length are UTF-16 code units in the original field text. Make 'backed by real estate' a review phrase."
+  },
+  {
+   "severity": "high",
+   "issue": "The write routes and lifecycle actors are missing. There is no route to create or edit a draft, check, submit, publish, withdraw, return (in_review -> changes_requested), resolve a review flag, raise materiality or change the ruleset. The spec does not say who or what moves an item from submitted to in_review, approved to scheduled, or scheduled to published, and no job publishes at scheduled_for. The detail read has no allowed_actions and no route says whether an agent may call it (delegable) or a person must (requiresHuman). The SDK, the MCP server (A104), the parity suite (A100), A64 and A75 depend on these routes. A75 already had to request them as a follow-up loop, A43.1.",
+   "fix": "List every write route with its method, path, roles, x-realx-scope, delegable or requiresHuman, and error codes: POST /v1/comms/items; PATCH (draft only); /check; /submit; /return (CCO or LEGL, human only); /flags/{flagId}/resolve (CCO or LEGL, human only); /materiality (raise only); /withdraw; GET /v1/comms/items/summary. Publication is done by the A14 effector on approval, or by a notify.publish_scheduled job at scheduled_for. Add allowed_actions[] to the detail read. Take A75's A43.1 request into this spec now."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec conflicts with A101 on agent notices. First, A43's notify.summaries sends agent.daily_summary to everyone with token activity, while A101 owns its own daily-summary job and its notice policy has that summary off by default: the result is duplicate or always-on summaries. Second, A101 requires a tenth type, agent.sensitive_action, and requires agent-category notifications to be hidden from reads made with a token (A43.1, A101 point (e)). A43 lets a token list them, and its challenge asserts that behaviour. A43 builds first, so its pass criteria would lock in behaviour that A101 must reverse.",
+   "fix": "A43 seeds agent.daily_summary as a type and template only; A101 emits it. Seed agent.sensitive_action. Leave agent-category rows out of the notification list and badge when the caller uses a token, and keep the 403 on marking them read. Update the 'agent that tidies up' challenge and the pass criteria. State that A101 decides whether to emit a notice and A43 only routes it."
+  },
+  {
+   "severity": "high",
+   "issue": "Public KPI publication has two owners. A45 owns metrics.publish (6E, IRCM -> CFO + CCO) and GET /v1/metrics/public for PUB-01 and PUB-08. A43 seeds comms.publish_public_kpis (6E) and a public_kpi_set for the same pages, and A54 reads A43's set. That is two approval rows for one product-map action and two competing public sources.",
+   "fix": "Remove the public_kpi_set kind and comms.publish_public_kpis from A43. A45 stays the owner, and its precheck lints the rendered strings with A43's pure checkClaims. Point A54 at /v1/metrics/public. (The reverse works too, as long as both specs name one owner.)"
+  },
+  {
+   "severity": "high",
+   "issue": "The item kinds campaign, site_copy and listing_copy have no approval policy row and no defined publication effect. D14 and ADM-28 require campaigns and site copy to go through the approvals queue, and A54 renders published site_copy. The builder must invent who approves them, and 'nothing publishes without an approval record' cannot be tested for these kinds. The spec does not say how listing_copy relates to A36's listing.go_live approval.",
+   "fix": "Seed comms.publish_campaign (MKTG -> CCO, 4E) and comms.publish_site_copy (MKTG or IRCM -> CCO, 4E). State that listing_copy is approved by A36's listing.go_live, whose payload includes the copy's body_sha256 and claims report id, and that A43 never publishes it. Define the publication effect for campaigns (sent to opted-in recipients only) and for site copy (served by key on a public read)."
+  },
+  {
+   "severity": "medium",
+   "issue": "The Spam Act 2003 and Privacy Act APP 7 are not covered. Campaign emails are commercial electronic messages: they need consent, sender identification and an unsubscribe that works and is honoured within 5 business days. The spec has no consent record and no unsubscribe route.",
+   "fix": "Add a marketing_consent record, an unsubscribe route that works without sign-in and the sender identification block in campaign templates. Send campaigns only to people who consented. Add a counsel question under HG-LEGAL and a challenge for a campaign sent to someone who did not consent."
+  },
+  {
+   "severity": "medium",
+   "issue": "offer.opening has no subscription source. The spec cites the 'Notify me' watch list but defines no watch table or route. A54 had to request POST and DELETE /v1/me/watches from A43.",
+   "fix": "Add a watch table and POST/DELETE /v1/me/watches for the kinds offer_open, listing_match and sponsor_listing. Each call is idempotent per person, kind and target, reachable by a token and audited 'on behalf of' the person. Route offer.opening to watchers."
+  },
+  {
+   "severity": "medium",
+   "issue": "The rules for an approval that no longer matches the text conflict. The challenge expects a maker to edit an approved item and get COMMS_REPORT_STALE on publish. The pass criteria expect COMMS_NO_APPROVAL for any body hash other than the approved one. The spec never says whether the text can be edited after submission.",
+   "fix": "Allow edits only in draft; an edit in checked returns the item to draft. An edit in submitted or later returns 409 MKT_ILLEGAL_TRANSITION. Publish compares the approved payload_sha256 with body_sha256 and returns COMMS_NO_APPROVAL on a mismatch. Use one error code in both places."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 30-day notice arithmetic is routed through A13's businessDaysAfter. 30 business days is about 42 calendar days, which breaks the challenge's case of 2 Nov 2026. The notice schedule is also stated two ways: at approval, T-7 and effective day in the brief, but T-30, T-7 and effective day in the pass criteria.",
+   "fix": "Define notice_days as calendar days in Australia/Sydney civil time. Pick one notice schedule and use it in the brief, the challenges and the pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "The notification catalogue has internal inconsistencies. announcement.withdrawn is emitted but not seeded, which is a startup error under the spec's own validator. A hard bounce opens an investor task, but tasks are only for sponsor and partner users. The valuation.due task at T-30 conflicts with A34's 21-day warning and A34's existing task. The review.changes_requested source should be A36, not A34.",
+   "fix": "Seed announcement.withdrawn. Replace the investor bounce task with a mandatory security notification and an ACC-01 flag. Take valuation.due from A34's event, with the 21 days kept as data. Correct the source to A36."
+  },
+  {
+   "severity": "medium",
+   "issue": "The sponsor second-human rule does not say that an agent counts as its human. SP-OWN could submit a material item that SP-OWN's own agent drafted.",
+   "fix": "Compare drafter and submitter by the human principal (on_behalf_of_id when an agent acted). Add a challenge that expects COMMS_SECOND_HUMAN_REQUIRED in this case."
+  },
+  {
+   "severity": "medium",
+   "issue": "The yield challenge contradicts the yield rule. 'we target 7.1%' contains none of the trigger words (yield, return, income, distribution), yet the challenge requires it to flag.",
+   "fix": "Add 'target', 'forecast' and 'aim' to the trigger words, or make any percentage count in a paragraph that contains a trigger word. Put the exact challenge text and expected offsets in the spec."
+  },
+  {
+   "severity": "medium",
+   "issue": "The estimate of 6-10 agent-hours is low for the scope: about 60 notification types, 2 adapters, a template engine, 6 jobs, the task model, the item lifecycle with approval routing, a confusables-aware lint with 300 obfuscation variants and 3 hidden suites. A14 and A40 are estimated at 10-14.",
+   "fix": "Raise the estimate to 10-16, or split the node into A43a (notifications, adapters, templates, jobs, tasks) and A43b (claims lint, item lifecycle, approval rows)."
+  },
+  {
+   "severity": "low",
+   "issue": "How a terms version relates to the A35 disclosure library is not defined. The item body is capped at 20,000 characters, and A75 lists 'one approval or two linked approvals' as an open question.",
+   "fix": "A terms_version item references one A35 document version. One A14 approval covers both, and its payload hashes the document hash and effective_from."
+  },
+  {
+   "severity": "low",
+   "issue": "Two SPN-12 requirements are not met. The editor's starter templates (monthly update, significant event) have no source. SPN-12 lets SP-IR submit, but the spec does not, which blocks J19 step 5, where SP-IR writes and submits the monthly update.",
+   "fix": "Add versioned starter templates for each announcement kind. Let SP-IR submit routine items; material items keep the second-human rule."
+  },
+  {
+   "severity": "low",
+   "issue": "The status line names AM3 'Chain, identity and the money path'; the graph calls it 'Business services'. The wikilinks to A50, A51, A62, A63, A64, A75 and A101 use ':' where the filenames use '-', so they are broken. The same link pattern appears across the plan.",
+   "fix": "Correct the milestone name. Have the generator emit sanitised filenames with the original title as an alias."
+  }
+ ]
+}

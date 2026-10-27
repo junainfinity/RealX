@@ -1,0 +1,90 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "Held receipts post no ledger journal, which breaks zero-tolerance reconciliation and contradicts A16. The spec says a payer-name mismatch gets 'no ledger journal' and makes that oracle invariant 1 and an escalation trigger. But the money is in the trust account: the sandbox statement credits ••2201 while A16's bank_mirror does not move, so A20's rule R10 (statement closing balance = sum of mapped ledger accounts, Sev1 on any cent) breaks on every held receipt and halts resale. A16 already defines deposit.unmatched (bank_mirror / suspense_unmatched, poster A17), suspense.resolve and suspense.return for this case. Fable will encode 'no journal' in the hidden oracle, so a correct build fails and a wrong build passes.",
+   "fix": "Rewrite invariant 1 as 'a receipt that fails the name rule never credits investor_cash or any wallet; it posts exactly one deposit.unmatched journal (bank_mirror / suspense_unmatched) in the ingest transaction'. Manual match posts suspense.resolve, return posts suspense.return then the payout, and a returned credit on a held receipt reverses the suspense journal. Update the matching step (3), the oracle rule, the Money challenge, pass criteria 1 and 2 and the Escalate clause. Add a pass criterion that the sandbox statement closing balance per account equals A16's mapped ledger balance after every end-to-end run."
+  },
+  {
+   "severity": "high",
+   "issue": "The dependencies miss most of the interfaces the spec calls. The graph gives A17 only A16 and A08 (the closure is A00-A04, A08, A09, A16). The spec uses A10 (audit), A11 (RBAC, unmask permission), A12 (G22 evaluator, on_behalf_of), A13 (alerts and the business-day calendar for '5 business days'), A14 (ApprovalPolicy rows and 4E requests), A19 (GateEvaluation for G02) and A22 (screening_result_ref). All are AM1 and none depends on A17, so adding them creates no cycle.",
+   "fix": "Add A10, A11, A12, A13, A14, A19 and A22 to A17's deps in final-graph.json and in the 'Depends on' line. Name the imported contracts in Specify: A10 append, A11 matrix cells, A12 evaluateG22 and mandate counters, A13 emit and the business-day calendar, A14 createRequest and the state query, A19 evaluate, and A22 ScreeningResult."
+  },
+  {
+   "severity": "high",
+   "issue": "The investor facts that the matching engine and payout primitive depend on come from later nodes, and the spec defines no interface for them. Verified names, joint holders, entity names, investor state and the nominated account come from A30 (AM3). The AML restriction flag comes from A42, which depends on A17. The spec reads them as if they exist, so the builder will invent investor tables that collide with A30, and the oracles have no input shape.",
+   "fix": "Define an InvestorFactsProvider { verifiedNames, state, nominatedAccount } and a RestrictionProvider { isRestricted } in modules/payments, with in-repo fakes seeded from A06 personas (Alex James Morgan). State that A30 and A42 register the real implementations and that Fable's oracles feed the fakes."
+  },
+  {
+   "severity": "high",
+   "issue": "The nominated withdrawal-account write route is missing. A56 (ONB-09) and A59 (ACC-01) both call 'A17's nominated-account write route' under a passkey step-up. A56 notes that A17 names none and proposes POST /v1/payments/nominated-account. A39 uses A17's nominated-account data as the only payout destination. A17 has no entity, no route, no name check, no step-up and no D04 non-delegable marking, so the withdrawal-destination rule and the D04 'never delegable' act are unowned.",
+   "fix": "Add a NominatedAccount entity (versioned, encrypted account) and POST /v1/payments/nominated-account { bsb, account_number, account_name }. It requires A11's fresh passkey assertion, carries x-realx-requires-human, and is marked delegable:false, so any agent or API token gets SCOPE_NON_DELEGABLE / 403. The account name must match a verified name under the same normalisation (422 nominated_name_mismatch). Each change is audited, notifies the investor, and makes in-flight payouts to the old account refuse. Add oracle and challenge cases: agent token refused, missing step-up refused, spouse-name account refused."
+  },
+  {
+   "severity": "high",
+   "issue": "The manual-match and CFO rules conflict with A16 and with AML review. (a) A16's suspense.resolve needs 4E TRSY->CFO for any match that is not exact, at any amount, while A17 lets TRSY match alone below A$10k, so A16 will refuse the journal. (b) A16's deposit.matched at or above A$10k carries an aml_hold reservation until A42 clears it; A17 ignores this and emits payment.credited at once, so A37 may fund an order with held money. (c) The A$10k threshold lives in two places (A14 ApprovalPolicy and A16 config). (d) ONB-09 says a deposit from another name is 'held and reviewed (AML)', yet TRSY alone can credit a third-party deposit of A$9,999 with no AML review. (e) Invariant 1 says a mismatched name 'never credits a wallet' while the manual-match route credits exactly such receipts.",
+   "fix": "Agree one rule with A16 and write it in both specs, for example: resolving a payer_name_mismatch or investor_restricted hold needs an AML clearance hook (fake until A42) and then suspense.resolve with 4E TRSY->CFO when the amount is at or above the threshold or the reason is a name mismatch. Read one threshold key from one place. Have payment.credited carry available_now:false under aml_hold. Reword invariant 1 as 'never auto-credits'. Add oracle cases for each branch."
+  },
+  {
+   "severity": "high",
+   "issue": "The payout primitive is exposed too widely and its rules are undefined for most purposes. (a) All routes, including POST /payments/payouts ('internal to A37 and A39'), go into the SDK and are callable by tokens, so a TRSY user or a staff agent could create a withdrawal below the undefined 'treasury threshold' for any investor, with no investor request, and move client money out. (b) 'treasury threshold' is never defined; A16 has A$25k and A$50k keys. (c) The G02 and destination rules assume an investor beneficiary: return_to_payer goes to a third-party payer who is never screened, which is a G02 gap. distribution_funding has no destination rule. A39 already needs escrow_settlement, internal_transfer and authorisations[] as an 'A17.1' reopen.",
+   "fix": "Make createPayout internal and service-principal only (A37, A39, A40; absent from the OpenAPI, SDK and MCP; tokens get 403), and expose to staff only POST /receipts/:id/return. Define a per-purpose table of destination rule, G02 subject (return_to_payer screens the payer name through screenPerson or screenEntity) and approval row, using A16's config keys. Add escrow_settlement, internal_transfer (client-money accounts only, never operating) and authorisations[] now. Add challenges: a staff token calling createPayout gets 403, and return_to_payer to a SANCTION-suffixed payer is refused."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec uses sandbox markers that are not in A08's single parser, which A17 cannot edit. Scenarios are 'parsed only by scenarioOf()', which lives in A08's owned packages/adapters/core. A08's table lacks SIM-DUP, SIM-CASH, payout BSB 000-000 and account 99999999. The builder must either edit A08's path, which fails 'only owned paths changed', or parse outside scenarioOf, which breaks the spec and A08's lint rule. Oracles and challenges depend on SIM-DUP and SIM-CASH.",
+   "fix": "Add these markers to A08's magic.ts table and MAGIC-INPUTS.md as an A08 amendment before A17. Alternatively specify an A08 extension point (for example registerScenarioMarkers from a sandbox/ folder) and state that A17 registers them there."
+  },
+  {
+   "severity": "high",
+   "issue": "Receipts that are not investor PayID deposits have no matching path. The engine resolves only PayID or reference to an investor VirtualAccount; anything else is held as unknown_destination. A16 names A17 as the poster of distribution.fund (sponsor funding into ••8810 'matched by reference'), interest.float and bank.internal_transfer confirmations. As written every sponsor distribution-funding payment and every interest credit is held, raises 48 h Sev2 alerts and blocks J06 funding.",
+   "fix": "Add receipt classes that are evaluated before the investor path, by destination account and reference: sponsor distribution funding (run reference from an A40 provider fake, payer = the vehicle's verified settlement account name, posts distribution.fund), bank interest (posts interest.float) and internal transfer confirmations (posts bank.internal_transfer). Each class gets its own hold reasons and oracle cases."
+  },
+  {
+   "severity": "medium",
+   "issue": "G22 and D04 coverage is incomplete. The spec only says 'the maker's own token or agent cannot be the checker'. D04 says no agent is ever checker and SoD counts an agent as its human. The spec names no A03 scope cells per route, does not apply the mandate caps and counters (per-action and daily caps, allowed_actions, time windows) to match and return, and does not notify the human of agent money actions. The only challenge is TRSY's own token acting as checker.",
+   "fix": "List the scope cell for each route. Enforce A12 mandate caps and counters on match and return in the same transaction. Notify the human on agent-initiated match and return. Add challenges: the CFO's own agent token tries to approve (refused); a TRSY human who also holds CFO tries to approve their own agent's request (SoD refusal); an agent match above its cap is refused; an investor agent can read its PayID but cannot write the nominated account."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ADM-18 KPIs and accounts overlap A16 and A39, and the client-money total is undefined. A39 builds the ADM-18 KPIs and takes only 'NPP in today' from A17, yet A17 returns all three KPIs and balances and makes design reproduction a pass criterion that depends on A16 and A39 data. Whether 'balance' means the bank balance or the ledger balance is unstated. The design's A$18,420,316.44 is the sum of the three client-money accounts and excludes operating, but it is labelled '4 accounts'.",
+   "fix": "Limit A17's /kpis to npp_in_today plus bank_balance per account from the latest statement, and leave the client-money total and payouts queued to A16 and A39. State that client-money totals include only is_client_money accounts, and flag the '4 accounts' label for reconciliation. Name the seed source for the 96 deposits and A$412,880.00, and make sure no seeded amount ends in .13, .99 or .77."
+  },
+  {
+   "severity": "medium",
+   "issue": "The AML hints and the A42 hand-off are not testable as written. 'rapid_in_out ... of the same order of magnitude' has no measure. 'structuring ... from one payer' does not define payer identity. A42 consumes an outbox event, payment.aml_intake, that A17 never names. Return or manual match of a receipt with an open AML-related hold needs no MLRO check, which risks tipping off or moving funds during an SMR decision.",
+   "fix": "Define rapid_in_out as payout_cents >= X% of a credit within 24 h, with X a config key. Define payer identity as the hash of BSB and account, falling back to the normalised name. Publish the AmlIntakeLine schema and emit payment.aml_intake for every line. Require an AML clearance hook before return or match when the hold reason is AML-related, and add a challenge for it."
+  },
+  {
+   "severity": "medium",
+   "issue": "PayID issuance has no trigger and no preconditions. createVirtualAccount exists, but no route, event or job calls it, and no G01 or G02 precondition is stated. GET /payids/me returns 409 payid_not_issued, but nothing shows how that state ends.",
+   "fix": "Specify issuance on an investor-verified event from the InvestorFactsProvider, or through POST /v1/payments/payids/me (idempotent), refused unless the investor is verified and G02 is clear. Emit payid.issued, audit it, and add oracle cases for an unverified investor, a restricted investor and a repeat call."
+  },
+  {
+   "severity": "medium",
+   "issue": "Conflicting duplicates are undefined. Ingest no-ops on an existing (rail, bankTxnId) and skips a duplicate eventId. The challenge 'replay a webhook with a changed amount under the old event id', and more generally the same key arriving with a different amount or payer from a poll or statement, has no expected result, so a silent no-op would pass. The .77 partials do not say whether they share a bankTxnId.",
+   "fix": "Store a content hash per BankTransaction and per WebhookEvent. The same key with a different hash is refused, raises a Sev1 integrity alert and an audit event, and leaves the ledger unchanged. Give the .77 partials distinct bankTxnIds with a parent reference. Add both to the oracles."
+  },
+  {
+   "severity": "low",
+   "issue": "'00:00 AEST' and '00:30 AEST' ignore daylight saving, while A12 and A16 use Australia/Sydney. The design shows 'Last statement 06:00'.",
+   "fix": "Use midnight Australia/Sydney from the injected clock for the cut and 00:30 Australia/Sydney for ingest. Add a DST-boundary challenge and reconcile the design's 06:00 display."
+  },
+  {
+   "severity": "low",
+   "issue": "The route paths are inconsistent. A09 puts every route under /v1 and dependents call /v1/payments/..., but A17 omits /v1 and 'GET /payments/kpis' under '/payments' reads as /payments/payments/kpis. The webhook path is unclear.",
+   "fix": "List full paths (/v1/payments/payids/me, /v1/payments/receipts, /v1/payments/kpis, /v1/payments/accounts, /v1/payments/statements, /v1/webhooks/bank), with the webhook unauthenticated and excluded from token scopes and the MCP server."
+  },
+  {
+   "severity": "low",
+   "issue": "The 8-12 h estimate is below A16's 10-14 h although A17's scope is larger: an adapter, a scenario sandbox, webhooks, statements, the PayTo lifecycle, a conformance suite, ingestion, matching, approvals, jobs, AML intake, payouts, routes and 10,000-sequence property tests. The fixes above add more.",
+   "fix": "Raise the estimate to 12-18 agent-hours, or split the node into an adapter-and-sandbox part and a payments-module part, divided by folder."
+  },
+  {
+   "severity": "low",
+   "issue": "PayTo has two swap points. A17's adapter has PayTo mandate verbs, and A95 builds a separate packages/adapters/payto port as 'the PayTo half of the bank rail' swap point. A17's manifest and its SWAP-POINTS row do not say so.",
+   "fix": "State in A17's manifest and SWAP-POINTS row that its PayTo verbs are a P1 stub and that A95's port becomes the PayTo swap point, or drop the verbs and keep only the sandbox lifecycle A95 needs."
+  }
+ ]
+}

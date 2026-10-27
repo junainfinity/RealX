@@ -1,0 +1,95 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "S2 offer-close stampede (money challenge and pass criterion) is internally impossible and contradicts A37. The challenge has 400 agent orders from investors who each already hold 4.9% of the vehicle, which adds up to 400 x 4.9% = 1,960% of supply. The 'sibling vehicle's rollover fixture' is not defined by any node; A06 has no such scenario. The criterion 'sum of accepted orders <= hard cap' is wrong for a correct A37 when the offering's allow_oversubscription is on: A37 then accepts orders past the hard cap for scale-back and caps only the locked Allocation file. The spec never sets that parameter. 'Every accepted order has exactly one escrow leg' confuses acceptance with funding, because A37 posts escrow only when an order is funded through the rail.",
+   "fix": "Make the S2 offering a follow-on offer on an issued perf vehicle. Use A06's holder-cap-attempt generator, counting associates as G07 requires, so that 20 investors each already hold 490 units (4.9%) and each sends 20 agent orders (400 orders). Run S2 twice. With allow_oversubscription=false, assert that accepted order units stay <= hard cap at placement and that refusals name G11. With allow_oversubscription=true, assert that allocated units in the locked Allocation file stay <= hard cap and that scaled-back orders are refunded to the cent. Replace the escrow invariant with: every funded order has exactly one escrow leg, no unfunded or refused order has any, and duplicates on one Idempotency-Key make no second leg."
+  },
+  {
+   "severity": "high",
+   "issue": "S3 anomaly expectations contradict A101's own rules, so 'A101 holds exactly the deviating tokens' has no defined expected set. In A101, a new IP in an already-seen country is only a notice (agent.first_use_new_ip), not a hold, yet the challenge expects those tokens to be held. Every S3 token deliberately sends twice its allowance for 2 minutes, so A101's burst rule (120 s window, max(floor_writes 20, 5 x baseline_p95)) and refusal_streak rule may legitimately fire for most of the 2,000 tokens. Planting 'calls at 03:00 Sydney' needs the global clock at 03:00, which makes off_hours fire for every token with no history in that hour-of-week.",
+   "fix": "Define the expected hold set mechanically. Fable's hidden probe replays A101's effective rule set AG-2026.1 (its pure rules and params) over the recorded api_token_activity id range and baseline snapshot hash. The pass criterion becomes: the held set equals the replayed fired set with action=hold, within 60 s. Plant the 10 deviants against A101's actual rules: new_country, near_cap_repeat and off_hours. For off_hours, give every other token a baseline that includes the burst's hour-of-week, and state the clock time at which S3 runs. For new-IP, same-country tokens, assert a notice and no hold. Set the burst shape per principal type so that non-deviant tokens stay below the thresholds by construction."
+  },
+  {
+   "severity": "high",
+   "issue": "The multi-process invariants are vacuous. The perf compose 'adds only' a database, pg extensions, a gas limit and CPU limits to A23's stack, which runs one API container. Yet S3 asserts exact per-token allowances, and revocation and the agents.traffic switch taking effect 'on both API processes'. With one process, A09's in-process RateLimitStore and a per-process revoke memo would pass. A99's PgRateLimitStore and A12's cross-process revocation rule, which are what this node must prove, would never be tested.",
+   "fix": "compose.perf.yml runs two API replicas and two worker replicas. The driver alternates base URLs per request, and each response carries an instance id header that goes into the request log. Pass criteria: each API instance serves 40-60% of requests. Each of the 50 revocation and switch trials is confirmed on the instance that did not process the revoke. The rate-limit exactness check fails unless PgRateLimitStore is the registered store."
+  },
+  {
+   "severity": "high",
+   "issue": "The sandbox latency and fault profile the spec depends on does not exist in A08. A08 has only magic-input markers (SIM-DELAY-<n> on bank references and ' SLOW' name suffixes), with no per-adapter latency setting and no storage, custody or identity latency. The money-critical 'stale snapshot reconciled as tonight's' challenge needs a storage-adapter delay. Section 8 lets the run 'record the gap' and still pass, so the node can gate with instant sandboxes and without ever running that challenge.",
+   "fix": "Before A08 is built, add a spec requirement to A08 for a SANDBOX_LATENCY_PROFILE config. It sets latency and transient-error rate per adapter, including storage and registry, uses the shared clock, runs in local and test modes only, and never changes a gate outcome. In A84, remove the 'record the gap' escape. Pass criteria require that the profile was active for all five adapters in every timed run, and that the stale-snapshot challenge ran with the storage delay applied: job timings must show the 7 vehicles' snapshots completing after 02:00 clock time."
+  },
+  {
+   "severity": "high",
+   "issue": "The 6-10 agent-hour estimate ignores the wall time the pass criteria need. Conventions lesson 1 (BQA-01, High) says such time must be modelled or explicitly excluded. One perf:all has at least 7 nightly cycles (up to 45+30 min each), a month-end of up to 2 h, a cold indexer run of up to 45 min, S1-S5 'each run three times', the phone suite and the paging walks. That is roughly 10-14 h per run. The spec asks for three consecutive runs, plus Fable's cold re-runs, a first-time chain generation of up to 2 h, and a re-measure after every fix in another node. A84 is on the path to A88 and launch. It is also unclear whether scenarios run three times inside each perf:all or once per run.",
+   "fix": "Add an explicit wall-time statement (about 40-50 wall-clock hours of measured runs, excluded from agent-hours and run in the background). Add a soak or wall-time field to the graph data so the schedule models it, or raise the estimate. State that each perf:all runs every scenario once with its own seed, and that the three perf:all runs give the three samples per budget."
+  },
+  {
+   "severity": "high",
+   "issue": "Owned-path conflict. A01 declares e2e as a single npm workspace, and root scripts can only be registered through a workspace package.json realx.rootScripts block via scripts-sync. No node owns app/e2e/package.json, and A84 owns only app/e2e/perf/. Registering the perf:* scripts and adding undici, hdr-histogram-js and web-vitals therefore means editing app/e2e/package.json and the root lockfile. That breaks the criterion 'only app\\e2e\\perf\\ changed'.",
+   "fix": "Choose one option and record it in the spec and the graph data. Option 1: make e2e/perf its own workspace. A01 adds e2e/* to the workspace globs, and A84 owns e2e/perf/package.json with its rootScripts and dependencies; the lockfile update falls under the standing dependency-install rule. Option 2: name an owner of app/e2e/package.json, and have A84 register through that owner."
+  },
+  {
+   "severity": "medium",
+   "issue": "Clock and reset mechanics are unspecified. A09's clock and Hardhat time only move forward, yet three perf:all runs must each visit 4 Oct 2026 and 4 Apr 2027. The spec defines only a chain restore, with no paired database and system_clock restore. It also does not say whether the clock runs at real speed between 00:00 and 03:00 or is advanced. If the harness advances the clock after the snapshot completes, the overrun challenge is vacuous.",
+   "fix": "Add perf:restore, which restores a paired, hash-matched snapshot of the realx_perf database (including system_clock) and the chain volume before every perf:all. The harness advances the clock only outside the window. From 23:59 to 03:00 the clock runs at real speed and is never advanced while a measured job runs. The overrun challenge asserts completion after 02:00 clock time."
+  },
+  {
+   "severity": "medium",
+   "issue": "The query-plan guard can pass vacuously. With auto_explain log_min_duration set to 100 ms, sequential scans that finish in under 100 ms are never logged. log_buffers is off, so buffer growth with page depth cannot be measured. log_analyze stays on during S1-S5, which distorts the latency budgets.",
+   "fix": "Run a separate plan pass with log_min_duration=0, log_analyze, log_buffers and JSON format. Require at least one captured plan per listed query at the first page and at the deep page; a missing plan is a finding. Turn log_analyze off during timed scenarios and record the settings in the evidence."
+  },
+  {
+   "severity": "medium",
+   "issue": "S5 asserts A12 behaviour that no node specifies: unknown lookups refused before hashing, and failed verifications rate-limited per lookup and per IP. None of this is in A12, A83 or A99, yet a miss is to be filed as a Critical against A12. The completeness invariant is undefined for unknown lookup ids, which have no token row. The driver runs from one IP, so per-IP limits and new-IP plants cannot be exercised, and the spec does not say how to create IP diversity without trusting X-Forwarded-For.",
+   "fix": "Add these limits to A12 or A83 now as a spec requirement, with numbers, and define the rows written for an unknown lookup. Run the S5 and new-IP drivers as several containers on the compose network with distinct IPs, leaving the API's trusted-proxy setting unchanged. State the expected row counts for each class of bad token."
+  },
+  {
+   "severity": "medium",
+   "issue": "Paging and server-side filtering coverage misses these tables: M12's own ADM-19 run lines (A74, 10,000 lines), the sponsor tables SPN-08 register and sponsor distributions (A64), which the design references cite as checked, the ACC-05/SPN-16 activity lists (A60), and the ADM-35 oversight token and evaluation lists (A77), which grow by millions of G22 rows after S3.",
+   "fix": "Add ADM-19, SPN-08, the sponsor distributions table, the A60 activity lists and the A77 oversight lists to the section 5 API list and to the Playwright network capture, with the same budgets. Measure them after S3."
+  },
+  {
+   "severity": "medium",
+   "issue": "Graph fit: the done definition for J22 relies on 'the same outcomes A79, A80 and A82 assert', and S3 and S4 reuse A82's flows. A82 is not a dependency or an ancestor of A84.",
+   "fix": "Add A82 to A84's deps (same milestone AM8, so no order violation), or drop A82 from the done definition and state the J22 end states A84 asserts itself."
+  },
+  {
+   "severity": "medium",
+   "issue": "Wrong screen ID and an invented route. Section 6 labels investments as PUB-02, but PUB-02 is 'How it works'; investments is PUB-03. GET /v1/agent-access/activity?token= is not defined in any node.",
+   "fix": "Use PUB-03. Use the activity route A12 actually defines (e.g. GET /v1/me/activity?token_id=), or add the route to A12 first. The harness fails with a named reason if any operation named in budgets.json is missing from OpenAPI."
+  },
+  {
+   "severity": "medium",
+   "issue": "D04 webhooks are not measured. The month-end emits 1,000,000 distribution.line.paid events and S3 emits anomaly and kill-switch events, but webhook delivery backlog, latency and duplicates (A46) are never checked; only the internal outbox lag is.",
+   "fix": "Add 200 agent webhook subscriptions across investors, sponsors and staff. Set budgets for delivery p95 and for backlog drain after month-end. Require stable event ids, duplicates only as retries with the same id, and zero deliveries for AML-held lines (N08)."
+  },
+  {
+   "severity": "medium",
+   "issue": "The holder population is undefined. '100 x 10,000 holders' could mean 1,000,000 distinct investors or an overlapping set. The choice changes identities, smart wallets and indexer events by up to 100x and decides spec point (a).",
+   "fix": "State the population (e.g. 50,000 investors across the seven sub-types, about 20 vehicles each, and Load Morgan in all 100). State the resulting counts of identities, wallets and Transfer events, and include them in the data-set content hash."
+  },
+  {
+   "severity": "low",
+   "issue": "The deep-page budget of page 500 does not exist for short lists: 1,000 offerings, 100 recon vehicles and 10,000-row lists all have fewer than 500 pages. The page-2,000 audit challenge needs at least 100,000 matching events inside the chosen date range, but the data set seeds exactly 100,000 in total.",
+   "fix": "Define the deep page as min(500, last page) and state the p95 sample count. Seed at least 150,000 agent events for the probe person inside the challenge's date range."
+  },
+  {
+   "severity": "low",
+   "issue": "The section 4 approval chain omits the ASTM checker on the period lock (A40: FINA maker -> ASTM checker, 4E). 'A40's own concurrency settings' do not exist, and A10 has no 'bulk mode'.",
+   "fix": "Write the chain exactly as A40 does and assert each step's A14 row. State the month-end concurrency the harness uses and record it in the evidence. Load audit events through A10's normal append path and budget the time."
+  },
+  {
+   "severity": "low",
+   "issue": "The findings.json severities (critical/blocker/major/minor) do not match the plan's Critical/High/Medium/Low gate vocabulary.",
+   "fix": "Use Critical/High/Medium/Low in findings.json: blocker becomes High, major becomes Medium, minor becomes Low."
+  },
+  {
+   "severity": "low",
+   "issue": "Some M11 and M12 scale actions have no budgets: the signed register extract and monthly certification for a 10,000-holder vehicle, and the exit waterfall at 10,000 holders. A20 promises 200 ms for /v1/recon/vehicles, but A84 applies its generic 300 ms.",
+   "fix": "Add budgets for extract generation and signing, certification of 100 vehicles, and computeExitWaterfall at 10,000 holders. Carry A20's 200 ms into budgets.json with source A20."
+  }
+ ]
+}

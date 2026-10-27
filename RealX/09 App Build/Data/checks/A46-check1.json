@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The scheduler engine cannot govern the jobs it claims to control. A09 owns scheduler.tick and computes due instants itself for 'plain cron', leaving the AEST/AEDT rules to other nodes. A13 (alerts.digest), A20 (recon_schedule) and A31 (claims.sweep-expired) all say they register with the pg-boss cron directly. A09.1 as requested only adds a fire/skip SchedulePolicy. So A46's zone-aware cron.ts never decides when anything fires. A 4E-approved pause of recon.nightly has no effect on a job that A20 fires through the pg-boss cron, and A20 keeps its own recon_schedule.enabled, a second on/off switch. The DST challenge would test A09's code, not A46's.",
+   "fix": "Extend loop A09.1 so that scheduler.tick takes an injectable DueInstantCalculator (A46's cron.ts, with zone and calendar rule) and is the ONLY cron path: a registerJob cron goes through the tick, and a lint rule forbids direct pg-boss cron. Raise spec defects against A13, A20 and A31 so they register their crons through registerJob and the tick. Make job_definition.enabled/paused_until the single switch; remove A20's recon_schedule.enabled or make it a read-only mirror. Add a pass criterion that pausing a module-registered schedule produces a skipped_paused row."
+  },
+  {
+   "severity": "high",
+   "issue": "The job names and times in the seeded catalogue do not match the owning nodes' specs. Handlers therefore never register and every row runs skipped_no_handler. Once each owner is built, the watchdog raises handler_missing every day. The critical-row list protects names that never fire. Mismatches: A18 register.fetch_extract (A46 says register.extract_fetch); A42 screening.nightly (A46 says sanctions.rescreen); A31 claims.sweep-expired at 02:00 (A46 says claims.expiry_sweep at 03:30); A10 audit.verify at 05:30 (A46 says audit.verify_daily at 04:30, and audit.evidence_ship is not in A10); A32 classification.expiry_sweep at 05:00 (A46 says certificates.reminders at 08:00); A34 properties.attestation_open at 00:30 and attestation_sweep hourly (A46 says attestations.reminders at 08:00). No owner spec declares agent.token_expiry_sweep, idempotency.expiry_sweep or access.review_quarterly.",
+   "fix": "Rebuild the seeded catalogue from the owners' specs exactly (name, cron, zone, owner) and cite the owner's section for each row. Add a seed test that checks every catalogue row against the owner's registerJob name once the owner is built. Remove the rows for jobs no owner declares, or request them from A12, A09 and A11 as follow-up loops. Update the critical list, the DST challenge and the design-fidelity challenge to the real names."
+  },
+  {
+   "severity": "high",
+   "issue": "There is no distributions.payout_execute job running at 09:00 on business days. A40 executes a run through an A14 AUTO row that fires on the funded transition, and its job is called distributions.execute. The challenge 'Replaying a payout dead letter' depends on this invented handler, on A40's seeded Bay Road run and on A16 journals. A40 is an AM3 peer, not a dependency or ancestor of A46. At A46's gate the challenge either cannot run or passes against a fake handler.",
+   "fix": "Delete the payout_execute cron row. If A40's jobs are listed at all, list distributions.execute and distributions.funding_check as event-triggered rows (registered_by module, no cron). Rewrite the money replay challenge against a fixture money handler with a counting ledger fixture. Move the real payout replay case to A40's challenges or to an AM8 journey (A79/A81), or add A40 as a dependency."
+  },
+  {
+   "severity": "high",
+   "issue": "A46 invents permission cells, action codes and approval policy rows, and no upstream loop adds them. A03 builds actions.ts and the permission matrix from product-map rows, and A03 also seeds A14's approval_policy from the product map's maker-checker rows. For ADM-32 the product map has only 'Switch RPC or network config' (ENGO to SECO). None of these exist in A03 or A14: jobs.schedule.pause (ENGO to SECO), jobs.dead_letter.discard (ENGO to CFO), disable (4E, checker not named), and the cells jobs:*, integrations:*, webhooks:manage_own and webhooks:read_all. A46 forbids editing A14's policy table and lists that as an escalation trigger. The build will predictably escalate, or it will hard-code roles in the module.",
+   "fix": "Before Specify freezes, add loop A03.1 plus the matching A14 seed. It covers the M26 jobs, integrations and webhook actions and their cells per role, the three new action codes with policy rows (naming the checker for disable), the delegable flags, and a webhooks:manage_own cell for every role that signs in. Record the two policy rows that are not in the product map as founder-visible additions in Decisions or the QA report."
+  },
+  {
+   "severity": "high",
+   "issue": "Two nodes claim the same tables. A04 already declares integration, webhook_subscription, webhook_delivery and job_run in its core inventory (Domain E). A46 says it declares integration, webhook_subscription and webhook_delivery in its own module schema, and two migrations for one table break the build. A46 also relies on job_run columns that neither A09 (which writes the table) nor A04 defines: trigger, due_at, on_behalf_of_id, replay_of, trace_id, and the skipped_* outcomes. A46 calls A04's table 'outbox', but A04 names it outbox_event. A46 uses owner_kind STAFF, which is not one of A04's principal kinds (HUMAN, PARTNER, AGNT, SVCA).",
+   "fix": "Either treat A04's integration, webhook_subscription, webhook_delivery and job_run as reused tables and list the columns A46 needs as an A04 follow-up loop, or have A04 drop them from its inventory. Never declare them twice. Put the job_run columns and outcome enum in the same loop. Use outbox_event, and set owner_kind to HUMAN or PARTNER, recording staff as a HUMAN with a role."
+  },
+  {
+   "severity": "high",
+   "issue": "The configuration 'applied' step contradicts A08. A08's loadConfig is the only reader of process.env, exits before any database call and has no overlay hook. A46 says loadConfig reads the applied integration_config_version row from the database as an overlay after .env. That needs a change to A08, which A46 lists only as an escalation trigger. Without it the mainnet challenge cannot pass (v3 approved but not applied until restart, then /v1/meta reporting v3 with its hash). Adapter reconfigure(values) is also not part of A08's interface.",
+   "fix": "Add loop A08.1: loadConfig accepts an injected ConfigOverlaySource that A09's bootstrap supplies after the database connects, re-validated by envSchema and hash-checked. If immediate apply is wanted, add an optional reconfigure() to the adapter interface. Alternatively, define 'applied' as A46 writing a validated overlay file that A09's bootstrap reads. Add an A09.1 item that shows the applied config version and hash in /v1/meta."
+  },
+  {
+   "severity": "high",
+   "issue": "The egress guard is effectively off in every mode this build can run, and the hostile-endpoint challenge contradicts it. A08 allows only RUN_MODE=local|test. In those modes A46 allows http, localhost, 127.0.0.1 and docker service names so the fixture sink works, and it skips the block list 'unless the run mode allows the fixture sink'. So http://api:3000/... and loopback addresses are allowed in exactly the modes Fable tests in, yet the challenge requires them to be blocked. The challenge's 'refused in RUN_MODE=ci' names a mode that makes A08 exit at boot. The sink runs in the worker, which is itself on the block list, and A09 mounting /sandbox/webhook-sink is not part of loop A09.1.",
+   "fix": "Enforce the full block list in every mode, with exactly one exception: the configured fixture sink origin and path (for example WEBHOOK_FIXTURE_SINK_URL, honoured only in local|test, unset by default), matched after DNS pinning. In the challenge, replace RUN_MODE=ci with 'fixture sink setting unset'. Add the sink mount to A09.1, or serve the sink from A46's own module routes."
+  },
+  {
+   "severity": "medium",
+   "issue": "Business-day schedules cannot be expressed or tested. job_definition holds only a cron string, but some rows must run on business days only or on the first business day of January, April, July and October, and the pass criteria test NSW holiday cases. A skip policy cannot produce 'first business day': 1 January is always a public holiday, so a cron on the 1st plus a skip never fires in the January quarter. The spec also does not say whether a fire due on a holiday is skipped or moved.",
+   "fix": "Add a calendar_rule column (none | business_days | first_business_day_of_months) and a calendar_code, evaluated with A13's isBusinessDay and businessDaysAfter inside the due-instant calculator. State that business_days generates no fire on a non-business day. Add the test case 1 Jan 2027 -> Monday 4 Jan 2027 08:00 AEDT."
+  },
+  {
+   "severity": "medium",
+   "issue": "The daylight-saving start rule contradicts itself. The firing rule says a local time that does not exist fires 'at the first existing instant (03:00 AEDT)', but the challenge expects register.extract_fetch at 02:10 to fire at 03:10 AEDT. Fable's 40 or more hidden test cases and the builder could follow different readings.",
+   "fix": "Define the rule as Temporal's 'compatible' disambiguation: a skipped local time moves forward by the gap (02:10 -> 03:10 AEDT, 02:00 -> 03:00 AEDT), and a repeated local time uses the earlier offset. Give both example instants in UTC."
+  },
+  {
+   "severity": "medium",
+   "issue": "The webhook visibility check is under-specified and can be bypassed. Check (b), 'evaluate the event's aggregate under RLS as the owner', needs a loader for each event type's aggregate, and those belong to other modules that A46 may reach only through their index.ts. Check (b) also runs only at fan-out. Retries and owner replays re-run the token check (a) but not (b), and replay does not exclude rows marked skipped_scope or skipped_not_visible. A person who has lost access (tenant consent withdrawn, role removed) can therefore still receive events through a retry or a replay.",
+   "fix": "Put the visibility inputs in the event catalogue (tenant_id, vehicle_id and subject principal ids carried in the outbox envelope) and check them with an RLS probe that A04 exposes, both at fan-out and before every attempt. Allow replay to re-queue only delivered, dead and skipped_failing rows, and re-run both checks on replay. Add a challenge: remove tenant consent between fan-out and retry, and expect zero deliveries."
+  },
+  {
+   "severity": "medium",
+   "issue": "Challenges and interfaces depend on nodes that are not ancestors of A46. First, the token-lifecycle challenge suspends the token through A101, an AM3 peer that is not a dependency. Second, the spec says A104 registers the mcp-server row through registerIntegration. But A104 is an AM1 node built before A46, cannot import it and never mentions it, so the row stays 'unknown' forever. Third, A101 expects A46 to consume agent.guard.hold_placed and to use a webhook_eligible flag. A46 uses a webhook_safe flag instead and does not subscribe to that event.",
+   "fix": "Suspend the token through A12's own suspended status, using a fixture that calls A12's interface, not A101. Let A46 own the mcp-server row and probe A104's health endpoint (compose service mcp) itself. Align the flag name with A101, or raise a defect against A101. State that introspect() detects suspended tokens, with agent.guard.hold_placed as an optional fast path."
+  },
+  {
+   "severity": "medium",
+   "issue": "Other nodes have no way to add schedules without editing A46's owned files. The catalogue is 'seeded from catalogue.ts and kept in sync at worker boot'. A101 and A102 are told to add catalogue rows plus a seed test without editing this node's code. A102 instead registers through A09's registerJob and expects A46 to list the job. The boot sync may delete or ignore rows it did not seed.",
+   "fix": "Export registerSchedule({name, owner_module, cron, zone, calendar_rule, critical, money, ...}) from the integrations index.ts, or read catalogue fragments from each module's own folder. Make the boot sync upsert-only for A46's own rows. Derive module-registered crons from A09's job registry."
+  },
+  {
+   "severity": "medium",
+   "issue": "A46 decides on its own that creating, widening and rotating the secret of a webhook subscription is non-delegable (requiresHuman). D04's non-delegable list does not include these acts, and A12 and A03 say the non-delegable list lives only in A03's delegable.ts. This breaks D04's UI/API parity for the webhook actions on ACC-05, SPN-16 and ADM-35, and A100 will flag it unless it is recorded.",
+   "fix": "Choose one. Either let an agent create subscriptions within its token's scopes, protected by the egress guard and an owner notification through A101. Or mark create, widen and rotate as false or 'counsel' in A03's delegable.ts through loop A03.1, record the rationale as a founder question in Decisions, and list the three acts in A100's non-delegable fixtures."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag does not match the spec. The graph and frontmatter say oracle is false. But the spec has Fable write hidden tests before the build, and the node covers discarding money dead letters (4E to CFO), payout replay and G22 token authority. If the orchestrator schedules the Oracle stage from the flag, it will skip it, and the Challenge will point at hidden tests that do not exist.",
+   "fix": "Set oracle to true in final-graph.json and in the frontmatter, since the money dead-letter discard and the G13/G22 authority qualify. Or change the Oracle rule paragraph to the A13/A45 wording, where Fable brings test cases to the Challenge and files them after the gate."
+  },
+  {
+   "severity": "low",
+   "issue": "Several smaller contract gaps. A66 also requests a loop called 'A13.1' with different content (MTTA/MTTR and digests), so two different loops share one id. The pause challenge says the first pause 'must be refused', while the spec says it creates a pending ApprovalRequest. The pause 'until' time has no anchor (proposal time or approval time). A51 draws 'Run now' and 'Pause job' through the hardware-key modal, but A46 requires no step-up for a trigger or an ordinary pause, so the modal would be a UI-only check. The dead-letter pass criterion 'counting fixture reads 2, not 4' does not say whether failed attempts count.",
+   "fix": "Merge both requests into one A13.1 list shared with A66. Make the challenge expect a pending approval and no pause until it is approved. Anchor 'until' to the approval time and cap it at 24 hours from then. Either require a fresh assertion on trigger and pause and test that on the server, or tell A51 and A76 the modal is a plain confirmation. Define the counting fixture as counting successful side effects only."
+  }
+ ]
+}

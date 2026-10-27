@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The graph does not list 10 upstream nodes as dependencies, although the spec reads from all of them. None of A15 (custody ops, paymaster runway), A21 (exemption meter, licences summary), A36 (live offers), A39 (reconciliation status, treasury accounts), A42 (AML summary, SMR clocks), A45 (reporting calendar, board-pack export), A48 (kill switches, halts, runbooks, declare incident), A06 (standard seed and scenarios used by every seed assertion and challenge), A101 (the agent-anomaly-hold queue and sensitive-action notices) or A104 (the MCP catalogue the pass criteria check) is a dependency or an ancestor of A66 in final-graph.json. Spec point 7(b) proposes 'soft edges' for only seven of them, and the graph has no soft edges. The scheduler orders work by remaining path length, not by milestone, so A66 can be scheduled before A39, A45 or A48 has passed. The 'Not connected · owned by Axx' tile state then lets the node pass its own gate with placeholder tiles.",
+   "fix": "Add hard edges A06, A15, A21, A36, A39, A42, A45, A48, A101 and A104 to A66's deps in final-graph.json and app-graph.json. All are in AM0-AM3, so no cycle or milestone-order violation results. Delete the soft-edge proposal in 7(b). Limit the 'Source absent' tile state to RUN_MODE=local development, and add a pass criterion that no tile shows it at A66's own gate, not only at A78."
+  },
+  {
+   "severity": "high",
+   "issue": "The upstream read contracts are missing more fields than spec point 7(a) lists, and 7(a) says a declined follow-up is 'dropped from this screen', which lets a build pass without product-map components. A14's list and detail contract has no impact, no other approvers and no expires_at on list items. It also has no simulation block, no bound file hash, no custody-binding descriptor (vault, quorum, condition), no maker_principal or token prefix on list items, and no ratifier or vetoer filter for the 'To ratify' and 'Queued' tabs. All of these are ADM-30 product-map components. A13's GET /v1/alerts has no module filter, no assignee (Mine or Unassigned) filter and no read for eligible assignees, and the Assign picker and filters need all three. A10's /audit/head returns seq numbers, but the banner needs the event times for to_seq and first_bad_seq. Only A14.1 (summary, bulk_allowed), A13.1 and A36.1 are requested. The MTTA/MTTR strip and the digest are ADM-02 components, so dropping them fails M01.",
+   "fix": "List every missing field in 7(a): A14.1 (impact, other_approvers[], expires_at and maker_principal with token_prefix on list items; simulation, file_sha256 and custody_binding {vault, quorum, condition} on the detail; mine=ratifier|vetoer filters; summary; bulk_allowed), A13.1 (module and assignee filters, eligible-assignees read, allowed_actions with snooze_max, MTTA/MTTR, stored-digest read) and A10.1 (to_ts and first_bad_ts on /audit/head). Make each one blocking at Specify for any product-map-required component. If one is declined, escalate and do not drop the component."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec disables Approve by reading the human-readable SoD note, and A14 cannot support that for two of the required G13 personas. A14 returns only three note variants ('you are not the maker, so you can approve', 'you are the maker', 'already decided') and no machine-readable decision flag. The G13 challenge expects a delegate of the maker and a CFO granted the role after submission to see Approve disabled with the API's note. Neither persona is the maker, so A14's note may read 'you can approve'. The builder then either enables Approve, which fails the node, or adds a client-side rule, which the spec forbids. The note is also said to be printed word for word as the full design sentence ('Maker-checker (G13): ... Approval ID is bound to the signing request.'), which A14 does not return.",
+   "fix": "Add to A14.1 a per-caller decision object {allowed, code (APR_MAKER_IS_CHECKER | APR_ROLE_NOT_HELD | APR_EXPIRED | already decided ...), note}, computed from the maker identity set and the required_checkers resolved at submit. Enable Approve, Reject, Veto and Ratify only on allowed=true. State in copy.ts which text is the API's and which is the fixed design framing (the prefix, and the suffix only when custody_binding is present). Add a pass criterion covering the delegate and mid-flight-grant personas."
+  },
+  {
+   "severity": "high",
+   "issue": "Section 6 marks audit 'Verify now' and placing or releasing a legal hold as human-only with a named refusal code, but no upstream node defines such a code. A10's verify is a 'staff scope' mutation and holds are a 4E request, so an agent token with the audit scope would succeed. Placing or releasing a hold is also the MAKER step (LEGL raises a 4E request that CCO checks), and D04 lets staff agents act as maker. The reason given ('A14 checker step') is wrong. The pass criterion 'refused with its named code and absent from the MCP catalogue' cannot be met, A100 would find a parity break, and D04 says personal-act questions go to counsel rather than being silently blocked.",
+   "fix": "Reclassify 'Verify now' as agent-maker, because it is idempotent and non-decisional, or request an A10.1 refusal code if the founder wants it human-only. Reclassify hold place and release requests as agent-maker, with the CCO decision human-only in ADM-30 (APR_CHECKER_MUST_BE_HUMAN). Keep the HG-LEGAL counsel question, and flip the classification only through A03's delegable.ts if counsel requires it. Update parity.ts, the section 6 table and the pass criteria."
+  },
+  {
+   "severity": "high",
+   "issue": "The tipping-off challenge contradicts the upstream need-to-know contract. A42 requires that a reader outside the AML case ACL gets either 404 or a redacted 'AML · restricted event' row with no subject and its hash intact. A66 instead says 'A10 hides' the event and requires rows, cursor, export and tiles to be indistinguishable from a seed without the match, which forbids the redacted row A42 mandates. A10 has no need-to-know rule of its own and returns seq in every list item. Fable's hidden test would fail a correct build, or push the builder to filter rows client-side. A42 is not a dependency of A66 either.",
+   "fix": "Rewrite the challenge and the ADM-31 bullets against A42's contract. A restricted event renders only as the redacted row, word for word, with no subject, object label or reason. The console never un-redacts, and the export applies the same redaction. No count, total or seq is rendered. Make the A10 seq-in-payload question a blocking Specify decision owned by A10 and A42, and add A42 as a dependency."
+  },
+  {
+   "severity": "high",
+   "issue": "Design references for the undesigned parts do not exist in the design-extension node. A51 draws ADM-02 only partially: severity Sev1-3 and All; states New, Acknowledged and Snoozed; actions acknowledge, assign, escalate and snooze. It has no Sev4, module or owner filters, no 'Breached only' toggle, no resolve, reopen or create-incident actions, no drawer, no MTTA/MTTR and no digest, yet section 3 attributes all of these to 'Extension B's frame'. A51 draws none of the ADM-31 additions (banner, on-behalf-of and token columns, export dialog, legal holds), none of ADM-01's role-filtered sections and none of ADM-30's additions (tabs, TTL and impact columns, diff, simulation, file hash, custody binding), apart from the bulk-approve state. A51's owned list excludes ADM-01, ADM-30 and ADM-31. HG-REVIEW is said to review frames that will not exist, and Fable's fidelity check has no reference for about half of the UI.",
+   "fix": "Add spec point 7(d): an A51.1 follow-up that draws the full ADM-02 frame, the ADM-01 role sections, the ADM-30 additions and the ADM-31 additions, with design-ext anchors (for example design-ext:ADM-01+, ADM-30+, ADM-31+). Add them to design_refs, block Specify until they are drawn and HG-REVIEW has passed, and correct section 3 so that only what A51 draws is attributed to extension B."
+  },
+  {
+   "severity": "medium",
+   "issue": "The seed and the design disagree, so the 'reproduce the five APS cards in order' fidelity challenge cannot pass. A06 seeds APR-2292 (a GYM01 register adjustment) as pending and records the design's APR-2288 as already decided. APR-2291's maker is 'agent treasury-drafter on behalf of Priya N.', so the card shows the AgentMarker, not 'raised by Priya N. (Treasury ops)'. APR-2285's maker is Sam R. (LEGL), where the design says (Compliance). None of this is recorded under 'Design bugs not reproduced'.",
+   "fix": "Record each seed delta as a design fix: APR-2292 replaces APR-2288, APR-2291 carries the agent marker, and the maker team labels follow the seed. Define the expected five cards and their check rows from A06's manifest, not from the prototype APS array."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several fixtures the challenges and pass criteria rely on do not exist upstream. A06 has 'cash-delta' (escrow statement short A$0.01), not the 'one-cent distributions-account bank/ledger delta plus a skipped 02:00 run'. It has no low-risk approvals fixture for bulk approve and no kyc.sanctions.true_match scenario. A14 defines no 'internal transition fixture' for walking a request through every SM-00 state.",
+   "fix": "Point each challenge at an existing scenario (cash-delta, audit-tamper, sod-conflict, agent-anomaly, aml-third-party-deposits), or request A06.1 scenarios and an A14.1 RUN_MODE=test transition endpoint in 7(a). Say that hidden fixtures are applied only through those sandbox or _test routes."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag disagrees with the spec. The graph sets oracle=false and the note says 'no hidden oracle', yet the Oracle rule paragraph requires Fable to write hidden specs, crops and fixtures before the build. An orchestrator that schedules the Oracle stage from the flag would skip it, on the one console surface through which a checker approves money.",
+   "fix": "Set oracle=true for A66 in the graph and the frontmatter, or add an explicit hidden_tests flag that the orchestrator honours, and make the wording consistent."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ADM-01 subtitle hard-codes 'AEST'. Sydney moves to AEDT on 4 Oct 2026, eleven days after the seed date, so the label will be wrong for half the year.",
+   "fix": "Render the zone abbreviation from the Australia/Sydney tz database at the reconciliation instant (AEST or AEDT), and test both sides of the DST change under the injectable clock."
+  },
+  {
+   "severity": "low",
+   "issue": "The product map lists G14 as a gate on ADM-01, along with the state 'Treasury difference other than 0 raises a Sev2 alert'. The node covers only G13 and does not say how the SMR-clock tile evidences G14.",
+   "fix": "Add G14 to the node's gates with a pass criterion (SMR clocks from A42 visible only to roles with M20 read), or record in the coverage matrix which node covers ADM-01's G14."
+  },
+  {
+   "severity": "low",
+   "issue": "Four interface names do not match the upstream specs. A53 exports ExemptionMeter, not ThresholdMeter. A15's route is GET /ops?state=, not /custody/ops. HardwareKeyConfirm's listed purposes do not include incident_declare. The product map lists TP-RE as an ADM-30 approver, but the spec never says that TP-RE decides in A105's partner portal.",
+   "fix": "Use the upstream names and operationIds, raise incident_declare to A53 as a follow-up, and add one line that TP-RE decisions happen on A105's approvals page."
+  },
+  {
+   "severity": "low",
+   "issue": "Agent-requested audit exports and board-pack exports can take bulk data out of the platform, but the spec does not say they trigger A101's sensitive-action notice to the human, which D04 requires.",
+   "fix": "State that an agent-made audit export or board-pack export raises A101's sensitive-action notice and appears in the human's activity. Add it to the agent-parity pass criterion."
+  }
+ ]
+}

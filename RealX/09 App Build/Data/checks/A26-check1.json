@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "ERC-7562 validation rules are broken, and local direct-handleOps tests cannot see it. The session-key expiry and validAfter check, the rolling 24 h spend window and lastUsedAt, plus the paymaster's rolling per-wallet and global caps, all use block.timestamp in validation, and TIMESTAMP is banned there (OP-011). The paymaster reads global storage without being staked (no addStake). The storage the spec calls fine because it is 'keyed by the account address' uses nested mappings and dynamic arrays, which are not associated storage. Every oracle passes on Hardhat, but real bundlers (A29 testnet, A86 Base Sepolia) reject every session-key and sponsored UserOp.",
+   "fix": "Put expiry and validAfter only in validationData packing. Move the caps, spend window, lastUsedAt and SessionKeyUsed to the execution phase (execute calls module.checkAndBook and reverts on a breach). Move the paymaster's rolling caps to signer validUntil plus postOp booking, or stake the paymaster in deploy-wallet.ts. Use the account as the innermost mapping key, with no dynamic arrays read in validation. Add a pass criterion: debug_traceCall of each UserOp kind's validation phase asserts no banned opcode and no non-associated storage access. Restate expected failures as EntryPoint FailedOp or FailedOpWithRevert codes."
+  },
+  {
+   "severity": "high",
+   "issue": "P-256 path selection contradicts itself. §1 falls back when the precompile call returns empty, but a real RIP-7212 precompile also returns empty for an invalid signature and has no code (extcodesize 0 on Base). The challenge demands selection 'by code presence, not by a return value' and says an always-true mock must still reject tampered fixtures. Code-presence selection makes the precompile dead code on Base, and return-value selection with an always-true mock accepts forgeries, so that challenge cannot pass.",
+   "fix": "The deploy-time probe calls 0x100 with a known-valid and a known-invalid Wycheproof vector and sets an immutable usePrecompile flag, recorded as the manifest 'P-256 path'. Rewrite the challenge: an always-true mock fails the probe, the script records 'solidity', and the tampered fixtures are rejected. Keep the tests proving which path ran."
+  },
+  {
+   "severity": "high",
+   "issue": "The recovery passkey (a P-256 key, not an address) has no defined way to call proposeOwner: no signature parameter, message, nonce or relayer. Yet the end-to-end flow, J09 and the race challenge all have 'second device proposes', so the hidden oracle and the build will use different ABIs. The CREATE2 salt keccak(salt||ownerHash||guardianHash) leaves out recoveryPasskey, so anyone can pre-deploy an investor's address with an attacker's recovery passkey. With one open proposal at a time, a compromised or planted recovery passkey can re-propose every 9 days and block RealX recovery for good in the lost-device case.",
+   "fix": "Add proposeOwnerWithPasskey(account, newPasskey, webauthnSig), with challenge = keccak(account, newOwnerHash, proposalNonce, chainId, module) and any relayer allowed. Put keccak(recoveryPasskey) in the CREATE2 salt and add a challenge that a different recovery passkey gives a different address. Let the RealX guardian cancel a proposal made by the recovery passkey (RecoveryCancelled), with a race challenge."
+  },
+  {
+   "severity": "high",
+   "issue": "D04 server-side gates can be bypassed. A session-key UserOp inside its allow-list, cap and expiry validates even when it is sent straight to the EntryPoint with self-paid gas (anyone can send the account ETH) or a foreign paymaster. That skips G09, G10, G12 and G14 in the API and the A101 kill switches, and contradicts A29's challenge that the bypass must revert on-chain. No A26 oracle covers it.",
+   "fix": "Session-key validation requires userOp.paymasterAndData to start with the RealXPaymaster address (whose signer signs only after the G01-G22 evaluation), or a RealX API attestation co-signature over userOpHash. Add oracle and challenge cases: an in-policy op with self-paid gas or a foreign paymaster fails. Document the paymaster signer's refusal as the instant platform-wide agent kill switch."
+  },
+  {
+   "severity": "high",
+   "issue": "Session-key limits do not match A12's session_key_policy, which A29 must register. There is no per-transaction cap (A12 has per-transaction and daily ceilings). ExpiryTooFar is set at 90 days and described as 'matching A12's mandate ceiling', but A12's ceiling is 365 days. One amountCap is summed across all targets, so units of different trusts share one raw-unit budget. A direct EntryPoint op can spend the whole daily cap in one call.",
+   "fix": "Give each target {perActionCap, dailyCap, amountArgOffset}, with selectors that carry no amount counting 0. Set the expiry ceiling to the mandate expiry, up to 365 days, or record that A29 clamps it. Add challenges: a single call over perActionCap fails, and spend on target X does not use target Y's cap."
+  },
+  {
+   "severity": "high",
+   "issue": "Expected errors are contradictory, so the hidden oracle and the build will disagree. (1) Execution after a veto expects ProposalNotFound in the races challenge but ProposalVetoed in §3 and the takeover challenge. (2) A session key calling registerSessionKey on the module hits both the ForbiddenTarget hard deny and SessionKeyCannotRegisterKeys. (3) SessionKeyExpired is expected, but packed expiry surfaces as FailedOp AA22. (4) Reverts inside validateUserOp surface as FailedOpWithRevert AA23 with inner data, not as bare named errors.",
+   "fix": "Add an error-precedence table: the check order and exactly one expected outcome per challenge row. Decide whether a vetoed proposal is deleted or kept, and align §3 with both challenges. Tests decode the inner revert data of FailedOpWithRevert and assert expiry failures as AA22."
+  },
+  {
+   "severity": "high",
+   "issue": "realxGuardian is a per-account slot that only the owner can change. A25 redeploys the V2 gateway for each new version, which would leave every existing account with a dead guardian, breaking G13 recovery and guardian revocation until each investor signs. The owner can also set the guardian to zero or to their own address, removing G13 recovery and the on-chain kill switch. V2 consumes the approvalId for non-mint selectors, so one approval cannot cover both proposeOwner and executeRecovery as A29 assumes. V3 is restrict-only and cannot call revoke, so 'instant' guardian revocation needs a two-person custody operation.",
+   "fix": "Add an indirection: a RealXGuardianRegistry (or a factory pointer) set by the V1 multisig under its timelock. The owner cannot replace or zero it. Add a revoker role (the V3 gateway) limited to revoke, revokeAll and a global pauseSessionKeys. Record the selectors A25 must allow-list, with a separate approval ID or nonce for each step. Add challenges: rotate the guardian and recover an old account; setRealXGuardian(0) is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "The paymaster allow-list never contains the account itself, so addOwner and removeOwner self-calls (the '3 passkeys' chip and the POR-06 devices list) are refused sponsorship. Investors would then need ETH, which contradicts 'Investors never buy gas'.",
+   "fix": "Allow target == userOp.sender for the addOwner and removeOwner selectors only (value 0, within caps). Test that a sponsored addOwner succeeds and any other sponsored self-call is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "'solc 0.8.2x' is a version range, which breaks A07's no-ranges and byte-identical rules. A26 edits A07-owned hardhat.config.ts and package.json while A24 builds in parallel. The rule 'no .sol outside vendor/ and src/wallet/' fails once A24 and A25 add their contracts in the same milestone. The Solidity mocks and stubs have no compiled path, and putting them in test/wallet/ breaks the rule or stops them compiling.",
+   "fix": "Pin the exact solc version and optimizer settings (for example 0.8.23). Name the config block A26 edits and merge A24 and A26 in sequence. Make the .sol rule diff-based ('adds no .sol outside src/wallet/'). Put fixtures in contracts/src/wallet/test-fixtures/, excluded from deploy and audit scope."
+  },
+  {
+   "severity": "medium",
+   "issue": "'Cannot be drained by the guardian alone' is proven only within 48 h or after a veto. After 48 h without a veto, the guardian alone can install a passkey it controls, and I1 to I4 allow this. The card's 'trustee approval' is reread as 'the app's approval', while SM-13 checker_approval requires the CFO and the trustee.",
+   "fix": "State the residual power as an invariant. executeRecovery carries keccak(approvalId) and emits it in RecoveryExecuted. Require A29 and A14 to bind the trustee's checker_approval into that approval ID. Keep the counsel disclosure question."
+  },
+  {
+   "severity": "low",
+   "issue": "The session-key events carry only an opaque keyId, so 'agent <token> on behalf of <person>' cannot be shown for on-chain acts.",
+   "fix": "Define keyId = keccak(A12 mandate id || version), or add a mandateRef field emitted in the Registered, Used and Revoked events."
+  },
+  {
+   "severity": "low",
+   "issue": "The on-chain 'expired' state has no SM-13 mapping. The ONB-08 catalogue rule 'recovery set-up needs re-verification and a waiting period' is neither enforced on-chain (setRecoveryPasskey is immediate) nor delegated.",
+   "fix": "Map 'expired' to legal_review or closed in A29. State that A29 enforces the recovery set-up waiting period and re-verification."
+  },
+  {
+   "severity": "low",
+   "issue": "The wikilinks [[A29 - Wallet service: ...]] and [[A50 - Design extension A: ...]] use ':', but the files use '-', so the links do not resolve.",
+   "fix": "Link to the real filenames and show the colon titles as aliases."
+  }
+ ]
+}

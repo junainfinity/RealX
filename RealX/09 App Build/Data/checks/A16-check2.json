@@ -1,0 +1,83 @@
+{
+  "node": "A16",
+  "check": 2,
+  "auditor": "Opus 5.5 independent third-party reviewer (plan check only; the future build is still Opus 5.5 ultracode with Fable 5.1 QA at every gauntlet loop)",
+  "date": "2026-09-24",
+  "pass": false,
+  "check1_verification": {
+    "critical tenant model": "Fixed in A16 (one platform-tenant ledger, sponsor ids kept as attributes, sponsor-vehicle oracle case added). A04 line 152 still says vehicle-scoped accounts carry the sponsor tenant 'as A16 states' (finding 1).",
+    "high approval binding": "Fixed: object map, state allow-list, amount or batch draw, policy strength, single use and oracle cases. The fix adds new defects: policy strength is re-resolved with live facts (finding 4), expiry and state are judged against the wrong A14 clock (finding 6), there are no action codes (finding 1), and distribution.pay binds only a total (finding 3).",
+    "high threshold source": "Fixed inside A16 (A14 rows, pure evaluator, Sydney civil date, inclusive boundaries). Not carried into A14, A17 or A39, which still read A16 config keys (finding 1).",
+    "high owned paths": "Fixed on the A16 side (A04.1 list, registry tables, A08 config section). A04's inventory lists only ledger_reservation and ledger_journal_type (finding 9).",
+    "high missing deps": "Fixed in app-graph.json (A02, A06, A09, A10, A13, A14). final-graph.json still shows ['A09','A02'], and the note's 'graph file must carry the same four new edges' is stale (finding 9).",
+    "mediums": "Scope ids, awaiting-investment derivation, summary counts, deposit control, reversal minimum, agent provenance and fee-in-escrow are fixed in A16. A06 and A17 still contradict several of these (findings 1 and 2)."
+  },
+  "findings": [
+    {
+      "id": "H1",
+      "severity": "high",
+      "issue": "The fixed A16 interface has not been carried into the nodes that call it, so A16 as specified will refuse their calls. (a) A14, a dependency built first: line 40 seeds withdrawal.release from 'A16's configuration keys ledger.withdrawal.auto_max_cents and second_approval_cents', which A16 now forbids. A14 has no manual-match row for deposits of A$10,000 or more, although A16 reads 'A14's manual-match policy row'. A14 seeds action codes only for distribution.run.approve and withdrawal.release, and A16's catalogue names no A14 action code for suspense.resolve, suspense.return, bank.internal_transfer, fee.sweep, interest.sweep, adjustment, reversal or freeze, so binding check 1 cannot be met without invented codes. (b) A17: it reads ledger.deposit.manual_review_cents and expects A16 to place an aml_hold on deposit.matched at or above it. It posts deposit.matched with no approval, which A16 refuses at A$10,000 or more. It undoes a matched credit returned by the bank with reverseJournal and expects LDG_REVERSAL_WOULD_OVERDRAW; A16 requires deposit.returned and makes any reversal 4E. It uses object_ref = bankTxnId where A16 requires bank_transaction:<id>, and it names the code 4E_SECOND_APPROVAL. (c) A39: it reads the removed keys, and its criterion 'changing second_approval_cents changes routing' contradicts A16's 'a config edit does not'. (d) A04 line 152 still puts vehicle-scoped ledger accounts in the sponsor tenant. A16 would pass its own gate, and then J04 and J15 would fail at A17 and A39.",
+      "fix": "Fix these in one pass. A14: seed literal cent tiers with no A16 key, and add a deposit manual-match row (amount_cents gte 1000000, 4E TRSY -> CFO). A03/A14: add an action code and policy row for every A16 catalogue row that names an approval, and add an 'A14 action code' column to A16's catalogue table. A17: route receipts at or above the threshold to suspense and suspense.resolve under 4E (or bind deposit.matched to that approval), use deposit.returned for bank recalls, drop the aml_hold assumption, and use object_ref '<type>:<id>'. A39: read thresholds only through A14 or A16's resolveWithdrawalPolicy. A04: restate the ledger as one platform tenant. Add to A16 an 'Interface published to dependents' list and a registration test that every catalogue action code resolves in A03 and has an A14 policy row."
+    },
+    {
+      "id": "H2",
+      "severity": "high",
+      "issue": "A06 (a dependency) seeds a ledger that contradicts A16's fee model and its design-fidelity pass. A06 puts each order's fee into fee_payable_realx at funding. It sets offer escrow to Σ subtotals (A$3,513,200.00, not the design's A$3,048,880.00) and lists 'the fee sits in escrow' as a seed failure. A16 and A37 keep the full order total, fee included, in the order's offer_escrow sub-balance until escrow.release. So A16's challenge awaiting_investment_cents = 239592 'derived from escrow sub-balances only' gets 238400 from A06's seed. A16's pass criterion 'ledger/accounts match the design field for field' conflicts with the seeded escrow balance. The nightly per-order escrow invariant would also raise a Sev1 on seeded rows that have no line_ref or beneficiary_id.",
+      "fix": "Reopen A06. Seed funded orders with the full total in offer_escrow under line_ref = order id and beneficiary_id, and put fees in fee_payable_realx only for released offerings. Drop 'fee sits in escrow' from its fault list. Seed ledger rows in A16's catalogue shapes (origin, posting_seq, balance_after_cents). Either lock the treasury figures (9,812,404.10 + 3,048,880.00 + 5,559,032.34 = 18,420,316.44) or change A16's fidelity criterion to seed-derived values. State in A16 exactly which ledger/accounts fields must equal the design."
+    },
+    {
+      "id": "H3",
+      "severity": "high",
+      "issue": "distribution.pay binds only 'Σ posted lines ≤ approved gross' plus a final Σ = funded gross. The product map's D07 row is 'Approve distribution run FINA -> CFO, 4E; bound to the payment file hash'. With only a total bound, a faulty or compromised caller can move money between holders (+A$100 to one, -A$100 to another) or change the withholding split, and every ledger check still passes. The ledger also has no stated way to know which line is the last one for LDG_RUN_TOTAL_MISMATCH.",
+      "fix": "Require each distribution.pay line to match a line of the approved payload (payload_sha256 = payment file hash): line id, beneficiary investor_cash owner, gross, withholding and net cents, each consumable once (draw keyed by approval_id + line id). Take the expected line count and gross from the payload. Add oracle cases: a redistributed pair with an unchanged total, a holder not in the file, and a changed withholding split, all refused with LDG_APPROVAL_MISMATCH and leaving no rows."
+    },
+    {
+      "id": "H4",
+      "severity": "high",
+      "issue": "Binding check 4 re-runs A14's resolver 'for this row's action code and amount now', using live facts. A14 evaluates applies_when on the frozen payload and on facts resolved at submit. same_day_sum counts every active or consumed reservation on the Sydney date, including reservations created after this request and possibly the request's own. Example: A$20,000 is AUTO-approved, then A$10,000 is requested the same day. When the first withdrawal.pay posts, the resolver returns 4E and the valid AUTO approval is refused with LDG_APPROVAL_MISMATCH. The 'Threshold split' challenge becomes order-dependent, J15 withdrawals get stuck, and a policy.change or Sydney midnight between approval and posting also strands approved withdrawals, with no rule saying it should.",
+      "fix": "Compare the approval's policy_code with the code A14 resolved at submit (stored with its fact snapshot and policy_version). Re-derive only the amount tier from the frozen payload, so a weaker code can never pay a larger amount. In same_day_sum, exclude the request itself and any reservation created after it. Add oracle cases: two same-day withdrawals posted in reverse order both post, and payment after Sydney midnight or after a policy.change follows an explicitly written rule."
+    },
+    {
+      "id": "H5",
+      "severity": "high",
+      "issue": "The AUTO refund path is bound to the wrong object and contradicts D07. The order.refund row accepts 'AUTO on refund_batch:<id> when the refund file hash equals the approved one', and check 1 requires object_ref refund_batch:<id> with the row's action code. A37 runs the soft-cap-missed refund under A38's offer.revert approval id, which is on the offering. So A16 would refuse A37's J05 refunds, or the builder would weaken the check. D07 'Revert and refund a failed raise' is CAPM -> CFO 4E+Q, not AUTO, so the pass criterion 'zero rows disagree with D07' cannot hold. The spec also never says where the 'approved' hash and the draw total come from.",
+      "fix": "Define the soft-cap row precisely. The approval is A38's offer.revert (policy per A14's D07 row) on offering:<id>. Its payload_canonical carries refund_file_sha256 and total_cents. The ledger checks the object and action code, that the batch hash equals the payload hash, and that Σ drawn ≤ total_cents under lock. Add oracle cases: an AUTO refund with no revert approval, with another offering's revert, and with a hash mismatch are all refused."
+    },
+    {
+      "id": "M1",
+      "severity": "medium",
+      "issue": "The expiry and state rules contradict A14's two-clock model. A16 refuses any approval whose expires_at (the decision TTL, submit + 72 h) has passed, in every allowed state. A14 applies expires_at only before execution and execution_deadline afterwards. A16 also refuses reconciled and closed, but fee.sweep and bank.internal_transfer post only on A17's bank confirmation, and chunked distribution.pay or refund batches post over time. By then the TTL may have lapsed, or A14's effector walk may already have reached reconciled. Only bank.internal_transfer's expiry was carved out.",
+      "fix": "Apply expires_at only while the approval is approved and not yet accepted for execution. After that, use A14's execution_deadline. Make the A16 journal the A14 postcondition for bank-confirmed action codes, so the approval cannot reach reconciled before the journal exists. Add oracle cases: a fee.sweep confirmed 80 h after submit posts once, and a distribution chunk after 72 h posts."
+    },
+    {
+      "id": "M2",
+      "severity": "medium",
+      "issue": "A16 reads state from nodes that depend on it, with no interface for doing so. ledger/accounts 'reconciled' comes from 'A20's last clean run' and last_statement_at from A17 statements, but A20 and A17 depend on A16, and A20 only consumes A16's snapshot. escrow.release is allowed 'only after A37 reports finalised and A20's last targeted run is clean', and G11's done test requires a finalised offering, but the ledger cannot see either. So the design-fidelity criterion (Reconciled, 06:00) cannot be met at A16's gate without faking, and the G11 precondition is untestable here.",
+      "fix": "Add registration ports (for example registerAccountStatusProvider, filled later by A20 and A17 from their own paths). The A16 gate asserts only ledger-owned fields and marks status and last_statement_at as provider-supplied, with a fake. Move the finalised and recon-clean preconditions to A39's drafting checks and A14's registerReconGuard. Restate G11 done in A16 as: the 6E approval on offering:<id> plus the zero-residual rule."
+    },
+    {
+      "id": "M3",
+      "severity": "medium",
+      "issue": "The journal catalogue has gaps that dependents will hit. (a) The rounding account 'must never exceed sweep_cap without a sweep journal', but there is no rounding.sweep row and no rule at the cap. (b) There is no withholding remittance row (A41 owns remittance; ADM 'Remit withholding' TRSY -> CFO). (c) distribution.pay credits only investor_cash, but the product map's run 'credits in-app wallets or pays bank accounts'. (d) payout_clearing is drained only by withdrawal.failed and withdrawal.return, which credit investor_cash, so a failed escrow settlement, suspense.return or refund-to-bank payout lands on the wrong liability. (e) There is no bank-fact row for recalling an unmatched receipt (suspense_unmatched / bank_mirror), and deposit.returned is refused on a frozen account although the bank has already taken the money. (f) The boundary rule stops operating funds from ever covering a client-money shortfall, so the A20 break would stay open for good.",
+      "fix": "Add rows, each with its A14 action code and policy: rounding.sweep, withholding.remit, distribution.pay_to_bank, payout.failed and payout.returned keyed by payout purpose (restoring the source account), deposit.unmatched_returned, and a two-sided shortfall.topup (operating -> client bank_mirror, 6E, each side balanced like fee.sweep). Allow bank-fact debits on frozen accounts, or park them visibly for A20. Extend the catalogue coverage test to include them."
+    },
+    {
+      "id": "L1",
+      "severity": "low",
+      "issue": "The Australian fact is misstated. 'Cash-reporting duties for receipts at or above A$10,000 (TTR)': AUSTRAC threshold transaction reports cover physical currency of A$10,000 or more, not NPP or PayID electronic receipts. The A$10,000 manual match is a product-map control (J04 step 6), not a TTR rule.",
+      "fix": "Reword to say the A$10,000 manual match is a J04/D07 control, TTR applies only to physical cash, and IFTI and SMR duties sit with A42. Keep the MLRO question."
+    },
+    {
+      "id": "L2",
+      "severity": "low",
+      "issue": "Undesigned surfaces (POR-07 statements, ADM-18 pay-in and payout queues, the under-review wallet state) point to 'the design-extension node' without naming it. The tenancy section names A36 as a sponsor reader of the ledger, but A36 has no graph path to A16.",
+      "fix": "Link [[A50 - Design extension A- investor and sponsor screens not in the prototype]] and [[A51 - Design extension B- operator console screens not in the prototype]]. Replace A36 with the real readers (A37, A40, A47, A64), or add the edge."
+    },
+    {
+      "id": "L3",
+      "severity": "low",
+      "issue": "The graph and schema notes are stale or ambiguous. The Depends-on line says 'the graph file must carry the same four new edges', but app-graph.json already does and final-graph.json still lists A16 deps ['A09','A02']. A04's registry inventory lists only ledger_reservation and ledger_journal_type, not ledger_approval_draw or ledger_snapshot_line. A04's migration rule ('core migrations may use these forms only on their own new objects, never on a guarded table ... ledger_*') can be read as barring an A04.1 ALTER or trigger on ledger_journal.",
+      "fix": "Drop the parenthetical, or name app-graph.json as authoritative and regenerate final-graph.json. Add A16's extra registry tables to A04's inventory. Either put A16's column list into A04 now (A04 is unbuilt) or state in A04 that A04.1 core migrations may add columns, constraints and triggers to ledger_* tables."
+    }
+  ]
+}

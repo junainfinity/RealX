@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "Dust carry-forward money is double-funded and has no ledger home. Funding requires distribution_payable = net_cents + sum(carry_in), but carry_in was already funded inside an earlier run's net (that run paid net + carry_in - carry_out and left carry_out in its own distribution_payable). The same paragraph also says the sponsor pays payable + withholding + remainder (= net + carry_in - carry_out), so the spec gives two different funding figures. No journal moves carry_out anywhere: distribution.pay legs are only investor_cash, withholding_payable and rounding, and 'rounding-adjacent carry sub-total' is not an A16 account. This contradicts A16's catalogue check (the sum of distribution.pay lines must equal the run's funded gross when the last line posts), so any run with a dust line fails at A16. It also contradicts this node's own pass criterion that distribution_payable is zero for every closed run. The hidden oracle would encode the wrong funding figure.",
+   "fix": "Define one money model and put it in the oracle scope. Add a per-vehicle client-money liability account distribution_carry (an A16 catalogue change, so reopen A16 upstream). Each run's last distribution.pay posts carry_out to distribution_carry, and a carry-consuming run posts distribution.carry_release (distribution_carry -> distribution_payable) for its carry_in. The sponsor funds exactly net_cents, and funding_check compares distribution_payable after the release against net + carry_in. State the identity per account and test nightly that distribution_carry equals the sum of open carries."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec needs SM-08 transitions that are not in the catalogue, yet it requires every transition to pass A03's table (DST_INVALID_TRANSITION). A03 allows only two named extensions. The missing transitions: reopen back to draft from approved, funding, funded, partially_failed or retrying after a hash mismatch (the catalogue only has in_review -> draft on CFO reject); retrying -> manual_payout and retrying -> partially_failed when a retry fails again; and the zero/reduced declaration path (no edge back to calculating, and no route to closed for a zero run with no lines). The catalogue's in_review -> draft 'CFO rejects' is never specified: no reject endpoint, no effect on lines or the A14 request. So the builder must break the table or invent behaviour, and the SM-08 coverage pass criterion cannot be met.",
+   "fix": "Either raise the needed transitions as named A03 extensions.ts entries (upstream reopen of A03), or redesign within the 18 catalogue edges. For example: a hash mismatch in approved or funded keeps the state, cancels the approval and sets hash_mismatch; a retry failure stays in retrying and escalates the line to manual through partially_failed -> manual_payout. Specify POST .../reject (A14 checker decision, in_review -> draft, lines cancelled) and the exact state path for zero and reduced declarations. Add each edge to the coverage matrix."
+  },
+  {
+   "severity": "high",
+   "issue": "Legal hold is duplicated. The product map puts 'Record court order - legal hold; may pause distributions' (LEGL -> CCO) on the property module. A34 implements it as SM-03 legal_hold and sets distributions_paused = true 'that A40 reads', and A48 owns the effects of legal hold. A40 instead creates its own POST /v1/distributions/vehicles/{id}/legal-hold and flag. A court order recorded in A34 would not stop funding or execution.",
+   "fix": "Delete A40's legal-hold endpoint and flag. Read A34's distributions_paused fact and A48/A19 halt state through their interfaces (fakes until they land) at every money-moving transition and before each execute or retry batch. Keep run.legal_hold as a mirrored read-only boolean. Rewrite the legal-hold challenge to record the court order through A34, and remove legal_hold from this node's G13 action list."
+  },
+  {
+   "severity": "high",
+   "issue": "A40 defines a rent_roll_imports table and a rent-roll CSV import through the property-data adapter. A34 already owns a table of the same name, the endpoint POST /v1/properties/{id}/rent-roll/import and the adapter. The build would produce two migrations for one table name and two import paths with different validation: a schema and ownership collision.",
+   "fix": "Remove rent_roll_imports and the CSV validation from A40. income_periods.rent_roll_import_id references A34's import (state validated or applied), and gross_rent_cents is read through A34's index.ts. Update build sub-agent (1)'s table list."
+  },
+  {
+   "severity": "high",
+   "issue": "Dependencies miss interfaces the spec uses. A20 (R10 result, break checks, targeted R8/R13 run for closure) is not an ancestor of A40 in final-graph.json, although the spec says 'A20 is built before this one'. A42 (AML restriction flag), A17 (receipt matching that posts distribution.fund) and A06 (seed and fixture provider, all design-fidelity criteria) are not ancestors either. The spec also ignores A20's contract: preflight() before approval, assertClear('payout') before every execution, and Sev2 breaks block distribution_approval and distribution_execution. The spec checks only Sev1 and a per-tenant R10, but client-money accounts are platform accounts.",
+   "fix": "Add A20, A42, A17 and A06 to deps (none depends on A40, so no cycle), or name the recorded fakes and move the real integration to A49. Use A20.preflight({vehicleId, purpose: 'distribution_approval'}) in the submit precheck and assertClear(vehicleId, 'distribution_execution'/'payout') before funding, executing and each batch. Treat Sev2 as blocking. Read R10 for the Distributions client-money account."
+  },
+  {
+   "severity": "high",
+   "issue": "The design-fidelity criteria cannot all be met. In the prototype, FY27 to date A$576.96 = 3 x (121.37 + 39.85 + 31.10), so Bay Road pays A$31.10 every month, but SPN-09's past runs pay 0.2573, 0.2605 and 0.2560 per token (120 tokens = 30.87, 31.26, 30.72). The activity row showing Bay Road A$31.10 paid 10 Sep is the August run, yet the spec calls 3110 the September gross, and September is still at the sponsor owner's turn, so it cannot be 'paid'. The investor screen key 'distributions' (POR-03) does not exist in RealX App.dc.html (the inv shell has port, buy, wallet, activity, statements and sell), so POR-03 is undrawn and should point to A50. The component named 'DistributionChain' is actually distChain in the prototype.",
+   "fix": "Write an explicit design-deviation decision in the spec and in A06 that says which figures are canonical. For example, keep the SPN-09 past runs and the September card, and derive the FY27 total and activity rows from seeded runs under the floor rule. Make 3110 the scheduled September line and 3072 the August line paid 10 Sep. Point POR-03 to A50 (design extension A) and fix the design key to distChain in the node data and spec."
+  },
+  {
+   "severity": "high",
+   "issue": "The closed-account and manual-payout ledger path is undefined, and payable_cents is ambiguous. The manual payout is 'the same distribution.pay row' to a bank account, but distribution.pay credits investor_cash, a closed account refuses credits, and no A16 row moves distribution_payable to a bank payout. The spec does not say whether closed_account and manual lines count in payable_cents. If they count, executing -> executed never happens and the only catalogue route to manual_payout is through partially_failed. If they do not, distribution_payable is non-zero at closure. It also does not say which approval id a manual journal carries.",
+   "fix": "Define payable_cents to include closed_account and manual lines. Route execution that ends with manual lines through executing -> partially_failed -> manual_payout. Name an A16 bank-payout journal (for example distribution.pay_bank: distribution_payable / bank_mirror distributions, with the per-line 4E approval id and A17's confirmation) and raise it upstream in A16. Add a closure test with one closed-account line."
+  },
+  {
+   "severity": "medium",
+   "issue": "The payment file can go stale inside in_review. It is regenerated only on the transition into in_review, but FINA may change exception codes during in_review, and nothing covers an edit after submit while the A14 request is pending. The approved payload then carries a stale file_sha256, which causes a false DST_FILE_HASH_MISMATCH and a Sev1 at funding, or lets edits land that the checker never saw.",
+   "fix": "Regenerate the file hash on every exception change and at submit. Refuse exception edits with DST_RUN_FROZEN while an A14 request is pending, or cancel the request on change. Add a challenge for an edit after submit."
+  },
+  {
+   "severity": "medium",
+   "issue": "D04/G22 is wired only as x-realx-scope. A12's evaluateG22 needs the action cell id (from A03 actions.ts), the vehicle for allowed_vehicle_ids and the amount for per-action and daily caps. The spec does not say how run-id routes resolve the vehicle or which amount a fund, manual-payout or declare call reports, so the allow-list and cap checks would silently not apply. No challenge covers a sponsor or staff agent outside its allowed vehicles, over its cap, revoked or under a kill switch, and sensitive-action notices are not mentioned.",
+   "fix": "Add a route table: actions.ts id, family (sponsor-distribution or staff-M12), delegable flag, vehicle resolver (run_id -> vehicle_id) and G22 amount (payable_cents for fund, line net for manual payout, net_cents for declare). Add challenges for G22_VEHICLE_NOT_ALLOWED, G22_LIMIT_EXCEEDED, a revoked token and each kill-switch tier, and a sensitive-action notice for each money-family agent action."
+  },
+  {
+   "severity": "medium",
+   "issue": "The CEO escalation uses signed variance ('variance_bps_gte 2,500'), so a run 30 % below last month or forecast would not add the CEO, while the reason rule uses |variance|. Variance divides by zero when the last closed net is 0 (after a zero declaration). The boundary tests are positive only. The inclusive A$1,000,000.00 differs from the product map's 'over $1m' and is not recorded as a deliberate choice.",
+   "fix": "Put absolute variance in the approval payload for policy resolution. Define a zero-base variance as null with the reason required. Add -24.99 % and -25.00 % boundary cases and a zero-base case. Record the inclusive boundary as a deliberate, stricter reading for the founder to confirm."
+  },
+  {
+   "severity": "medium",
+   "issue": "The closure hash checks are not measurable. R8 is said to 'reproduce the payment file hash from the ledger credits', but journals carry no units, rates or register version. A20's R13 recomputes a snapshot from the register version and the chain holders at its block, yet A40's snapshot stores no block number.",
+   "fix": "Restate R8 as a per-line match: the journal found by external_ref = line_id has legs equal to the line's net, withholding and remainder, with totals equal to the run's. Keep R13 alone for the hash. Add block_number (or the indexer checkpoint) to distribution_snapshots, or state that R13 compares the register side only, and align A20."
+  },
+  {
+   "severity": "medium",
+   "issue": "Using 'the latest certified version at or before the record date' can miss transfers, recoveries or mints between that version's as_of and the record date, so the wrong holders are paid.",
+   "fix": "Require as_of equal to the record date. Allow an earlier version only when A18 confirms no acknowledged register instruction in the gap (DST_SNAPSHOT_STALE otherwise). Add a challenge with a transfer in the gap."
+  },
+  {
+   "severity": "low",
+   "issue": "Wikilinks to A41, A64, A74, A51 and A93 use ':' and '/' while the file names use '-' (for example 'A41 - Tax engine- profiles, withholding, AMMA and CRS-FATCA.md'), so the links do not resolve. This looks plan-wide.",
+   "fix": "Have the generator emit links to the sanitised file name with the display title as an alias."
+  },
+  {
+   "severity": "low",
+   "issue": "Business days use 'the national public-holiday table' with Australia/Sydney, so NSW Labour Day (5 Oct 2026, inside the September run's window) is missed. The forecast fallback is attributed to A34, but offer forecast yield is A36's.",
+   "fix": "Use a per-vehicle state calendar (NSW by default) and test that the September 2026 due date skips 5 Oct. Source the forecast fallback from A36's offer terms through an interface."
+  }
+ ]
+}

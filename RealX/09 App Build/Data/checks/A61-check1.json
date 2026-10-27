@@ -1,0 +1,120 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "A43 is missing as a dependency. It owns the captured email/SMS inbox (GET /v1/_sandbox/inbox) and the +bounce@/+delay@/+fail@ markers, which J02's verification-email step, the landing page and the magic-inputs table all use. A43 is not in A61's transitive closure.",
+   "fix": "Add A43 to A61's deps in final-graph.json and to the Depends on line (AM3 to AM5 is legal), and name A43's inbox route in the Specify inputs."
+  },
+  {
+   "severity": "high",
+   "issue": "The G07 boundary conflicts with A19's hidden oracle. A61 says 501 units fails with a maximum of 500 (magic inputs 500 for a new investor, 490 for the seeded Alex). A19's oracle says a 500-unit order on a 10,000-unit, 5% vehicle fails with max_allowed_units = 499, although A19 line 44 says 'at or below'.",
+   "fix": "Read max_allowed_units from the server quote. Assert that max+1 fails and max passes. Generate the magic-inputs rows from A19's rule pack. Open a Specify fix item on A19 to settle 'at or below' versus 'below'."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec lists the SM-05 transition 'submitted -> eligibility_check -> funded' for the walk variant and the agent path. That transition does not exist in data_states.py or in A37, where funding at placement goes eligibility_check -> awaiting_funds -> funded in one transaction. The pass criterion that every listed transition is observed can therefore never be met by a correct build.",
+   "fix": "Specify eligibility_check -> awaiting_funds -> funded in one transaction, with one audit event per transition."
+  },
+  {
+   "severity": "high",
+   "issue": "The agent order will return 428 even when counsel allows standing consent. A37 accepts an agent order only with a mandate signing-key signature, and satisfies G12 only from the disclosure consent recorded on the mandate. preview:agent-token registers neither. The result is a false 'parity break', which the spec classes as Critical.",
+   "fix": "Have preview:agent-token register, under the same fresh assertion, a mandate signing key (held only in the test process's memory) and the standing consent for KST01's current IM and fee-schedule versions. The test then signs the canonical order payload."
+  },
+  {
+   "severity": "high",
+   "issue": "The non-delegable negatives cannot return AGNT_NOT_ALLOWED through MCP. A104 leaves requiresHuman operations out of the tool list and answers an unknown tool with MCP_UNKNOWN_TOOL without forwarding the call.",
+   "fix": "Through MCP: assert the tools are absent and a call returns MCP_UNKNOWN_TOOL. Through REST with the same token (SDK): assert 403 AGNT_NOT_ALLOWED and that nothing was written."
+  },
+  {
+   "severity": "high",
+   "issue": "Resuming the walk contradicts A23. A23 recreates the Hardhat chain on every boot and reruns deploy, so the walk persona's wallet, its registerIdentity claims and the deploy addresses are lost while Postgres keeps the walk. Spec point (b) only covers SEED_PRESENT.",
+   "fix": "Add chain persistence to point (b): open fix items on A23/A07 to persist chain state and to skip deploy when the recorded addresses already hold code. Add a post-resume probe (wallet still 'Linked', reconciliation clean)."
+  },
+  {
+   "severity": "high",
+   "issue": "seed:verify cannot pass after a walk. A06's locked invariants include KST01 raised = 6,400, escrow = A$3,513,200.00 and 'no event after AS_OF'. The pass criterion asks for them to still hold, and A23 prints SEED_PRESENT only when seed:verify passes, so a walked volume gets reloaded.",
+   "fix": "Run seed:verify on a fresh reset before the walk. After the walk, assert baseline plus the exact walk deltas. Open fix items on A23/A06 so seed presence is detected by a manifest marker row, not by seed:verify."
+  },
+  {
+   "severity": "high",
+   "issue": "The 375 px captures must match the prototype's computed layout within 1 px, but the design has no phone layout. The design analysis records a build decision to collapse the nav and stack columns at phone width, so all 24 small-width pairs will fail.",
+   "fix": "At 375 px, gate only tokens and text plus scrollWidth === 375. Record layout metrics and pixel difference as non-gating, citing the design-analysis responsiveness decision."
+  },
+  {
+   "severity": "high",
+   "issue": "The helper's approve-certificate step uses 'the CLSR persona A06 seeds', but A06 seeds no CLSR. A32's decide route needs CLSR (CCO only on a referral), so J02's clean path cannot finish.",
+   "fix": "Open a Specify fix item on A06 to seed a named CLSR persona with a sandbox hardware key and segregation-of-duties data, and name that persona's id in A61."
+  },
+  {
+   "severity": "medium",
+   "issue": "The agent orders for the seeded INV-00841, whose A$3,420.18 and activity rows are gating text in the captures, and no passkey twin order is defined. Two orders on one persona also produce different funding and G07 states, so the comparison is not like for like.",
+   "fix": "Use a dedicated fresh persona, or reset between the paths. Place the passkey twin in the same starting state and compare verdicts and reason codes only. Require preview:reset before preview:shots."
+  },
+  {
+   "severity": "medium",
+   "issue": "The escrow checkpoint is circular: it compares escrow with A37's own journal.",
+   "fix": "Assert A16's three-leg figures directly: offer_escrow +A$23,840.00 and fee_payable +A$119.20 for J04; +A$2,384.00 and +A$11.92 for the walk variant."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec cites A50 drawings that do not exist (a PUB-01 audited strip, amount field, no-cooling-off banner, Opened pills, order states). A54 and A57 say these compositions are shown in the A61 gallery, but A61 never captures them.",
+   "fix": "Point these refs at A54's and A57's composition notes. Stop accepting 'A50 drawing' as the excuse for them. Add an app-only states gallery to SHOTS.md and REVIEW.md."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G11 check (headroom shown) is not a refusal, yet the pass criteria require a negative with a stable code for each gate.",
+   "fix": "Add a real G11 negative: a scenario that brings an offering near its hard cap, then an order above the cap refused with A37's code and a G11 GateEvaluation row."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G06 fixture treats 'residency New Zealand' as a foreign person. Foreign-person status turns on citizenship and visa, not residency, and New Zealand citizens are commonly exempt.",
+   "fix": "Use an unambiguous foreign-person fixture (for example residency and citizenship Singapore), assert A19's verdict, and log the residency-versus-citizenship capture at ONB-01 as a counsel question."
+  },
+  {
+   "severity": "medium",
+   "issue": "The agent token's scopes leave out orders:quote, which A37's quote route requires.",
+   "fix": "Take A03's invest-and-trade scope family, or the orders:quote, orders:place and orders:read cells."
+  },
+  {
+   "severity": "medium",
+   "issue": "Non-delegable acts on the walked path (ONB-08 wallet creation, ONB-09 bank account) are not probed, and no check shows that a staff agent can never be checker.",
+   "fix": "Add agent negatives for the wallet and bank-account routes, plus a probe that a CFO agent token calling the match-deposit approval is refused G22_AGENT_NEVER_CHECKER."
+  },
+  {
+   "severity": "medium",
+   "issue": "The clock semantics across a resume are ambiguous. Either the offer closes and 72-hour orders expire when the user comes back weeks later, or platform time runs backwards.",
+   "fix": "Platform time should advance only while the stack runs: at preview:up, add the downtime to the offset, never moving time backwards. Add a probe for a resume after a real-time gap, and raise the change as a fix item on A09/A23."
+  },
+  {
+   "severity": "medium",
+   "issue": "The steps pending A55 or A59 make the scope depend on timing, and AM5's exit can be recorded while J01 is only partly run.",
+   "fix": "Freeze the pending set at Specify, and require a full rerun of A61 after A55 and A59 pass before AM5 is closed."
+  },
+  {
+   "severity": "medium",
+   "issue": "The web image is built from a working tree shared with A55, A59 and A60 while they are being built in parallel.",
+   "fix": "Build from the last gated commit (a worktree) and record that commit in A61.json."
+  },
+  {
+   "severity": "medium",
+   "issue": "Product-map items on the walked screens are untested: PUB-01 footer disclosures (G17/G21), PUB-03 no-results state, PUB-04 G19/G20 rows, ONB-08 recovery, ONB-10 cap headroom, POR-01 alerts. The switch from WLG01 to KST01 in J01 is not recorded.",
+   "fix": "Add one assertion for each, and note the KST01 substitution as a seed-driven change."
+  },
+  {
+   "severity": "low",
+   "issue": "The codes 'token_revoked' and the unnamed vehicle refusal do not match A12's TOKEN_REVOKED and G22_VEHICLE_NOT_ALLOWED.",
+   "fix": "Use A12's exact codes."
+  },
+  {
+   "severity": "low",
+   "issue": "A23 has no registration hook for the no-live check (it already globs infra/). The prototype driver's screen-code label cannot tell buy steps or property tabs apart.",
+   "fix": "Remove the registration claim and add A61's own resolved-config refusal test. Make the driver also wait on the active step or tab."
+  },
+  {
+   "severity": "low",
+   "issue": "The 5-8 hour estimate is low for three sub-agents, five suites, 48 capture pairs and three Docker cycles in every fix loop.",
+   "fix": "Re-estimate to about 8-12 agent-hours."
+  }
+ ]
+}

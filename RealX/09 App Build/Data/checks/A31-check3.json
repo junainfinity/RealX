@@ -1,0 +1,66 @@
+{
+  "node": "A31",
+  "check": 3,
+  "auditor": "Opus 5.5 independent third-party auditor",
+  "date": "2026-09-24",
+  "pass": false,
+  "previous_findings_verified": {
+    "critical_A32_claim_contract": "Fixed in the note. The outbox model, the one 02:00 sweep, claim.expiring and claim.expired, and the basis enum {certificate, s708_500k_offer, sophisticated_s761GA, professional} now match A32. off_chain_only is an A32 follow-up in section 0.",
+    "high_topic_model": "Fixed. Holding and acquisition topics and the keccak constants match A24.",
+    "high_key_layout_recovery": "Fixed in substance: createInvestorIdentity, V4 as a claim key only, and the R rows bound to A28's approval ID. A gap in the R-vault definition remains and is reported below.",
+    "high_ir_country": "Fixed. The G06 code comes from A30's foreign_person classification, and A24's vectors are in the challenge.",
+    "high_registry_status": "Fixed. Five values and three labels are written through setRegistryStatus, matching A29.",
+    "high_A30_interface": "Fixed in the note (account query, owners_pending and owners_verified, how members combine, the kyb_recompute binding). It depends on A30 accepting its follow-ups.",
+    "high_A15_A28_provider_and_dep": "Fixed in the note. Not fixed in app-graph.json: A28 is still missing from the deps.",
+    "medium_nonexistent_nodes_codes": "Fixed in the note. The A42 -> A31 edge is still missing from the graph.",
+    "medium_stale_header_graph": "The note is fixed. The summary, estimate and deps in app-graph.json are still stale.",
+    "low_estimate": "The note is raised to 10-16. The graph still says 6-10."
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "issue": "Wallet-to-account mapping is undefined and contradicts A29. A29 keeps one active passkey_aa wallet per investor principal (a person, salt keccak256(principal id)). A31 creates one ONCHAINID per INV- account (salt keccak(investor_id)) and registers 'the investor's passkey_aa wallets'. The shared IdentityRegistryStorage maps a wallet to only one identity. A30 supports one person holding an individual account, an SMSF and a joint account. Result: the person's single wallet can be registered to one account's identity only. The SMSF or joint account can never be registered: it gets CLM_NO_WALLET forever, or registerIdentity reverts. If the wallet is registered to the wrong identity, SMSF trust property and personal holdings share one identity, which breaks the holder cap and G03.",
+      "fix": "Before Specify, agree one rule with A29 and A30 and write it in section 2: each INV- account has its own passkey_aa wallet (A29 salt keyed by the account id, the person's passkey as owner), and a joint account's wallet has both holders' passkeys. Add an A29 follow-up to section 0. Add a challenge: one person with individual, SMSF and joint accounts gets three identities and three registered wallets, and a transfer between the person's individual and SMSF wallets is treated as a cross-identity transfer."
+    },
+    {
+      "severity": "high",
+      "issue": "Nothing restores holding claims that lapsed. A31 does not consume A30's investor.reinstated (SM-01 suspended -> whitelisted: MLRO then CCO). The addClaim row requires the account condition, so the sanctions restamp is refused while an investor is suspended, and SANCTIONS_CLEAR ends within 30 days. KYC_VERIFIED can also expire. The restamp job only selects claims 'ending within 7 days', so a claim that already expired after an A42 outage is never re-stamped either. replaceClaim assumes an old claim exists. Result: a reinstated investor, or anyone whose claim lapsed during a provider outage, stays stale with isVerified false for good, and no challenge detects it.",
+      "fix": "Consume investor.reinstated and add a repair step to claims.register-pending, or a new claims.restore job. For every account that meets the account condition and lacks a current issued KYC_VERIFIED, SANCTIONS_CLEAR or RESIDENCY_FIRB claim, issue it from the live source under the addClaim row, and set stale -> registered on confirmation. Make replaceClaim fall back to issueClaim when no live old claim exists. Add a challenge: suspend for 45 days, reinstate, and isVerified is true again within one V4 op; after a 10-day A42 outage, restoring the provider re-verifies every lapsed investor."
+    },
+    {
+      "severity": "high",
+      "issue": "The graph data still contradicts the fixed note. app-graph.json lists A31's deps as [A15, A19, A27, A29, A30] with no A28, est 6/10, and the old summary ('only for KYCCase rows in state approved', 'wholesale claim with a two-year expiry', 'R4/R5 checks feeding recon', 'revoke as 4E'). A42 has no edge to A31, and App Development Graph.md has no A28 --> A31 edge. The note only lists these as a 'Graph follow-up (not edited here)', although A30's graph entry was updated the same way (12-18). The orchestrator schedules from app-graph.json. A28 is not reachable through A31's deps, so A31 can start before A28 passes, and then the J09 two-trust, forcedTransfer ticket-scope and IdentityLookup contract tests cannot run.",
+      "fix": "Edit app-graph.json and the mermaid graph now: add A28 to A31.deps, add A31 to A42.deps (no cycle), set est_lo/est_hi to 10/16, and replace the summary with the text already drafted in the note's follow-up paragraph. Then delete that paragraph from the note."
+    },
+    {
+      "severity": "medium",
+      "issue": "The J09 trigger from A28 is not specified. Section 2 says 'After A28's recovery approval, A31 executes R's addKey/removeKey' and 'after A28's forced transfers leave balanceOf(lost)==0 ... deleteIdentity', and Build lists an 'A28 recovery' consumer. No event, port or payload is named, and A28's spec still names recoveryAddress and publishes only custody.op.confirmed and audit events. The builder cannot know what starts the R op or the deletion, so the J09 two-trust challenge has nothing to drive it.",
+      "fix": "Name the interface in section 0 A28 and section 2: for example, A28 publishes tokenops.recovery.approved { transfer_request_id, approval_id, investor_id, lost_wallet, new_wallet } and tokenops.recovery.transfers_complete { approval_id, tokens[] }, and A31 consumes both idempotently on event_id. Re-read A28's request state through its public read before each op. Add the step order (R keys before forced transfers, per A24 step 3) to the challenge."
+    },
+    {
+      "severity": "medium",
+      "issue": "The R custody slot and the creation op cannot be built in A15's model as written. Section 1 row 1 puts V4's factory call and R's two addKey calls 'in one batched op', but a CustodyOp belongs to one vault and one signer set. Section 0 A15 (3) does not say whether R is hot (0-of-0 AUTO) or a quorum vault, or which principal signs it. A15's signer check constraint refuses any SVCA except V4 and V7, so an auto-signing R slot is refused as specified.",
+      "fix": "Specify two ops under the same AUTO source hash: a V4 op, then an R op. On retry, detect an identity whose key set is exactly {R} and re-run only the R op. Define the R vault in A15 (3): hot 0-of-0 for the AUTO creation row, the same approval-bound rule for the recovery rows, a dedicated SVCA principal svc-identity-recovery that is not V4, and an amendment to A15's signer constraint. Add a challenge that fails the R op after the V4 op and checks recovery."
+    },
+    {
+      "severity": "medium",
+      "issue": "A lapsed SGL+R ratification is not handled. A31 removes and issuer-revokes SANCTIONS_CLEAR under A30's kyc.sanctions.confirm_match SGL+R approval as soon as it is approved. SGL+R is reversible when ratification lapses (A30 uses an AUTO revert for SGL+R). A31 defines no reaction. Issuer revocation is permanent for that signature, and the restore gap above means the investor stays de-verified after a revert.",
+      "fix": "Consume A14's ratification-lapsed or revert event for these approvals and re-issue SANCTIONS_CLEAR from the live screening source under the addClaim row, only if A30 no longer shows a confirmed match. Add a challenge: SGL+R executes, ratification lapses, and one new claim is confirmed with no manual step."
+    },
+    {
+      "severity": "medium",
+      "issue": "kyc_valid_until uses a different day boundary from A30. A31 turns every valid_until into 00:00 Sydney on the next day, which reads the date as the last valid day. A30's vector has the account approved 1 Oct 2026 with isWhitelisted false at 00:00 on 1 Oct 2027, which reads kyc_valid_until as an exclusive instant. Result: KYC_VERIFIED (and RESIDENCY_FIRB when tied to it) stays valid on chain for one day after A30 has de-whitelisted the account, so the chain's last line of G01 is looser than the off-chain gate.",
+      "fix": "Add one convention per source to section 3. Wholesale valid_until is an inclusive civil date (design 'Valid to 30 Jun 2028'). A30's kyc_valid_until is either exclusive (onchain_valid_until = 00:00 Sydney on that date) or A30 publishes an inclusive date. Agree it with A30 in section 0, and add A30's 1 Oct 2027 vector to the oracle scope."
+    },
+    {
+      "severity": "low",
+      "issue": "The 60-day and 30-day claim.expiring marks are hard-coded. A32 has a cross-node test that fails if A31's 30-day mark disagrees with A19's wholesale.expiring_warn_days. A policy-change path also has a gap: A29 allows no registering -> unregistered transition, so a registration refused by policy leaves the wallet in registering and the claim failed, with only an implicit retry.",
+      "fix": "Read the 30-day mark from A19's AU-W-2026.1 expiring_warn_days, and hold the 60-day mark as policy data. State that a failed registration stays registering and is retried by claims.register-pending once the refusal cause clears. Add a pass criterion for that case."
+    },
+    {
+      "severity": "low",
+      "issue": "Section 0 A24 (b) asks for 'a key on RealXClaimIssuer that can call revokeClaimBySignature and nothing else'. The vendored ONCHAINID ClaimIssuer allows revokeClaimBySignature only for management keys, and an action key cannot auto-execute calls to the identity itself, so no key purpose meets this without a RealX contract change.",
+      "fix": "Name the mechanism: either a thin revoker gateway that holds the issuer management key and exposes only revokeClaimBySignature to V4, or A24's RealX IClaimIssuer fallback with a revoker role. List it under HG-AUDIT."
+    }
+  ]
+}

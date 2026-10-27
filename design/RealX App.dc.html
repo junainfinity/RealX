@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F2EC;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:#1F5E4B;text-decoration:underline;text-underline-offset:2px}
+a:hover{color:#17191C}
+input{font:inherit}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#F5F2EC;font-family:'Geist',system-ui,sans-serif;color:#17191C;font-size:14px">
+
+<div style="display:flex;align-items:center;gap:16px;padding:8px 20px;background:#17191C;color:#F5F2EC;flex-wrap:wrap">
+  <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#B9B4AA">RealX prototype · view as</div>
+  <div style="display:flex;gap:4px;background:#2A2D31;padding:3px;border-radius:999px">
+    <sc-for list="{{ roles }}" as="r" hint-placeholder-count="4">
+      <button onClick="{{ r.click }}" style="border:none;border-radius:999px;padding:6px 14px;font:500 12px 'Geist',sans-serif;cursor:pointer;background:{{ r.bg }};color:{{ r.fg }}">{{ r.label }}</button>
+    </sc-for>
+  </div>
+  <div style="margin-left:auto;font:400 11px 'Geist Mono',monospace;color:#B9B4AA">{{ screenCode }}</div>
+</div>
+
+<sc-if value="{{ shell.pub }}" hint-placeholder-val="{{ true }}">
+<div style="min-height:calc(100vh - 44px);display:flex;flex-direction:column">
+  <header style="display:flex;align-items:center;gap:20px;padding:18px 32px;border-bottom:1px solid #E3DED4;background:#F5F2EC;flex-wrap:wrap">
+    <div onClick="{{ go.home }}" style="font:500 26px 'Newsreader',serif;letter-spacing:-.02em;cursor:pointer;display:flex;align-items:baseline;gap:1px">Real<span style="color:#1F5E4B;font-style:italic">X</span></div>
+    <nav style="display:flex;gap:2px;flex:1 1 auto;min-width:0;overflow-x:auto">
+      <sc-for list="{{ pubNav }}" as="n" hint-placeholder-count="2">
+        <button onClick="{{ n.click }}" style="border:none;background:{{ n.bg }};color:#17191C;padding:8px 14px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0">{{ n.label }}</button>
+      </sc-for>
+    </nav>
+    <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-shrink:0">
+      <sc-if value="{{ isVisitor }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ login }}" style="border:1px solid #17191C;background:transparent;padding:9px 18px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer;white-space:nowrap">Log in</button>
+        <button onClick="{{ go.onb }}" style="border:none;background:#1F5E4B;color:#fff;padding:10px 18px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer;white-space:nowrap" style-hover="background:#174838">Get started</button>
+      </sc-if>
+      <sc-if value="{{ isInvestor }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align:right;line-height:1.25;white-space:nowrap"><div style="font:500 13px 'Geist',sans-serif">Alex Morgan</div><div style="font:400 11px 'Geist Mono',monospace;color:#5E6166">Wholesale investor</div></div>
+        <div style="width:36px;height:36px;border-radius:50%;background:#1F5E4B;color:#fff;display:flex;align-items:center;justify-content:center;font:500 13px 'Geist',sans-serif">AM</div>
+      </sc-if>
+    </div>
+  </header>
+
+  <main style="flex:1;width:100%;max-width:1240px;margin:0 auto;padding:36px 40px 64px;display:flex;flex-direction:column;gap:32px">
+
+  <sc-if value="{{ s.home }}" hint-placeholder-val="{{ true }}">
+    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:center;padding:24px 0 8px">
+      <div style="display:flex;flex-direction:column;gap:22px">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#1F5E4B">Wholesale investors · retail from 2027</div>
+        <h1 style="font:400 64px/1.02 'Newsreader',serif;letter-spacing:-.025em;margin:0;text-wrap:balance">Own part of a building that <em style="color:#1F5E4B">pays rent.</em></h1>
+        <p style="font-size:18px;line-height:1.5;color:#45484D;margin:0;max-width:520px;text-wrap:pretty">RealX lists property trusts from vetted Australian sponsors. Buy tokens that are units in the trust, get rental income every month, and see proof the property exists.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button onClick="{{ go.invest }}" style="border:none;background:#1F5E4B;color:#fff;padding:14px 24px;border-radius:999px;font:500 15px 'Geist',sans-serif;cursor:pointer" style-hover="background:#174838">Browse investments</button>
+          <button onClick="{{ go.onb }}" style="border:1px solid #17191C;background:transparent;padding:14px 24px;border-radius:999px;font:500 15px 'Geist',sans-serif;cursor:pointer">Check if you qualify</button>
+        </div>
+      </div>
+      <div onClick="{{ feat.open }}" style="background:#fff;border:1px solid #E3DED4;border-radius:14px;overflow:hidden;cursor:pointer;box-shadow:0 30px 60px -30px rgba(23,25,28,.25)">
+        <div style="height:260px;background:repeating-linear-gradient(135deg,#E8E2D6 0 12px,#EFEAE0 12px 24px);display:flex;align-items:flex-end;padding:16px;position:relative">
+          <span style="position:absolute;top:14px;left:14px;background:#E3EEE8;color:#1F5E4B;font:500 11px 'Geist Mono',monospace;padding:5px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.05em">Open offer</span>
+          <span style="font:400 11px 'Geist Mono',monospace;color:#5E6166">photo · {{ feat.img }}</span>
+        </div>
+        <div style="padding:22px;display:flex;flex-direction:column;gap:14px">
+          <div><div style="font:400 26px 'Newsreader',serif">{{ feat.name }}</div><div style="color:#5E6166">{{ feat.sub }} · {{ feat.spName }}</div></div>
+          <div style="height:6px;background:#ECE8E0;border-radius:3px;overflow:hidden"><div style="height:100%;width:{{ feat.raisedW }};background:#1F5E4B"></div></div>
+          <div style="display:flex;justify-content:space-between;font:400 12px 'Geist Mono',monospace;color:#45484D"><span>{{ feat.raised }}% raised</span><span>closes {{ feat.closes }}</span></div>
+        </div>
+      </div>
+    </section>
+    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:#E3DED4;border:1px solid #E3DED4;border-radius:12px;overflow:hidden">
+      <sc-for list="{{ howSteps }}" as="h" hint-placeholder-count="3">
+        <div style="background:#F5F2EC;padding:26px;display:flex;flex-direction:column;gap:10px">
+          <div style="font:400 32px 'Newsreader',serif;color:#1F5E4B">{{ h.n }}</div>
+          <div style="font:500 16px 'Geist',sans-serif">{{ h.t }}</div>
+          <div style="color:#45484D;line-height:1.5;text-wrap:pretty">{{ h.d }}</div>
+        </div>
+      </sc-for>
+    </section>
+    <section style="display:flex;flex-direction:column;gap:18px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <h2 style="font:400 34px 'Newsreader',serif;margin:0">Open offers</h2>
+        <button onClick="{{ go.invest }}" style="border:none;background:none;color:#1F5E4B;font:500 14px 'Geist',sans-serif;cursor:pointer;text-decoration:underline">All investments</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px">
+        <sc-for list="{{ openProps }}" as="p" hint-placeholder-count="3">
+          <div onClick="{{ p.open }}" style="background:#fff;border:1px solid #E3DED4;border-radius:12px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column" style-hover="border-color:#17191C">
+            <div style="height:150px;background:repeating-linear-gradient(135deg,#E8E2D6 0 10px,#EFEAE0 10px 20px);position:relative;display:flex;align-items:flex-end;padding:12px">
+              <span style="position:absolute;top:12px;left:12px;background:{{ p.sb }};color:{{ p.sf }};font:500 10px 'Geist Mono',monospace;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.05em">{{ p.status }}</span>
+              <span style="font:400 10px 'Geist Mono',monospace;color:#5E6166">photo · {{ p.img }}</span>
+            </div>
+            <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+              <div><div style="font:400 21px 'Newsreader',serif">{{ p.name }}</div><div style="color:#5E6166;font-size:13px">{{ p.sub }} · {{ p.type }}</div></div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font:500 22px 'Geist Mono',monospace">{{ p.priceF }}</div><div style="font:400 12px 'Geist Mono',monospace;color:#1F5E4B">{{ p.disc }}</div></div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid #ECE8E0;padding-top:12px">
+                <div><div style="font:400 11px 'Geist',sans-serif;color:#5E6166">Net yield</div><div style="font:500 14px 'Geist Mono',monospace">{{ p.yieldF }}</div></div>
+                <div><div style="font:400 11px 'Geist',sans-serif;color:#5E6166">5-yr growth</div><div style="font:500 14px 'Geist Mono',monospace">{{ p.growthF }}</div></div>
+                <div><div style="font:400 11px 'Geist',sans-serif;color:#5E6166">LVR</div><div style="font:500 14px 'Geist Mono',monospace">{{ p.lvrF }}</div></div>
+              </div>
+              <div style="height:4px;background:#ECE8E0;border-radius:2px;overflow:hidden"><div style="height:100%;width:{{ p.raisedW }};background:#1F5E4B"></div></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </sc-if>
+
+  <sc-if value="{{ s.invest }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5E6166">PUB-03</div>
+      <h1 style="font:400 44px/1.05 'Newsreader',serif;margin:0;letter-spacing:-.015em">Investments</h1>
+      <p style="margin:0;color:#45484D;font-size:15px">{{ listCount }} property trusts from 3 sponsors. Prices are per token; each property has 10,000 tokens.</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;padding:16px;background:#fff;border:1px solid #E3DED4;border-radius:12px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font:500 12px 'Geist',sans-serif;color:#5E6166;width:56px">Type</span>
+        <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="3">
+          <button onClick="{{ c.click }}" style="border:1px solid {{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};padding:7px 14px;border-radius:999px;font:500 13px 'Geist',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0">{{ c.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span style="font:500 12px 'Geist',sans-serif;color:#5E6166;width:56px">Sort</span>
+        <sc-for list="{{ sortChips }}" as="c" hint-placeholder-count="6">
+          <button onClick="{{ c.click }}" style="border:1px solid {{ c.bd }};background:{{ c.bg }};color:{{ c.fg }};padding:7px 14px;border-radius:999px;font:500 13px 'Geist',sans-serif;cursor:pointer;white-space:nowrap;flex-shrink:0">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px">
+      <sc-for list="{{ list }}" as="p" hint-placeholder-count="6">
+        <div onClick="{{ p.open }}" style="background:#fff;border:1px solid #E3DED4;border-radius:12px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column" style-hover="border-color:#17191C">
+          <div style="height:150px;background:repeating-linear-gradient(135deg,#E8E2D6 0 10px,#EFEAE0 10px 20px);position:relative;display:flex;align-items:flex-end;padding:12px">
+            <span style="position:absolute;top:12px;left:12px;background:{{ p.sb }};color:{{ p.sf }};font:500 10px 'Geist Mono',monospace;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.05em">{{ p.status }}</span>
+            <span style="position:absolute;top:12px;right:12px;background:#fff;color:#45484D;font:500 10px 'Geist Mono',monospace;padding:4px 9px;border-radius:999px">{{ p.sponsorShort }}</span>
+            <span style="font:400 10px 'Geist Mono',monospace;color:#5E6166">photo · {{ p.img }}</span>
+          </div>
+          <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+            <div><div style="font:400 21px 'Newsreader',serif">{{ p.name }}</div><div style="color:#5E6166;font-size:13px">{{ p.sub }} · {{ p.type }}</div></div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline"><div style="font:500 22px 'Geist Mono',monospace">{{ p.priceF }}</div><div style="font:400 12px 'Geist Mono',monospace;color:{{ p.discC }}">{{ p.disc }}</div></div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid #ECE8E0;padding-top:12px">
+              <div><div style="font:400 11px 'Geist',sans-serif;color:#5E6166">Net yield</div><div style="font:500 14px 'Geist Mono',monospace">{{ p.yieldF }}</div></div>
+              <div><div style="font:400 11px 'Geist',sans-serif;color:#5E6166">5-yr growth</div><div style="font:500 14px 'Geist Mono',monospace">{{ p.growthF }}</div></div>
+              <div><div style="font:400 11px 'Geist',sans-serif;color:#5E6166">LVR</div><div style="font:500 14px 'Geist Mono',monospace">{{ p.lvrF }}</div></div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ s.prop }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;gap:8px;font-size:13px;color:#5E6166"><span onClick="{{ go.invest }}" style="cursor:pointer;text-decoration:underline">Investments</span><span>/</span><span>{{ P.name }}</span></div>
+    <section style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:32px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <span style="background:{{ P.sb }};color:{{ P.sf }};font:500 11px 'Geist Mono',monospace;padding:5px 10px;border-radius:999px;text-transform:uppercase">{{ P.status }}</span>
+          <span style="background:#ECE8E0;color:#4A4D52;font:500 11px 'Geist Mono',monospace;padding:5px 10px;border-radius:999px;text-transform:uppercase">{{ P.type }}</span>
+          <span style="background:#ECE8E0;color:#4A4D52;font:500 11px 'Geist Mono',monospace;padding:5px 10px;border-radius:999px;text-transform:uppercase">Wholesale · P1</span>
+        </div>
+        <h1 style="font:400 52px/1.02 'Newsreader',serif;margin:0;letter-spacing:-.02em">{{ P.name }}</h1>
+        <div style="color:#45484D;font-size:16px">{{ P.sub }} · {{ P.kind }} · listed by <span onClick="{{ tabSponsor }}" style="color:#1F5E4B;text-decoration:underline;cursor:pointer">{{ P.spName }}</span></div>
+        <div style="display:grid;grid-template-columns:2fr 1fr;grid-template-rows:150px 150px;gap:8px;margin-top:6px">
+          <div style="grid-row:span 2;border-radius:10px;background:repeating-linear-gradient(135deg,#E8E2D6 0 12px,#EFEAE0 12px 24px);display:flex;align-items:flex-end;padding:12px;font:400 11px 'Geist Mono',monospace;color:#5E6166">photo · {{ P.img }}</div>
+          <div style="border-radius:10px;background:repeating-linear-gradient(135deg,#E8E2D6 0 12px,#EFEAE0 12px 24px);display:flex;align-items:flex-end;padding:10px;font:400 10px 'Geist Mono',monospace;color:#5E6166">photo · interior</div>
+          <div style="border-radius:10px;background:repeating-linear-gradient(135deg,#E8E2D6 0 12px,#EFEAE0 12px 24px);display:flex;align-items:flex-end;padding:10px;font:400 10px 'Geist Mono',monospace;color:#5E6166">+ 14 photos</div>
+        </div>
+      </div>
+      <aside style="background:#fff;border:1px solid #E3DED4;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:18px;position:sticky;top:20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div><div style="font-size:12px;color:#5E6166">Token price</div><div style="font:500 30px 'Geist Mono',monospace">{{ P.priceF }}</div></div>
+          <div><div style="font-size:12px;color:#5E6166">Token valuation</div><div style="font:500 30px 'Geist Mono',monospace;color:#45484D">{{ P.valF }}</div></div>
+        </div>
+        <div style="font:400 13px 'Geist Mono',monospace;color:{{ P.discC }}">{{ P.disc }} · valued {{ P.valDate }}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px 0;border-top:1px solid #ECE8E0;border-bottom:1px solid #ECE8E0">
+          <div><div style="font-size:11px;color:#5E6166">Net yield</div><div style="font:500 16px 'Geist Mono',monospace">{{ P.yieldF }}</div></div>
+          <div><div style="font-size:11px;color:#5E6166">5-yr growth p.a.</div><div style="font:500 16px 'Geist Mono',monospace">{{ P.growthF }}</div></div>
+          <div><div style="font-size:11px;color:#5E6166">LVR</div><div style="font:500 16px 'Geist Mono',monospace">{{ P.lvrF }}</div></div>
+        </div>
+        <sc-if value="{{ P.isOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="height:8px;background:#ECE8E0;border-radius:4px;overflow:hidden;position:relative"><div style="height:100%;width:{{ P.raisedW }};background:#1F5E4B"></div><div style="position:absolute;top:0;bottom:0;left:75%;width:2px;background:#17191C"></div></div>
+            <div style="display:flex;justify-content:space-between;font:400 12px 'Geist Mono',monospace;color:#45484D"><span>{{ P.raised }}% of hard cap</span><span>soft cap 75%</span></div>
+            <div style="font-size:13px;color:#45484D">Offer closes {{ P.closes }}. Money waits in escrow; refunded automatically if the soft cap isn't reached.</div>
+          </div>
+        </sc-if>
+        <button onClick="{{ buyClick }}" style="border:none;background:#1F5E4B;color:#fff;padding:15px;border-radius:999px;font:500 15px 'Geist',sans-serif;cursor:pointer" style-hover="background:#174838">{{ buyLabel }}</button>
+        <div style="font-size:12px;color:#5E6166;line-height:1.5">0.5% transaction fee. Read the information memorandum before investing. Wholesale investors only.</div>
+      </aside>
+    </section>
+    <div style="display:flex;gap:2px;border-bottom:1px solid #E3DED4;overflow-x:auto">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="7">
+        <button onClick="{{ t.click }}" style="border:none;background:none;padding:12px 16px;font:500 14px 'Geist',sans-serif;cursor:pointer;white-space:nowrap;color:{{ t.fg }};border-bottom:2px solid {{ t.bd }};margin-bottom:-1px">{{ t.label }}</button>
+      </sc-for>
+    </div>
+    <sc-if value="{{ tab.summary }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:32px">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <h3 style="font:400 26px 'Newsreader',serif;margin:0">About the property</h3>
+          <p style="margin:0;line-height:1.65;color:#2E3135;font-size:15px;text-wrap:pretty">{{ P.desc }}</p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#E3DED4;border:1px solid #E3DED4;border-radius:12px;overflow:hidden;align-self:start">
+          <sc-for list="{{ P.keyFacts }}" as="k" hint-placeholder-count="6">
+            <div style="background:#fff;padding:16px"><div style="font-size:12px;color:#5E6166">{{ k.l }}</div><div style="font:500 17px 'Geist Mono',monospace;margin-top:4px">{{ k.v }}</div></div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ tab.dist }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px"><h3 style="font:400 26px 'Newsreader',serif;margin:0">Monthly distributions per token</h3><div style="font:400 13px 'Geist Mono',monospace;color:#45484D">Paid to wallet by the 10th business day · 3-month cash reserve held</div></div>
+        <div style="display:flex;align-items:flex-end;gap:10px;height:200px;border-bottom:1px solid #17191C;padding-top:20px">
+          <sc-for list="{{ P.dist }}" as="b" hint-placeholder-count="12">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;height:100%">
+              <div style="font:400 10px 'Geist Mono',monospace;color:#45484D">{{ b.v }}</div>
+              <div style="width:100%;background:#1F5E4B;border-radius:3px 3px 0 0;height:{{ b.h }}"></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;gap:10px"><sc-for list="{{ P.dist }}" as="b" hint-placeholder-count="12"><div style="flex:1;text-align:center;font:400 11px 'Geist Mono',monospace;color:#5E6166">{{ b.m }}</div></sc-for></div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ tab.cap }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px"><h3 style="font:400 26px 'Newsreader',serif;margin:0">Token valuation history</h3><div style="font:400 13px 'Geist Mono',monospace;color:#45484D">Independent valuation every 6 months · net assets ÷ 10,000</div></div>
+        <div style="display:flex;align-items:flex-end;gap:18px;height:220px;border-bottom:1px solid #17191C;padding-top:20px">
+          <sc-for list="{{ P.cap }}" as="b" hint-placeholder-count="6">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;height:100%">
+              <div style="font:500 11px 'Geist Mono',monospace">{{ b.v }}</div>
+              <div style="width:100%;background:#D7E4DC;border-top:2px solid #1F5E4B;height:{{ b.h }}"></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;gap:18px"><sc-for list="{{ P.cap }}" as="b" hint-placeholder-count="6"><div style="flex:1;text-align:center;font:400 11px 'Geist Mono',monospace;color:#5E6166">{{ b.m }}</div></sc-for></div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ tab.details }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;overflow:hidden">
+        <sc-for list="{{ P.details }}" as="d" hint-placeholder-count="8">
+          <div style="display:grid;grid-template-columns:minmax(160px,280px) 1fr;padding:14px 20px;border-bottom:1px solid #ECE8E0;gap:16px"><div style="color:#5E6166">{{ d.l }}</div><div style="font-weight:500">{{ d.v }}</div></div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ tab.docs }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <sc-for list="{{ docs }}" as="d" hint-placeholder-count="5">
+          <div onClick="{{ ackDoc }}" style="display:flex;align-items:center;gap:16px;padding:16px 20px;background:#fff;border:1px solid #E3DED4;border-radius:10px;cursor:pointer" style-hover="border-color:#17191C">
+            <div style="width:36px;height:44px;border:1px solid #17191C;border-radius:3px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;font:500 8px 'Geist Mono',monospace">PDF</div>
+            <div style="flex:1"><div style="font-weight:500">{{ d.t }}</div><div style="font-size:12px;color:#5E6166">{{ d.m }}</div></div>
+            <span style="font:500 11px 'Geist Mono',monospace;color:#1F5E4B">Open ↗</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ tab.sponsor }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px">
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px">
+          <div style="font:500 11px 'Geist Mono',monospace;color:#5E6166;text-transform:uppercase;letter-spacing:.06em">PUB-05 · Sponsor</div>
+          <div style="font:400 30px 'Newsreader',serif">{{ SPN.name }}</div>
+          <p style="margin:0;line-height:1.6;color:#2E3135">{{ SPN.about }}</p>
+          <div style="display:inline-flex;align-self:flex-start;gap:6px;align-items:center;background:#E3EEE8;color:#1F5E4B;font:500 12px 'Geist',sans-serif;padding:6px 12px;border-radius:999px">Vetted by RealX · {{ SPN.vetted }}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#E3DED4;border:1px solid #E3DED4;border-radius:12px;overflow:hidden;align-self:start">
+          <sc-for list="{{ SPN.facts }}" as="k" hint-placeholder-count="4"><div style="background:#fff;padding:16px"><div style="font-size:12px;color:#5E6166">{{ k.l }}</div><div style="font:500 16px 'Geist Mono',monospace;margin-top:4px">{{ k.v }}</div></div></sc-for>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ tab.proof }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="padding:18px 20px;background:#17191C;color:#F5F2EC;border-radius:12px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center">
+          <div><div style="font:400 22px 'Newsreader',serif">Register and chain agree</div><div style="font:400 12px 'Geist Mono',monospace;color:#B9B4AA;margin-top:4px">Trustee register {{ P.regUnits }} units = {{ P.regUnits }} tokens on-chain · checked 23 Sep 2026 06:00 AEST</div></div>
+          <span style="background:#E3EEE8;color:#1F5E4B;font:500 11px 'Geist Mono',monospace;padding:5px 10px;border-radius:999px">MATCHED</span>
+        </div>
+        <sc-for list="{{ proof }}" as="r" hint-placeholder-count="5">
+          <div style="display:grid;grid-template-columns:24px 1fr auto;gap:14px;align-items:center;padding:14px 20px;background:#fff;border:1px solid #E3DED4;border-radius:10px">
+            <div style="width:20px;height:20px;border-radius:50%;background:#1F5E4B;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center">✓</div>
+            <div><div style="font-weight:500">{{ r.t }}</div><div style="font-size:12px;color:#5E6166">{{ r.d }}</div></div>
+            <div style="font:400 12px 'Geist Mono',monospace;color:#45484D">{{ r.when }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <sc-if value="{{ s.fees }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;flex-direction:column;gap:6px;max-width:760px">
+      <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5E6166">PUB-06</div>
+      <h1 style="font:400 44px/1.05 'Newsreader',serif;margin:0">Fees</h1>
+      <p style="margin:0;color:#45484D;font-size:15px;line-height:1.55">Each listing carries its own fee schedule, set by the sponsor and shown before you buy. RealX never charges fees in tokens.</p>
+    </div>
+    <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;overflow:hidden;max-width:900px">
+      <sc-for list="{{ fees }}" as="f" hint-placeholder-count="6">
+        <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.6fr) minmax(0,1.4fr);gap:16px;padding:16px 20px;border-bottom:1px solid #ECE8E0;align-items:baseline">
+          <div style="font-weight:500">{{ f.t }}</div><div style="font:500 15px 'Geist Mono',monospace">{{ f.v }}</div><div style="color:#5E6166;font-size:13px">{{ f.d }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ s.onb }}" hint-placeholder-val="{{ false }}">
+    <div style="display:grid;grid-template-columns:minmax(220px,260px) minmax(0,1fr);gap:40px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:2px;position:sticky;top:20px">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5E6166;margin-bottom:10px">Open an account</div>
+        <sc-for list="{{ onbSteps }}" as="o" hint-placeholder-count="8">
+          <button onClick="{{ o.click }}" style="display:flex;align-items:center;gap:12px;border:none;background:{{ o.bg }};padding:10px 12px;border-radius:8px;text-align:left;cursor:pointer;font:500 14px 'Geist',sans-serif;color:{{ o.fg }}">
+            <span style="width:22px;height:22px;border-radius:50%;border:1px solid {{ o.dot }};background:{{ o.dotBg }};color:{{ o.dotFg }};display:flex;align-items:center;justify-content:center;font:500 11px 'Geist Mono',monospace">{{ o.n }}</span>{{ o.label }}
+          </button>
+        </sc-for>
+      </div>
+      <div style="background:#fff;border:1px solid #E3DED4;border-radius:14px;padding:36px;display:flex;flex-direction:column;gap:24px;max-width:720px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="font:500 12px 'Geist Mono',monospace;color:#1F5E4B">{{ onbCur.code }} · Step {{ onbCur.n }} of 8</div>
+          <h1 style="font:400 38px/1.1 'Newsreader',serif;margin:0">{{ onbCur.title }}</h1>
+          <p style="margin:0;color:#45484D;font-size:15px;line-height:1.5;text-wrap:pretty">{{ onbCur.sub }}</p>
+        </div>
+        <sc-if value="{{ onbCur.hasFields }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+            <sc-for list="{{ onbCur.fields }}" as="f" hint-placeholder-count="4">
+              <label style="display:flex;flex-direction:column;gap:6px;font:500 13px 'Geist',sans-serif">{{ f.l }}<input placeholder="{{ f.v }}" style="border:1px solid #D6D0C4;border-radius:8px;padding:12px 14px;font:400 15px 'Geist',sans-serif;background:#FBFAF7;color:#17191C;outline-color:#1F5E4B"></label>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ onbCur.hasOpts }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ onbCur.opts }}" as="o" hint-placeholder-count="3">
+              <div onClick="{{ o.click }}" style="display:flex;gap:14px;padding:16px 18px;border:1px solid {{ o.bd }};background:{{ o.bg }};border-radius:10px;cursor:pointer">
+                <span style="width:18px;height:18px;border-radius:50%;border:1px solid #17191C;margin-top:2px;background:{{ o.dot }};flex-shrink:0"></span>
+                <div><div style="font-weight:500;font-size:15px">{{ o.t }}</div><div style="color:#5E6166;font-size:13px;margin-top:2px;line-height:1.45">{{ o.d }}</div></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ onbCur.hasBox }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px dashed #B9B4AA;border-radius:12px;padding:28px;display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;background:#FBFAF7">
+            <div style="font:400 22px 'Newsreader',serif">{{ onbCur.boxT }}</div>
+            <div style="font:400 12px 'Geist Mono',monospace;color:#45484D">{{ onbCur.boxD }}</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ onbCur.hasChecks }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;border:1px solid #E3DED4;border-radius:10px;overflow:hidden">
+            <sc-for list="{{ onbCur.checks }}" as="c" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:14px 18px;border-bottom:1px solid #ECE8E0;align-items:center">
+                <div><div style="font-weight:500">{{ c.t }}</div><div style="font-size:12px;color:#5E6166">{{ c.d }}</div></div>
+                <span style="background:{{ c.pb }};color:{{ c.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px">{{ c.pt }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid #ECE8E0;padding-top:20px">
+          <button onClick="{{ onbBack }}" style="border:1px solid #D6D0C4;background:transparent;padding:12px 20px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer;opacity:{{ onbBackOp }}">Back</button>
+          <button onClick="{{ onbNext }}" style="border:none;background:#1F5E4B;color:#fff;padding:12px 24px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer" style-hover="background:#174838">{{ onbCur.cta }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ appPage }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5E6166">{{ pg.code }}</div>
+        <h1 style="font:400 44px/1.05 'Newsreader',serif;margin:0;letter-spacing:-.015em">{{ pg.title }}</h1>
+        <p style="margin:0;color:#45484D;font-size:15px;max-width:680px;line-height:1.5;text-wrap:pretty">{{ pg.sub }}</p>
+      </div>
+    </div>
+    <sc-if value="{{ pg.hasKpis }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:#E3DED4;border:1px solid #E3DED4;border-radius:12px;overflow:hidden">
+        <sc-for list="{{ pg.kpis }}" as="k" hint-placeholder-count="4">
+          <div style="background:#fff;padding:20px"><div style="font-size:12px;color:#5E6166">{{ k.l }}</div><div style="font:500 26px 'Geist Mono',monospace;margin-top:6px;letter-spacing:-.02em">{{ k.v }}</div><div style="font-size:12px;color:#45484D;margin-top:4px">{{ k.d }}</div></div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.port }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <h2 style="font:400 26px 'Newsreader',serif;margin:0">Holdings</h2>
+        <sc-for list="{{ holdings }}" as="h" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:64px minmax(160px,2fr) repeat(4,minmax(90px,1fr)) auto;gap:16px;align-items:center;padding:14px 18px;background:#fff;border:1px solid #E3DED4;border-radius:12px">
+            <div style="width:64px;height:48px;border-radius:6px;background:repeating-linear-gradient(135deg,#E8E2D6 0 8px,#EFEAE0 8px 16px)"></div>
+            <div onClick="{{ h.open }}" style="cursor:pointer"><div style="font:400 19px 'Newsreader',serif">{{ h.name }}</div><div style="font-size:12px;color:#5E6166">{{ h.sub }}</div></div>
+            <div><div style="font-size:11px;color:#5E6166">Tokens</div><div style="font:500 14px 'Geist Mono',monospace">{{ h.qty }}</div></div>
+            <div><div style="font-size:11px;color:#5E6166">Value</div><div style="font:500 14px 'Geist Mono',monospace">{{ h.value }}</div></div>
+            <div><div style="font-size:11px;color:#5E6166">Gain</div><div style="font:500 14px 'Geist Mono',monospace;color:#1F5E4B">{{ h.gain }}</div></div>
+            <div><div style="font-size:11px;color:#5E6166">Monthly income</div><div style="font:500 14px 'Geist Mono',monospace">{{ h.inc }}</div></div>
+            <div style="display:flex;gap:6px">
+              <button onClick="{{ h.buy }}" style="border:1px solid #17191C;background:transparent;padding:7px 14px;border-radius:999px;font:500 12px 'Geist',sans-serif;cursor:pointer">Buy</button>
+              <button onClick="{{ h.sell }}" style="border:1px solid #D6D0C4;background:transparent;padding:7px 14px;border-radius:999px;font:500 12px 'Geist',sans-serif;cursor:pointer">Sell</button>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.buy }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,1fr);gap:28px;align-items:start">
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:22px">
+          <div style="display:flex;gap:8px">
+            <sc-for list="{{ buySteps }}" as="b" hint-placeholder-count="3"><div style="flex:1;display:flex;flex-direction:column;gap:6px"><div style="height:3px;border-radius:2px;background:{{ b.c }}"></div><div style="font:500 12px 'Geist',sans-serif;color:{{ b.fg }}">{{ b.l }}</div></div></sc-for>
+          </div>
+          <sc-if value="{{ bs.s0 }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:18px">
+              <div style="font:500 13px 'Geist',sans-serif">How many tokens?</div>
+              <div style="display:flex;align-items:center;gap:0;border:1px solid #17191C;border-radius:12px;overflow:hidden;align-self:flex-start">
+                <button onClick="{{ qtyDec }}" style="width:56px;height:60px;border:none;background:#F5F2EC;font:400 24px 'Geist',sans-serif;cursor:pointer">−</button>
+                <div style="width:120px;text-align:center;font:500 28px 'Geist Mono',monospace">{{ qty }}</div>
+                <button onClick="{{ qtyInc }}" style="width:56px;height:60px;border:none;background:#F5F2EC;font:400 24px 'Geist',sans-serif;cursor:pointer">+</button>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ qtyPresets }}" as="q" hint-placeholder-count="4"><button onClick="{{ q.click }}" style="border:1px solid #D6D0C4;background:transparent;padding:6px 12px;border-radius:999px;font:500 12px 'Geist Mono',monospace;cursor:pointer">{{ q.l }}</button></sc-for></div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ bs.s1 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="font:500 13px 'Geist',sans-serif">Checks run on this order</div>
+              <div style="display:flex;flex-direction:column;border:1px solid #E3DED4;border-radius:10px;overflow:hidden">
+                <sc-for list="{{ buyGates }}" as="g" hint-placeholder-count="5">
+                  <div style="display:grid;grid-template-columns:52px 1fr auto;gap:12px;padding:12px 16px;border-bottom:1px solid #ECE8E0;align-items:center">
+                    <span style="font:500 11px 'Geist Mono',monospace;color:#5E6166">{{ g.id }}</span>
+                    <div><div style="font-weight:500">{{ g.t }}</div><div style="font-size:12px;color:#5E6166">{{ g.d }}</div></div>
+                    <span style="background:#E3EEE8;color:#1F5E4B;font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px">Pass</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div onClick="{{ toggleAck }}" style="display:flex;gap:12px;padding:14px 16px;border:1px solid {{ ackBd }};border-radius:10px;cursor:pointer;background:#FBFAF7">
+                <span style="width:20px;height:20px;border-radius:4px;border:1px solid #17191C;background:{{ ackBg }};color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">{{ ackMark }}</span>
+                <span style="line-height:1.45">I've read the information memorandum, fee schedule and risks for {{ P.name }}, and I understand my money stays in escrow until the offer closes. (G12)</span>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ bs.s2 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:0">
+              <sc-for list="{{ orderTimeline }}" as="o" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:28px 1fr;gap:14px">
+                  <div style="display:flex;flex-direction:column;align-items:center"><span style="width:18px;height:18px;border-radius:50%;border:2px solid {{ o.c }};background:{{ o.bg }};margin-top:2px"></span><span style="flex:1;width:2px;background:#E3DED4;min-height:26px"></span></div>
+                  <div style="padding-bottom:18px"><div style="font-weight:500">{{ o.t }}</div><div style="font-size:12px;color:#5E6166">{{ o.d }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid #ECE8E0;padding-top:18px">
+            <button onClick="{{ buyBack }}" style="border:1px solid #D6D0C4;background:transparent;padding:12px 20px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer">{{ buyBackLabel }}</button>
+            <button onClick="{{ buyNext }}" style="border:none;background:#1F5E4B;color:#fff;padding:12px 24px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer;opacity:{{ buyNextOp }}">{{ buyNextLabel }}</button>
+          </div>
+        </div>
+        <aside style="background:#17191C;color:#F5F2EC;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:14px">
+          <div style="font:400 24px 'Newsreader',serif">{{ P.name }}</div>
+          <div style="font-size:13px;color:#B9B4AA">{{ P.sub }} · {{ P.spName }}</div>
+          <sc-for list="{{ orderLines }}" as="l" hint-placeholder-count="5">
+            <div style="display:flex;justify-content:space-between;font:400 14px 'Geist Mono',monospace;padding:6px 0;border-bottom:1px solid #2E3135"><span style="color:#B9B4AA">{{ l.l }}</span><span>{{ l.v }}</span></div>
+          </sc-for>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:6px"><span>Total</span><span style="font:500 26px 'Geist Mono',monospace">{{ orderTotal }}</span></div>
+          <div style="font-size:12px;color:#B9B4AA">Paid from funds available: A$3,420.18</div>
+        </aside>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.wallet }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:10px">
+          <div style="font:400 22px 'Newsreader',serif">Deposit with PayID</div>
+          <div style="font-size:13px;color:#45484D">Arrives in under a minute over NPP. Or set up PayTo for automatic monthly top-ups.</div>
+          <div style="font:500 15px 'Geist Mono',monospace;padding:12px 14px;background:#F5F2EC;border-radius:8px">alex.morgan.841@pay.realx.au</div>
+        </div>
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:10px">
+          <div style="font:400 22px 'Newsreader',serif">Withdraw</div>
+          <div style="font-size:13px;color:#45484D">To your verified account CBA ••4471. Withdrawals over A$50,000 need a second RealX approval.</div>
+          <button onClick="{{ withdraw }}" style="align-self:flex-start;border:1px solid #17191C;background:transparent;padding:9px 16px;border-radius:999px;font:500 13px 'Geist',sans-serif;cursor:pointer">Withdraw funds</button>
+        </div>
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:10px">
+          <div style="font:400 22px 'Newsreader',serif">Token wallet</div>
+          <div style="font-size:13px;color:#45484D">Secured by your passkey. RealX can't move your tokens without trustee approval.</div>
+          <div style="font:500 13px 'Geist Mono',monospace;padding:12px 14px;background:#F5F2EC;border-radius:8px">0x7a3f…c91e · 3 passkeys</div>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.sell }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:14px 18px;background:#F5E4DB;color:#7A3A1E;border-radius:10px;font-size:14px;line-height:1.5">Preview · the resale board opens with the retail launch (from about 8 Apr 2027), once counsel or ASIC relief allows.</div>
+      <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(260px,1fr);gap:24px;align-items:start">
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:14px;padding:26px;display:flex;flex-direction:column;gap:18px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <label style="display:flex;flex-direction:column;gap:6px;font:500 13px 'Geist',sans-serif">Tokens to sell<input placeholder="20 of {{ sellH.qty }}" style="border:1px solid #D6D0C4;border-radius:8px;padding:12px 14px;font:400 15px 'Geist Mono',monospace;background:#FBFAF7"></label>
+            <label style="display:flex;flex-direction:column;gap:6px;font:500 13px 'Geist',sans-serif">Limit price per token<input placeholder="{{ P.priceF }}" style="border:1px solid #D6D0C4;border-radius:8px;padding:12px 14px;font:400 15px 'Geist Mono',monospace;background:#FBFAF7"></label>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font:500 13px 'Geist',sans-serif">Allowed price band (G09)</div>
+            <div style="height:10px;border-radius:5px;background:linear-gradient(90deg,#ECE8E0 0 15%,#D7E4DC 15% 85%,#ECE8E0 85%);position:relative"><div style="position:absolute;left:52%;top:-4px;width:3px;height:18px;background:#17191C"></div></div>
+            <div style="display:flex;justify-content:space-between;font:400 12px 'Geist Mono',monospace;color:#45484D"><span>{{ band.lo }}</span><span>valuation {{ P.valF }}</span><span>{{ band.hi }}</span></div>
+          </div>
+          <button onClick="{{ placeSell }}" style="align-self:flex-start;border:none;background:#1F5E4B;color:#fff;padding:12px 24px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer">Place sell order</button>
+        </div>
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:14px;overflow:hidden">
+          <sc-for list="{{ sellChecks }}" as="c" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:14px 18px;border-bottom:1px solid #ECE8E0;align-items:center"><div><div style="font-weight:500">{{ c.t }}</div><div style="font-size:12px;color:#5E6166">{{ c.d }}</div></div><span style="background:{{ c.pb }};color:{{ c.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px">{{ c.pt }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ pg.hasTbl }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:720px">
+          <thead><tr><sc-for list="{{ pg.tbl.cols }}" as="c" hint-placeholder-count="6"><th style="text-align:left;font:500 11px 'Geist Mono',monospace;text-transform:uppercase;letter-spacing:.05em;color:#5E6166;padding:12px 16px;border-bottom:1px solid #E3DED4">{{ c }}</th></sc-for></tr></thead>
+          <tbody><sc-for list="{{ pg.tbl.rows }}" as="r" hint-placeholder-count="5"><tr><sc-for list="{{ r.c }}" as="x" hint-placeholder-count="5"><td style="padding:13px 16px;border-bottom:1px solid #ECE8E0;font-size:13px">{{ x }}</td></sc-for><td style="padding:13px 16px;border-bottom:1px solid #ECE8E0"><span style="background:{{ r.pb }};color:{{ r.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px;white-space:nowrap">{{ r.pt }}</span></td></tr></sc-for></tbody>
+        </table>
+      </div>
+    </sc-if>
+  </sc-if>
+  </main>
+
+  <footer style="border-top:1px solid #E3DED4;padding:28px 40px;display:flex;gap:24px;justify-content:space-between;flex-wrap:wrap;color:#5E6166;font-size:12px;line-height:1.6">
+    <div style="max-width:720px">RealX Pty Ltd (sample) is a corporate authorised representative of Example Licensee Pty Ltd, AFSL 000 000. Offers are open to wholesale investors only until the retail launch. Past performance is not a reliable indicator of future performance. All names and figures in this prototype are made up.</div>
+    <div style="display:flex;gap:16px"><span onClick="{{ go.fees }}" style="cursor:pointer;text-decoration:underline">Fees</span><span>Complaints</span><span>Privacy</span></div>
+  </footer>
+</div>
+</sc-if>
+
+<sc-if value="{{ shell.sp }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:240px minmax(0,1fr);min-height:calc(100vh - 44px)">
+  <aside style="background:#fff;border-right:1px solid #E3DED4;padding:22px 14px;display:flex;flex-direction:column;gap:4px">
+    <div style="font:500 22px 'Newsreader',serif;padding:0 10px">Real<span style="color:#1F5E4B;font-style:italic">X</span> <span style="font:500 11px 'Geist Mono',monospace;color:#5E6166;letter-spacing:.05em">SPONSOR</span></div>
+    <div style="margin:18px 0 12px;padding:12px;background:#F5F2EC;border-radius:10px"><div style="font-weight:500">Harbour &amp; Co Property</div><div style="font-size:12px;color:#5E6166">Mia Chen · Sponsor owner</div></div>
+    <sc-for list="{{ spNav }}" as="n" hint-placeholder-count="6">
+      <button onClick="{{ n.click }}" style="border:none;text-align:left;background:{{ n.bg }};color:{{ n.fg }};padding:10px 12px;border-radius:8px;font:500 14px 'Geist',sans-serif;cursor:pointer">{{ n.label }}</button>
+    </sc-for>
+  </aside>
+  <main style="padding:32px 40px 64px;display:flex;flex-direction:column;gap:26px;max-width:1240px;width:100%">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5E6166">{{ pg.code }}</div>
+        <h1 style="font:400 40px/1.05 'Newsreader',serif;margin:0">{{ pg.title }}</h1>
+        <p style="margin:0;color:#45484D;font-size:15px;max-width:680px;line-height:1.5;text-wrap:pretty">{{ pg.sub }}</p>
+      </div>
+      <sc-if value="{{ s.spDash }}" hint-placeholder-val="{{ false }}"><button onClick="{{ go.spNew }}" style="border:none;background:#1F5E4B;color:#fff;padding:12px 20px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer">New listing</button></sc-if>
+    </div>
+    <sc-if value="{{ pg.hasKpis }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:#E3DED4;border:1px solid #E3DED4;border-radius:12px;overflow:hidden">
+        <sc-for list="{{ pg.kpis }}" as="k" hint-placeholder-count="4"><div style="background:#fff;padding:20px"><div style="font-size:12px;color:#5E6166">{{ k.l }}</div><div style="font:500 26px 'Geist Mono',monospace;margin-top:6px;letter-spacing:-.02em">{{ k.v }}</div><div style="font-size:12px;color:#45484D;margin-top:4px">{{ k.d }}</div></div></sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ pg.hasTasks }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <h2 style="font:400 24px 'Newsreader',serif;margin:0">{{ pg.tasksTitle }}</h2>
+        <sc-for list="{{ pg.tasks }}" as="t" hint-placeholder-count="3">
+          <div onClick="{{ t.click }}" style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;padding:14px 18px;background:#fff;border:1px solid #E3DED4;border-radius:10px;cursor:pointer" style-hover="border-color:#17191C">
+            <div><div style="font-weight:500">{{ t.t }}</div><div style="font-size:12px;color:#5E6166">{{ t.d }}</div></div>
+            <span style="background:{{ t.pb }};color:{{ t.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px;white-space:nowrap">{{ t.pt }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.spNew }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#fff;border:1px solid #E3DED4;border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;gap:8px">
+          <sc-for list="{{ lSteps }}" as="b" hint-placeholder-count="4"><div onClick="{{ b.click }}" style="flex:1;display:flex;flex-direction:column;gap:6px;cursor:pointer"><div style="height:3px;border-radius:2px;background:{{ b.c }}"></div><div style="font:500 12px 'Geist',sans-serif;color:{{ b.fg }}">{{ b.l }}</div></div></sc-for>
+        </div>
+        <div style="font:400 26px 'Newsreader',serif">{{ lCur.title }}</div>
+        <sc-if value="{{ lCur.hasFields }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+            <sc-for list="{{ lCur.fields }}" as="f" hint-placeholder-count="6"><label style="display:flex;flex-direction:column;gap:6px;font:500 13px 'Geist',sans-serif">{{ f.l }}<input placeholder="{{ f.v }}" style="border:1px solid #D6D0C4;border-radius:8px;padding:11px 13px;font:400 14px 'Geist',sans-serif;background:#FBFAF7"></label></sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ lCur.hasChecks }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;border:1px solid #E3DED4;border-radius:10px;overflow:hidden">
+            <sc-for list="{{ lCur.checks }}" as="c" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:13px 16px;border-bottom:1px solid #ECE8E0;align-items:center"><div><div style="font-weight:500">{{ c.t }}</div><div style="font-size:12px;color:#5E6166">{{ c.d }}</div></div><span style="background:{{ c.pb }};color:{{ c.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px">{{ c.pt }}</span></div></sc-for>
+          </div>
+        </sc-if>
+        <div style="display:flex;justify-content:space-between;border-top:1px solid #ECE8E0;padding-top:18px">
+          <button onClick="{{ lBack }}" style="border:1px solid #D6D0C4;background:transparent;padding:11px 20px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer">Back</button>
+          <button onClick="{{ lNext }}" style="border:none;background:#1F5E4B;color:#fff;padding:11px 22px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer">{{ lCur.cta }}</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.spOffer }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#fff;border:1px solid #E3DED4;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><div style="font:400 22px 'Newsreader',serif">Kent Street Terrace · 6,400 of 10,000 tokens</div><div style="font:400 12px 'Geist Mono',monospace;color:#45484D">closes 14 Oct 2026 · 21 days left</div></div>
+        <div style="height:14px;background:#ECE8E0;border-radius:7px;overflow:hidden;position:relative"><div style="height:100%;width:64%;background:#1F5E4B"></div><div style="position:absolute;top:0;bottom:0;left:75%;width:2px;background:#17191C"></div></div>
+        <div style="display:flex;justify-content:space-between;font:400 12px 'Geist Mono',monospace;color:#45484D"><span>A$1,525,760 raised</span><span>soft cap A$1,788,000 (75%)</span><span>hard cap A$2,384,000</span></div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.spDist }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#fff;border:1px solid #E3DED4;border-radius:14px;padding:24px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:baseline"><div style="font:400 22px 'Newsreader',serif">Bay Road Apartment · September 2026</div><div style="font:500 20px 'Geist Mono',monospace">A$2,592.00 · A$0.2592 per token</div></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+          <sc-for list="{{ distChain }}" as="d" hint-placeholder-count="5">
+            <div style="padding:14px;border:1px solid {{ d.bd }};border-radius:10px;background:{{ d.bg }};display:flex;flex-direction:column;gap:4px">
+              <div style="font:500 11px 'Geist Mono',monospace;color:{{ d.fg }}">{{ d.st }}</div>
+              <div style="font-weight:500">{{ d.t }}</div>
+              <div style="font-size:12px;color:#5E6166">{{ d.who }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ distCanApprove }}" hint-placeholder-val="{{ true }}"><button onClick="{{ approveDist }}" style="align-self:flex-start;border:none;background:#1F5E4B;color:#fff;padding:11px 22px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer">Approve as sponsor owner</button></sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ pg.hasTbl }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-if value="{{ pg.tblTitle }}" hint-placeholder-val="{{ false }}"><h2 style="font:400 24px 'Newsreader',serif;margin:0">{{ pg.tblTitle }}</h2></sc-if>
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;min-width:720px">
+            <thead><tr><sc-for list="{{ pg.tbl.cols }}" as="c" hint-placeholder-count="6"><th style="text-align:left;font:500 11px 'Geist Mono',monospace;text-transform:uppercase;letter-spacing:.05em;color:#5E6166;padding:12px 16px;border-bottom:1px solid #E3DED4">{{ c }}</th></sc-for></tr></thead>
+            <tbody><sc-for list="{{ pg.tbl.rows }}" as="r" hint-placeholder-count="5"><tr><sc-for list="{{ r.c }}" as="x" hint-placeholder-count="5"><td style="padding:13px 16px;border-bottom:1px solid #ECE8E0;font-size:13px">{{ x }}</td></sc-for><td style="padding:13px 16px;border-bottom:1px solid #ECE8E0"><span style="background:{{ r.pb }};color:{{ r.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px;white-space:nowrap">{{ r.pt }}</span></td></tr></sc-for></tbody>
+          </table>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+</div>
+</sc-if>
+
+<sc-if value="{{ shell.ad }}" hint-placeholder-val="{{ false }}">
+<div style="display:grid;grid-template-columns:240px minmax(0,1fr);min-height:calc(100vh - 44px)">
+  <aside style="background:#1C1E22;color:#E8E4DC;padding:22px 14px;display:flex;flex-direction:column;gap:2px">
+    <div style="font:500 22px 'Newsreader',serif;padding:0 10px;color:#F5F2EC">Real<span style="color:#8FC3AC;font-style:italic">X</span> <span style="font:500 11px 'Geist Mono',monospace;color:#8E8A82;letter-spacing:.05em">ADMIN</span></div>
+    <div style="margin:18px 0 10px;padding:12px;background:#2A2D31;border-radius:10px"><div style="font-weight:500">Jordan Blake</div><div style="font-size:12px;color:#A6A198">Chief compliance officer</div></div>
+    <sc-for list="{{ adNav }}" as="n" hint-placeholder-count="10">
+      <sc-if value="{{ n.hdr }}" hint-placeholder-val="{{ false }}"><div style="font:500 10px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#8E8A82;padding:14px 12px 4px">{{ n.label }}</div></sc-if>
+      <sc-if value="{{ n.item }}" hint-placeholder-val="{{ true }}"><button onClick="{{ n.click }}" style="border:none;text-align:left;background:{{ n.bg }};color:{{ n.fg }};padding:9px 12px;border-radius:8px;font:500 13px 'Geist',sans-serif;cursor:pointer;display:flex;justify-content:space-between">{{ n.label }}<span style="font:500 11px 'Geist Mono',monospace;color:#8FC3AC">{{ n.badge }}</span></button></sc-if>
+    </sc-for>
+  </aside>
+  <main style="padding:32px 40px 64px;display:flex;flex-direction:column;gap:24px;max-width:1280px;width:100%">
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5E6166">{{ pg.code }}</div>
+      <h1 style="font:400 40px/1.05 'Newsreader',serif;margin:0">{{ pg.title }}</h1>
+      <p style="margin:0;color:#45484D;font-size:15px;max-width:720px;line-height:1.5;text-wrap:pretty">{{ pg.sub }}</p>
+    </div>
+    <sc-if value="{{ pg.hasKpis }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:#E3DED4;border:1px solid #E3DED4;border-radius:12px;overflow:hidden">
+        <sc-for list="{{ pg.kpis }}" as="k" hint-placeholder-count="4"><div style="background:#fff;padding:20px"><div style="font-size:12px;color:#5E6166">{{ k.l }}</div><div style="font:500 24px 'Geist Mono',monospace;margin-top:6px;letter-spacing:-.02em">{{ k.v }}</div><div style="font-size:12px;color:#45484D;margin-top:4px">{{ k.d }}</div></div></sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ pg.hasTasks }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <h2 style="font:400 24px 'Newsreader',serif;margin:0">{{ pg.tasksTitle }}</h2>
+        <sc-for list="{{ pg.tasks }}" as="t" hint-placeholder-count="4">
+          <div onClick="{{ t.click }}" style="display:grid;grid-template-columns:auto 1fr auto;gap:16px;align-items:center;padding:14px 18px;background:#fff;border:1px solid #E3DED4;border-radius:10px;cursor:pointer" style-hover="border-color:#17191C">
+            <span style="background:{{ t.pb }};color:{{ t.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px;white-space:nowrap">{{ t.pt }}</span>
+            <div><div style="font-weight:500">{{ t.t }}</div><div style="font-size:12px;color:#5E6166">{{ t.d }}</div></div>
+            <span style="font:400 12px 'Geist Mono',monospace;color:#5E6166">{{ t.m }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.adApprovals }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:minmax(240px,1fr) minmax(0,1.8fr);gap:20px;align-items:start">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <sc-for list="{{ apList }}" as="a" hint-placeholder-count="5">
+            <div onClick="{{ a.click }}" style="padding:14px 16px;background:{{ a.bg }};border:1px solid {{ a.bd }};border-radius:10px;cursor:pointer;display:flex;flex-direction:column;gap:4px">
+              <div style="display:flex;justify-content:space-between;gap:8px"><span style="font:500 11px 'Geist Mono',monospace;color:#5E6166">{{ a.id }} · {{ a.age }}</span><span style="background:{{ a.pb }};color:{{ a.pf }};font:500 10px 'Geist Mono',monospace;padding:3px 8px;border-radius:999px">{{ a.risk }}</span></div>
+              <div style="font-weight:500">{{ a.type }}</div>
+              <div style="font-size:12px;color:#45484D">{{ a.obj }}</div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ apEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:24px;text-align:center;color:#5E6166;border:1px dashed #D6D0C4;border-radius:10px">Inbox clear.</div></sc-if>
+        </div>
+        <sc-if value="{{ apHas }}" hint-placeholder-val="{{ true }}">
+          <div style="background:#fff;border:1px solid #E3DED4;border-radius:14px;padding:26px;display:flex;flex-direction:column;gap:18px">
+            <div><div style="font:500 12px 'Geist Mono',monospace;color:#5E6166">{{ ap.id }} · raised by {{ ap.maker }}</div><div style="font:400 28px 'Newsreader',serif;margin-top:4px">{{ ap.type }}</div><div style="color:#45484D;margin-top:4px">{{ ap.obj }}</div></div>
+            <div style="display:flex;flex-direction:column;border:1px solid #E3DED4;border-radius:10px;overflow:hidden">
+              <sc-for list="{{ ap.checks }}" as="c" hint-placeholder-count="4"><div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:12px 16px;border-bottom:1px solid #ECE8E0;align-items:center"><div style="font-size:13px">{{ c.t }}</div><span style="background:{{ c.pb }};color:{{ c.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px">{{ c.pt }}</span></div></sc-for>
+            </div>
+            <div style="font-size:12px;color:#5E6166">Maker-checker (G13): you are not the maker, so you can approve. Approval ID is bound to the signing request.</div>
+            <div style="display:flex;gap:10px">
+              <button onClick="{{ apApprove }}" style="border:none;background:#1F5E4B;color:#fff;padding:11px 22px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer">Approve</button>
+              <button onClick="{{ apReject }}" style="border:1px solid #A3312A;color:#A3312A;background:transparent;padding:11px 22px;border-radius:999px;font:500 14px 'Geist',sans-serif;cursor:pointer">Reject</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.adKyc }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:20px;align-items:start">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="aspect-ratio:1.58;border-radius:10px;background:repeating-linear-gradient(135deg,#E8E2D6 0 10px,#EFEAE0 10px 20px);display:flex;align-items:flex-end;padding:10px;font:400 10px 'Geist Mono',monospace;color:#5E6166">NSW licence · front</div>
+          <div style="aspect-ratio:1.58;border-radius:10px;background:repeating-linear-gradient(135deg,#E8E2D6 0 10px,#EFEAE0 10px 20px);display:flex;align-items:flex-end;padding:10px;font:400 10px 'Geist Mono',monospace;color:#5E6166">liveness selfie</div>
+          <div style="grid-column:span 2;background:#fff;border:1px solid #E3DED4;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:4px"><div style="font:400 22px 'Newsreader',serif">Daniel Okafor</div><div style="font-size:13px;color:#45484D">INV-00912 · Individual · wholesale certificate uploaded · Surry Hills NSW</div></div>
+        </div>
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;border:1px solid #E3DED4;border-radius:10px;overflow:hidden">
+            <sc-for list="{{ kycChecks }}" as="c" hint-placeholder-count="6"><div style="display:grid;grid-template-columns:1fr auto;gap:12px;padding:12px 16px;border-bottom:1px solid #ECE8E0;align-items:center"><div><div style="font-weight:500">{{ c.t }}</div><div style="font-size:12px;color:#5E6166">{{ c.d }}</div></div><span style="background:{{ c.pb }};color:{{ c.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px">{{ c.pt }}</span></div></sc-for>
+          </div>
+          <sc-if value="{{ kycOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button onClick="{{ kycClear }}" style="border:none;background:#1F5E4B;color:#fff;padding:10px 18px;border-radius:999px;font:500 13px 'Geist',sans-serif;cursor:pointer">Clear PEP hit and verify</button>
+              <button onClick="{{ kycEsc }}" style="border:1px solid #17191C;background:transparent;padding:10px 18px;border-radius:999px;font:500 13px 'Geist',sans-serif;cursor:pointer">Escalate to MLRO</button>
+              <button onClick="{{ kycRej }}" style="border:1px solid #A3312A;color:#A3312A;background:transparent;padding:10px 18px;border-radius:999px;font:500 13px 'Geist',sans-serif;cursor:pointer">Reject</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{ kycClosed }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 16px;background:#E3EEE8;color:#1F5E4B;border-radius:8px;font-weight:500">Decision recorded: {{ kycDone }}</div></sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ s.adToken }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <h2 style="font:400 24px 'Newsreader',serif;margin:0">Waiting for signatures</h2>
+        <sc-for list="{{ tokenOps }}" as="o" hint-placeholder-count="3">
+          <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(120px,1fr) auto;gap:16px;align-items:center;padding:16px 18px;background:#fff;border:1px solid #E3DED4;border-radius:10px">
+            <div><div style="font:500 11px 'Geist Mono',monospace;color:#5E6166">{{ o.id }} · {{ o.appr }}</div><div style="font-weight:500;margin-top:2px">{{ o.op }}</div><div style="font-size:12px;color:#45484D;font-family:'Geist Mono',monospace">{{ o.detail }}</div></div>
+            <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;gap:4px"><sc-for list="{{ o.sigs }}" as="g" hint-placeholder-count="3"><span style="flex:1;height:6px;border-radius:3px;background:{{ g }}"></span></sc-for></div><div style="font:400 11px 'Geist Mono',monospace;color:#45484D">{{ o.sigL }} custody quorum</div></div>
+            <button onClick="{{ o.sign }}" style="border:none;background:{{ o.btnBg }};color:#fff;padding:9px 16px;border-radius:999px;font:500 13px 'Geist',sans-serif;cursor:pointer">{{ o.btn }}</button>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ pg.hasTbl }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <sc-if value="{{ pg.tblTitle }}" hint-placeholder-val="{{ false }}"><h2 style="font:400 24px 'Newsreader',serif;margin:0">{{ pg.tblTitle }}</h2></sc-if>
+        <div style="background:#fff;border:1px solid #E3DED4;border-radius:12px;overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;min-width:760px">
+            <thead><tr><sc-for list="{{ pg.tbl.cols }}" as="c" hint-placeholder-count="6"><th style="text-align:left;font:500 11px 'Geist Mono',monospace;text-transform:uppercase;letter-spacing:.05em;color:#5E6166;padding:12px 16px;border-bottom:1px solid #E3DED4">{{ c }}</th></sc-for></tr></thead>
+            <tbody><sc-for list="{{ pg.tbl.rows }}" as="r" hint-placeholder-count="5"><tr><sc-for list="{{ r.c }}" as="x" hint-placeholder-count="5"><td style="padding:13px 16px;border-bottom:1px solid #ECE8E0;font-size:13px">{{ x }}</td></sc-for><td style="padding:13px 16px;border-bottom:1px solid #ECE8E0"><span style="background:{{ r.pb }};color:{{ r.pf }};font:500 11px 'Geist Mono',monospace;padding:4px 10px;border-radius:999px;white-space:nowrap">{{ r.pt }}</span></td></tr></sc-for></tbody>
+          </table>
+        </div>
+      </div>
+    </sc-if>
+  </main>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#17191C;color:#F5F2EC;padding:14px 22px;border-radius:999px;font:500 14px 'Geist',sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.25);z-index:50">{{ toast }}</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const TONE={green:['#E3EEE8','#1F5E4B'],amber:['#F6ECD6','#7A4F00'],red:['#F6E1DE','#A3312A'],grey:['#ECE8E0','#4A4D52'],brick:['#F5E4DB','#9A4524']};
+const pl=(t,tone)=>({pt:t,pb:TONE[tone][0],pf:TONE[tone][1]});
+const tbl=(cols,rows)=>({cols,rows:rows.map(r=>({c:r.slice(0,-2),...pl(r[r.length-2],r[r.length-1])}))});
+const chk=(t,d,p,tone)=>({t,d,...pl(p,tone)});
+const $=(n,d=2)=>'A$'+Number(n).toLocaleString('en-AU',{minimumFractionDigits:d,maximumFractionDigits:d});
+const SP={
+ s1:{name:'Harbour & Co Property',short:'Harbour & Co',vetted:'admitted Mar 2026',about:'Sydney residential syndicator running single-property trusts since 2011. Acts as trustee under its own AFSL and uses an independent custodian for title.',facts:[{l:'Trusts on RealX',v:'3'},{l:'Trusts managed',v:'14'},{l:'Assets managed',v:'A$212m'},{l:'Licence',v:'Own AFSL'}]},
+ s2:{name:'Northline Capital',short:'Northline',vetted:'admitted Apr 2026',about:'Brisbane-based commercial property manager focused on small-format office, retail and light industrial assets on long leases.',facts:[{l:'Trusts on RealX',v:'3'},{l:'Trusts managed',v:'22'},{l:'Assets managed',v:'A$486m'},{l:'Licence',v:'Own AFSL'}]},
+ s3:{name:'Yarra Bend Partners',short:'Yarra Bend',vetted:'admitted Jun 2026',about:'Melbourne family-office sponsor holding townhouses and small apartment blocks in inner-east suburbs, with a hired professional trustee.',facts:[{l:'Trusts on RealX',v:'2'},{l:'Trusts managed',v:'9'},{l:'Assets managed',v:'A$134m'},{l:'Licence',v:'Trustee: hired RE'}]}};
+const PR=[
+ {id:'p1',name:'Kent Street Terrace',sub:'Paddington NSW 2021',type:'Residential',kind:'4-bed Victorian terrace',sid:'s1',price:238.40,val:246.10,y:2.6,g:7.2,lvr:32,status:'Open offer',raised:64,closes:'14 Oct 2026',img:'terrace, street view',rent:'A$1,650/wk',beds:'4 bed · 2 bath · 1 car',land:'148 m²',built:'1889'},
+ {id:'p2',name:'Marion Street Warehouse',sub:'Leichhardt NSW 2040',type:'Commercial',kind:'Converted warehouse, 2 tenants',sid:'s2',price:418.50,val:412.00,y:5.8,g:4.1,lvr:38,status:'Fully funded',raised:100,img:'brick warehouse facade',rent:'A$262,000 p.a.',beds:'612 m² NLA · WALE 4.3 yrs',land:'540 m²',built:'1932'},
+ {id:'p3',name:'Bay Road Apartment',sub:'Brighton VIC 3186',type:'Residential',kind:'2-bed apartment, bay views',sid:'s1',price:115.20,val:118.60,y:2.7,g:6.4,lvr:25,status:'Fully funded',raised:100,img:'apartment balcony',rent:'A$720/wk',beds:'2 bed · 2 bath · 1 car',land:'Strata · 96 m²',built:'2014'},
+ {id:'p4',name:'Ann Street Office Floor',sub:'Fortitude Valley QLD 4006',type:'Commercial',kind:'Whole office floor, 1 tenant',sid:'s2',price:364.00,val:364.00,y:6.4,g:3.2,lvr:40,status:'Open offer',raised:28,closes:'2 Nov 2026',img:'office floor interior',rent:'A$233,000 p.a.',beds:'780 m² NLA · WALE 6.1 yrs',land:'Strata',built:'2008'},
+ {id:'p5',name:'Hawthorn Grove Townhouse',sub:'Hawthorn VIC 3122',type:'Residential',kind:'3-bed townhouse',sid:'s3',price:164.90,val:168.80,y:2.9,g:6.9,lvr:0,status:'Fully funded',raised:100,img:'townhouse courtyard',rent:'A$950/wk',beds:'3 bed · 2 bath · 2 car',land:'210 m²',built:'2019'},
+ {id:'p6',name:'Marine Parade Apartment',sub:'Cottesloe WA 6011',type:'Residential',kind:'3-bed beachfront apartment',sid:'s1',price:189.00,val:192.40,y:3.1,g:5.5,lvr:30,status:'Coming soon',raised:0,img:'ocean-facing living room',rent:'A$1,150/wk',beds:'3 bed · 2 bath · 2 car',land:'Strata · 142 m²',built:'2011'},
+ {id:'p7',name:'Gympie Road Retail',sub:'Kedron QLD 4031',type:'Commercial',kind:'Strip retail, 3 shops',sid:'s2',price:288.80,val:296.00,y:7.1,g:2.8,lvr:42,status:'Fully funded',raised:100,img:'shopfronts on main road',rent:'A$214,000 p.a.',beds:'520 m² GLA · WALE 3.8 yrs',land:'690 m²',built:'1996'},
+ {id:'p8',name:'Unley Road Cottage',sub:'Unley SA 5061',type:'Residential',kind:'3-bed stone cottage',sid:'s3',price:106.40,val:109.90,y:3.6,g:6.1,lvr:28,status:'Open offer',raised:91,closes:'30 Sep 2026',img:'bluestone cottage front',rent:'A$640/wk',beds:'3 bed · 1 bath · 1 car',land:'402 m²',built:'1910'}];
+const MON=['Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep'];
+const WIG=[1,1.02,.97,1,1.01,.99,1.03,.98,1,1.02,1,.99];
+const STT={'Open offer':'green','Fully funded':'grey','Coming soon':'amber'};
+PR.forEach(p=>{
+ const d=(p.val-p.price)/p.val*100;
+ Object.assign(p,{spName:SP[p.sid].name,sponsorShort:SP[p.sid].short,priceF:$(p.price),valF:$(p.val),disc:d>0.05?d.toFixed(1)+'% below valuation':d<-0.05?Math.abs(d).toFixed(1)+'% above valuation':'At valuation',discC:d<-0.05?'#9A4524':'#1F5E4B',
+ yieldF:p.y.toFixed(1)+'%',growthF:p.g.toFixed(1)+'%',lvrF:p.lvr?p.lvr+'%':'Debt free',raisedW:p.raised+'%',isOpen:p.status==='Open offer',sb:TONE[STT[p.status]][0],sf:TONE[STT[p.status]][1],valDate:'Mar 2026',regUnits:p.isOpen?'6,400':'10,000'});
+ p.regUnits=p.status==='Open offer'?Math.round(p.raised*100).toLocaleString('en-AU'):p.status==='Coming soon'?'0':'10,000';
+ const m=p.price*p.y/100/12, mx=m*1.05;
+ p.dist=MON.map((mo,i)=>({m:mo,v:'$'+(m*WIG[i]).toFixed(2),h:Math.round(m*WIG[i]/mx*100)+'%'}));
+ const labels=['Mar 24','Sep 24','Mar 25','Sep 25','Mar 26','Sep 26'];
+ const vals=labels.map((l,i)=>p.val/Math.pow(1+p.g/100,(5-i)/2));
+ p.cap=labels.map((l,i)=>({m:l,v:'$'+vals[i].toFixed(2),h:Math.round(40+60*(vals[i]-vals[0])/(vals[5]-vals[0]||1))+'%'}));
+ p.keyFacts=[{l:'Property value',v:$(p.val*10000,0)},{l:'Gross rent',v:p.rent},{l:'Tokens',v:'10,000'},{l:'Cash reserve',v:'3 months'},{l:'Next valuation',v:'Sep 2026'},{l:'Holder cap',v:'5% per investor'}];
+ p.desc=`${p.kind} in ${p.sub.replace(/ \d{4}$/,'')}, held in a single-property unit trust. ${p.type==='Residential'?'Leased on a 12-month residential tenancy, managed by a local agency appointed by the sponsor.':'Leased to established tenants on net leases with annual CPI reviews.'} Distributions are paid monthly from net rent after costs and interest. The sponsor reports rent, arrears and maintenance each month, and an independent valuer revalues the property at least every six months.`;
+ p.details=[{l:'Address',v:p.sub},{l:'Configuration',v:p.beds},{l:'Land',v:p.land},{l:'Year built',v:p.built},{l:'Trust',v:p.name+' Trust (unit trust)'},{l:'Trustee',v:p.sid==='s3'?'Professional RE (hired)':p.spName+' (own AFSL)'},{l:'Custodian',v:'Independent custodian (RG 133)'},{l:'Debt',v:p.lvr?p.lvr+'% LVR · variable, 3-yr facility':'None'},{l:'Foreign investors',v:p.type==='Residential'?'Not permitted (established residential)':'Permitted after FIRB checks'}];
+});
+const byId=Object.fromEntries(PR.map(p=>[p.id,p]));
+const HOLD=[{pid:'p3',qty:120,avg:111.80},{pid:'p2',qty:60,avg:404.20},{pid:'p5',qty:100,avg:161.30}];
+const APS=[
+ {id:'APR-2291',type:'Distribution run',obj:'Bay Road Apartment · Sep 2026 · A$2,592.00',maker:'Priya N. (Treasury ops)',risk:'High',age:'2h',checks:[chk('Sponsor owner approved','','Done','green'),chk('Rent roll attested for August (G19)','','Pass','green'),chk('Snapshot: 186 holders, 10,000 units','','Matched','green'),chk('Client money covers payout','','Pass','green')]},
+ {id:'APR-2290',type:'Listing publication',obj:'Marine Parade Apartment · Harbour & Co',maker:'Tom H. (Listings)',risk:'Medium',age:'5h',checks:[chk('Valuation current (G20)','','Pass','green'),chk('Proof of property (G19)','','Pass','green'),chk('Marketing claims (G17)','','2 flags','amber'),chk('Residency rule: foreign persons blocked','','Set','green')]},
+ {id:'APR-2288',type:'Forced transfer',obj:'Marion Street · 12 tokens · estate transfer',maker:'Grace L. (Registry ops)',risk:'High',age:'1d',checks:[chk('Grant of probate on file','','Pass','green'),chk('Trustee instruction countersigned','','Pass','green'),chk('Recipient verified (G01)','','Pass','green'),chk('Holder cap after transfer (G07)','','0.8%','green')]},
+ {id:'APR-2286',type:'Withdrawal over A$50k',obj:'INV-00841 · A$62,000.00 to CBA ••4471',maker:'System threshold',risk:'Medium',age:'1d',checks:[chk('Bank account in investor name','','Pass','green'),chk('Sanctions re-screen (G02)','','Clear','green'),chk('AML pattern check (G14)','','No alerts','green')]},
+ {id:'APR-2285',type:'Rule pack change',obj:'Holder cap 5% → 7.5% · Ann Street Office Floor',maker:'Sam R. (Compliance)',risk:'High',age:'2d',checks:[chk('Trust deed allows change','','Pass','green'),chk('Licensee notified','','Pending','amber'),chk('Holders affected','','0','green')]}];
+
+class Component extends DCLogic{
+ state={role:'visitor',screen:'home',pid:'p1',tab:'summary',type:'All',sort:'Featured',onb:0,invType:0,qty:10,bstep:0,ack:false,lstep:0,apDone:[],apSel:'APR-2291',toast:'',kycDone:'',distOk:false,signed:[]};
+ toast(t){this.setState({toast:t});clearTimeout(this._t);this._t=setTimeout(()=>this.setState({toast:''}),2600);}
+ go(screen,extra){this.setState({screen,...extra});window.scrollTo(0,0);}
+ renderVals(){
+  const S=this.state, r=S.role;
+  const go={};['home','invest','prop','fees','onb','port','buy','wallet','activity','statements','sell','spDash','spNew','spOffer','spRegister','spDist','spReport','adCmd','adApprovals','adListing','adKyc','adToken','adRecon','adTreasury','adAml','adAudit'].forEach(k=>go[k]=()=>this.go(k));
+  const s={[S.screen]:true};
+  const setRole=nr=>()=>this.setState({role:nr,screen:{visitor:'home',investor:'port',sponsor:'spDash',admin:'adCmd'}[nr]});
+  const roles=[['visitor','Visitor'],['investor','Investor'],['sponsor','Sponsor'],['admin','RealX admin']].map(([k,l])=>({label:l,click:setRole(k),bg:r===k?'#F5F2EC':'transparent',fg:r===k?'#17191C':'#D9D4CA'}));
+  const shell={pub:r==='visitor'||r==='investor',sp:r==='sponsor',ad:r==='admin'};
+  const navBtn=(label,k,dark)=>({label,click:go[k],bg:S.screen===k?(dark?'#34383D':'#ECE8E0'):'transparent',fg:dark?(S.screen===k?'#fff':'#C9C4BA'):'#17191C'});
+  const pubNav=r==='investor'?[navBtn('Portfolio','port'),navBtn('Investments','invest'),navBtn('Wallet','wallet'),navBtn('Activity','activity'),navBtn('Statements','statements')]:[navBtn('Investments','invest'),navBtn('Fees','fees')];
+  const openP=id=>()=>this.go('prop',{pid:id,tab:'summary'});
+  const decorate=p=>({...p,open:openP(p.id)});
+  const P=byId[S.pid], SPN=SP[P.sid];
+  // list
+  let list=PR.filter(p=>S.type==='All'||p.type===S.type);
+  const sorters={'Below valuation':(a,b)=>(b.val-b.price)/b.val-(a.val-a.price)/a.val,'Lowest price':(a,b)=>a.price-b.price,'Highest net income':(a,b)=>b.y-a.y,'Lowest LVR':(a,b)=>a.lvr-b.lvr,'Highest growth':(a,b)=>b.g-a.g};
+  if(sorters[S.sort])list=[...list].sort(sorters[S.sort]);
+  const chip=(label,on,click)=>({label,click,bg:on?'#17191C':'transparent',fg:on?'#fff':'#17191C',bd:on?'#17191C':'#D6D0C4'});
+  const typeChips=['All','Residential','Commercial'].map(t=>chip(t,S.type===t,()=>this.setState({type:t})));
+  const sortChips=['Featured','Below valuation','Lowest price','Highest net income','Lowest LVR','Highest growth'].map(t=>chip(t,S.sort===t,()=>this.setState({sort:t})));
+  const TABS=[['summary','Summary'],['dist','Monthly distributions'],['cap','Capital returns'],['details','Details'],['docs','Documents'],['sponsor','Sponsor'],['proof','Proof of property']];
+  const tabs=TABS.map(([k,l])=>({label:l,click:()=>this.setState({tab:k}),fg:S.tab===k?'#17191C':'#5E6166',bd:S.tab===k?'#17191C':'transparent'}));
+  const docs=[{t:'Information memorandum',m:'PDF · 42 pages · v2, 1 Sep 2026'},{t:'Trust deed',m:'PDF · 68 pages'},{t:'Independent valuation report',m:'PDF · panel valuer · Mar 2026'},{t:'Fee schedule',m:'PDF · 2 pages'},{t:'Monthly property report · August 2026',m:'PDF · attested by sponsor operator'}];
+  const proof=[{t:'Title search',d:'Registered proprietor: custodian for the trust',when:'12 Sep 2026'},{t:'Insurance certificate',d:'Building and landlord cover, current',when:'to 30 Jun 2027'},{t:'Rent roll attested',d:'August 2026 · no arrears over 14 days',when:'05 Sep 2026'},{t:'Independent valuation',d:P.valF+' per token',when:'Mar 2026'},{t:'Client-money reconciliation',d:'Trust bank ledger matches distributions paid',when:'23 Sep 2026'}];
+  const fees=[{t:'Transaction fee',v:'0.5%',d:'On each buy, and on resale sells from 2027.'},{t:'Account fee',v:'None',d:'No monthly or annual account-keeping fee.'},{t:'Sponsor management fee',v:'0.5–0.9% p.a.',d:'Set per listing, charged to the trust and shown on the property page.'},{t:'RealX platform fee',v:'0.25% p.a.',d:'Charged to the trust from net assets, not to your wallet.'},{t:'Deposits and withdrawals',v:'Free',d:'PayID over NPP, PayTo, or bank transfer.'},{t:'Float interest',v:'Disclosed',d:'Interest on uninvested cash is shown in the transparency report.'}];
+  const howSteps=[{n:'01',t:'Verify once',d:'Identity, tax and wholesale status are checked once and reused for every sponsor on RealX.'},{n:'02',t:'Buy tokens',d:'Each token is a unit in the property trust, recorded on the trustee’s register and mirrored on-chain.'},{n:'03',t:'Get paid monthly',d:'Net rent lands in your wallet each month, with a tax statement at year end.'}];
+  // onboarding
+  const ONB=[
+   {code:'ONB-01',label:'Account',title:'Create your account',sub:'Your email and mobile are used for sign-in and approvals.',fields:[{l:'Email',v:'alex.morgan@email.com'},{l:'Mobile',v:'0412 345 678'},{l:'Country of tax residence',v:'Australia'},{l:'Password',v:'••••••••••'}]},
+   {code:'ONB-02',label:'Investor type',title:'Who is investing?',sub:'You can add more accounts later.',opts:[{t:'Individual',d:'Investing in your own name.'},{t:'Joint',d:'Two people. Both are verified, and you choose whether either or both must approve.'},{t:'SMSF, company or trust',d:'Every trustee, director and 25%+ owner is verified.'}]},
+   {code:'ONB-03',label:'Identity',title:'Verify your identity',sub:'We check your licence or passport against government records, then take a short liveness check.',fields:[{l:'Full legal name',v:'Alex James Morgan'},{l:'Date of birth',v:'14/03/1984'},{l:'Driver licence number',v:'NSW 1234 5678'},{l:'Residential address',v:'22 Glebe Point Rd, Glebe NSW 2037'}],box:['Liveness check','Look at your camera · takes about 10 seconds']},
+   {code:'ONB-05',label:'Tax',title:'Tax details',sub:'Without a TFN we must withhold tax from distributions at the top rate.',fields:[{l:'Tax file number',v:'••• ••• 482'},{l:'US person for FATCA?',v:'No'},{l:'Other tax residencies',v:'None'}]},
+   {code:'ONB-06',label:'Wholesale status',title:'Prove wholesale status',sub:'Until the retail launch, RealX offers are open to wholesale investors only.',opts:[{t:'Accountant’s certificate',d:'Net assets of A$2.5m or gross income of A$250k in each of the last two years. Valid for 2 years.'},{t:'Invest A$500,000 or more in one offer',d:'Checked on each order.'},{t:'Sophisticated or professional investor',d:'Assessed by RealX’s licensee from your experience and evidence.'}],box:['Drop your certificate here','PDF or photo · signed within the last 6 months']},
+   {code:'ONB-08',label:'Wallet',title:'Set up your token wallet',sub:'Your tokens live in a wallet secured by a passkey on your device. No seed phrase to lose.',box:['Create passkey wallet','Uses Face ID, Touch ID or Windows Hello'],checks:[chk('Wallet address','0x7a3f…c91e','Created','green'),chk('Linked to your verified identity','Required to receive tokens','Linked','green')]},
+   {code:'ONB-09',label:'Bank & deposit',title:'Link a bank and add funds',sub:'Withdrawals only go to an account in your name.',fields:[{l:'BSB',v:'062-000'},{l:'Account number',v:'••••4471'},{l:'Your PayID for deposits',v:'alex.morgan.841@pay.realx.au'}]},
+   {code:'ONB-10',label:'Status',title:'You’re verified',sub:'You can now invest in any wholesale offer on RealX.',checks:[chk('Identity verified (G01)','DVS match, 2 sources · liveness pass','Pass','green'),chk('Sanctions and PEP (G02)','No matches','Clear','green'),chk('Tax details (G16)','TFN provided','Pass','green'),chk('Wholesale status (G04)','Accountant’s certificate','Valid to 30 Jun 2028','green'),chk('Residency (G06)','Australian resident','Pass','green')],cta:'Go to portfolio'}];
+  const cur=ONB[S.onb];
+  const onbCur={...cur,n:S.onb+1,cta:cur.cta||'Continue',hasFields:!!cur.fields,hasOpts:!!cur.opts,hasBox:!!cur.box,hasChecks:!!cur.checks,boxT:cur.box&&cur.box[0],boxD:cur.box&&cur.box[1],opts:(cur.opts||[]).map((o,i)=>({...o,click:()=>this.setState({invType:i}),bd:S.invType===i?'#17191C':'#E3DED4',bg:S.invType===i?'#FBFAF7':'#fff',dot:S.invType===i?'#1F5E4B':'transparent'}))};
+  const onbSteps=ONB.map((o,i)=>({label:o.label,n:i<S.onb?'✓':i+1,click:()=>this.setState({onb:i}),bg:i===S.onb?'#fff':'transparent',fg:i<=S.onb?'#17191C':'#5E6166',dot:i<=S.onb?'#1F5E4B':'#B9B4AA',dotBg:i<S.onb?'#1F5E4B':'transparent',dotFg:i<S.onb?'#fff':'#17191C'}));
+  const onbNext=()=>{if(S.onb<7)this.setState({onb:S.onb+1});else{this.setState({role:'investor',screen:'port',onb:0});this.toast('Welcome to RealX, Alex');}};
+  const onbBack=()=>S.onb>0&&this.setState({onb:S.onb-1});
+  // buy
+  const sub=S.qty*P.price, fee=sub*.005;
+  const orderLines=[{l:'Tokens',v:String(S.qty)},{l:'Price per token',v:P.priceF},{l:'Subtotal',v:$(sub)},{l:'Transaction fee 0.5%',v:$(fee)},{l:'Share of trust',v:(S.qty/100).toFixed(2)+'%'}];
+  const buySteps=['Order','Review and confirm','Status'].map((l,i)=>({l,c:i<=S.bstep?'#1F5E4B':'#E3DED4',fg:i<=S.bstep?'#17191C':'#5E6166'}));
+  const bs={['s'+S.bstep]:true};
+  const buyGates=[{id:'G01',t:'Identity verified',d:'Reusable credential on wallet 0x7a3f…c91e'},{id:'G04',t:'Wholesale status valid',d:'Certificate valid to 30 Jun 2028'},{id:'G06',t:'Residency and FIRB',d:'Australian resident'},{id:'G07',t:'Holder cap',d:`After this order you’d hold ${(S.qty/100).toFixed(2)}% (cap 5%)`},{id:'G11',t:'Offer caps and escrow',d:'Within hard cap · funds held until soft cap'}];
+  const orderTimeline=[{t:'Order placed',d:'22 Sep 2026, 10:41 AEST · RX-ORD-55120',c:'#1F5E4B',bg:'#1F5E4B'},{t:'Funds held in escrow',d:$(sub+fee)+' moved from funds available',c:'#1F5E4B',bg:'#1F5E4B'},{t:'Offer reaches soft cap',d:'64% of 75% · refunded automatically if not reached by '+(P.closes||'close'),c:'#B9B4AA',bg:'#fff'},{t:'Units issued by trustee',d:'Recorded on the trustee register',c:'#B9B4AA',bg:'#fff'},{t:'Tokens delivered to your wallet',d:'Mirrored on-chain within minutes of issue',c:'#B9B4AA',bg:'#fff'}];
+  const buyNext=()=>{if(S.bstep===0)this.setState({bstep:1});else if(S.bstep===1){if(S.ack){this.setState({bstep:2});this.toast('Order placed · funds in escrow');}}else this.go('activity');};
+  const buyBack=()=>S.bstep===0||S.bstep===2?this.go('prop',{bstep:0}):this.setState({bstep:S.bstep-1});
+  const buyClick=()=>{if(r==='visitor')this.go('onb');else if(P.status==='Coming soon')this.toast('We’ll email you when this offer opens');else if(P.isOpen)this.go('buy',{bstep:0,ack:false});else this.go('sell');};
+  const buyLabel=r==='visitor'?'Sign up to invest':P.status==='Coming soon'?'Notify me':P.isOpen?'Buy tokens':'Sell tokens (resale · 2027)';
+  // holdings
+  const holdings=HOLD.map(h=>{const p=byId[h.pid];return{name:p.name,sub:p.sub,qty:h.qty,value:$(h.qty*p.price),gain:'+'+$(h.qty*(p.price-h.avg)),inc:$(h.qty*p.price*p.y/100/12),open:openP(p.id),buy:openP(p.id),sell:()=>this.go('sell',{pid:p.id})};});
+  const totVal=HOLD.reduce((a,h)=>a+h.qty*byId[h.pid].price,0), totInc=HOLD.reduce((a,h)=>a+h.qty*byId[h.pid].price*byId[h.pid].y/100/12,0);
+  const sellH=HOLD.find(h=>h.pid===S.pid)||{qty:0};
+  // sponsor dist chain
+  const distChain=[{st:'DONE',t:'Rent roll uploaded',who:'Leo P. · fund accountant'},{st:'DONE',t:'Distribution proposed',who:'Leo P. · 23 Sep'},{st:S.distOk?'DONE':'YOUR TURN',t:'Sponsor owner approves',who:'Mia Chen'},{st:'WAITING',t:'RealX approval',who:'Treasury + compliance'},{st:'WAITING',t:'Paid to wallets',who:'10 Oct 2026'}].map(d=>({...d,bd:d.st==='YOUR TURN'?'#1F5E4B':'#E3DED4',bg:d.st==='DONE'?'#F4F8F5':'#fff',fg:d.st==='WAITING'?'#5E6166':'#1F5E4B'}));
+  const lsteps=[
+   {l:'Property',title:'Tell us about the property',fields:[{l:'Listing name',v:'Marine Parade Apartment'},{l:'Address',v:'Marine Parade, Cottesloe WA 6011'},{l:'Type',v:'Residential · established'},{l:'Configuration',v:'3 bed · 2 bath · 2 car'},{l:'Trust name',v:'Marine Parade Apartment Trust'},{l:'Trustee',v:'Harbour & Co Property (own AFSL)'}]},
+   {l:'Due diligence',title:'Due diligence',checks:[chk('Title search','Uploaded 12 Sep 2026','Uploaded','green'),chk('Independent valuation (G20)','Panel valuer · A$1,924,000','Uploaded','green'),chk('Building and pest report','','Uploaded','green'),chk('Lease and rent roll (G19)','Current tenant to Jun 2027','Uploaded','green'),chk('Insurance certificate','','Missing','amber')]},
+   {l:'Offer terms',title:'Offer terms',fields:[{l:'Tokens on offer',v:'10,000'},{l:'Price per token',v:'A$189.00'},{l:'Soft cap',v:'75% · A$1,417,500'},{l:'Offer period',v:'1 Oct – 12 Nov 2026'},{l:'Holder cap',v:'5% per investor'},{l:'Investor type',v:'Wholesale only'}]},
+   {l:'Documents & submit',title:'Documents and submit',checks:[chk('Information memorandum','v1 · 38 pages','Ready','green'),chk('Trust deed','','Ready','green'),chk('Fee schedule','','Ready','green'),chk('Marketing copy check (G17)','2 phrases flagged for review','Review','amber'),chk('Sponsor owner approval (G13)','Mia Chen','Required','grey')],cta:'Submit to RealX'}];
+  const lc=lsteps[S.lstep];
+  const lCur={...lc,cta:lc.cta||'Continue',hasFields:!!lc.fields,hasChecks:!!lc.checks};
+  const lSteps=lsteps.map((x,i)=>({l:x.l,click:()=>this.setState({lstep:i}),c:i<=S.lstep?'#1F5E4B':'#E3DED4',fg:i<=S.lstep?'#17191C':'#5E6166'}));
+  // admin
+  const apRemain=APS.filter(a=>!S.apDone.includes(a.id));
+  const ap=apRemain.find(a=>a.id===S.apSel)||apRemain[0];
+  const apList=apRemain.map(a=>{const t=a.risk==='High'?'red':'amber';return{...a,click:()=>this.setState({apSel:a.id}),bg:ap&&a.id===ap.id?'#fff':'#FBFAF7',bd:ap&&a.id===ap.id?'#17191C':'#E3DED4',pb:TONE[t][0],pf:TONE[t][1]};});
+  const apAct=verb=>()=>{if(!ap)return;this.setState({apDone:[...S.apDone,ap.id]});this.toast(`${ap.id} ${verb}`);};
+  const OPS=[{id:'OP-7731',op:'Forced transfer',detail:'Marion St · 12 tokens · 0x4b…19 → 0x9e…a2',appr:'APR-2288',have:1},{id:'OP-7730',op:'Mint on offer close',detail:'Unley Road Cottage · 9,100 tokens',appr:'APR-2279',have:2},{id:'OP-7729',op:'Freeze wallet',detail:'0x2c…7f · AML-118',appr:'APR-2283',have:2}];
+  const tokenOps=OPS.map(o=>{const n=Math.min(3,o.have+(S.signed.includes(o.id)?1:0));return{...o,sigs:[0,1,2].map(i=>i<n?'#1F5E4B':'#E3DED4'),sigL:n+' of 3',btn:n>=2?'Broadcast':'Sign',btnBg:n>=2?'#17191C':'#1F5E4B',sign:()=>{if(n>=2)this.toast(o.id+' broadcast · register sync queued');else this.setState({signed:[...S.signed,o.id]});}};});
+  const kycChecks=[chk('Document check','NSW licence · DVS match','Pass','green'),chk('Name and date of birth','2 sources','Pass','green'),chk('Address','1 source · utility bill requested','Refer','amber'),chk('Liveness','Score 0.98','Pass','green'),chk('Sanctions (G02)','DFAT consolidated list','Clear','green'),chk('PEP screen (G02)','1 possible match · low confidence · different DOB','Review','red')];
+  const kycAct=v=>()=>{this.setState({kycDone:v});this.toast('Case INV-00912: '+v);};
+  const adNavDef=[['Overview'],['Command center','adCmd','3'],['Approvals inbox','adApprovals',String(apRemain.length)],['Onboarding & listings'],['Listing review','adListing','1'],['Identity review','adKyc',S.kycDone?'':'1'],['Assets & money'],['Token operations','adToken','3'],['Register & reconciliation','adRecon','1'],['Treasury','adTreasury',''],['Risk & records'],['AML cases','adAml','4'],['Audit log','adAudit','']];
+  const adNav=adNavDef.map(([l,k,b])=>k?{item:true,hdr:false,...navBtn(l,k,true),badge:b}:{hdr:true,item:false,label:l});
+  const spNav=[['Dashboard','spDash'],['New listing','spNew'],['Offer monitor','spOffer'],['Investor register','spRegister'],['Distributions','spDist'],['Property reporting','spReport']].map(([l,k])=>navBtn(l,k));
+  const task=(t,d,p,tone,click,m)=>({t,d,m:m||'',click:click||(()=>{}),...pl(p,tone)});
+  // page config
+  const PG={
+   port:{code:'INV-01',title:'Good morning, Alex',sub:'Your property tokens, income and cash in one place.',kpis:[{l:'Portfolio value',v:$(totVal),d:'3 properties · 280 tokens'},{l:'Funds available',v:'A$3,420.18',d:'Ready to invest'},{l:'Monthly income',v:$(totInc),d:'Next payment 10 Oct'},{l:'Distributions FY27',v:'A$576.96',d:'Jul–Sep 2026'}]},
+   buy:{code:'INV-02 · Buy',title:'Buy tokens',sub:'Checks run automatically. Nothing is charged until you confirm.'},
+   wallet:{code:'INV · Wallet',title:'Wallet',sub:'Cash sits in RealX’s client-money trust account until you invest. Tokens sit in a wallet only you control.',kpis:[{l:'Funds available',v:'A$3,420.18',d:'Client-money trust account'},{l:'Awaiting investment',v:'A$2,395.92',d:'In offer escrow'},{l:'Tokens held',v:'280',d:'Across 3 trusts'}],tbl:tbl(['Date','Type','Detail','Amount','Status'],[['10 Sep 2026','Distribution','3 trusts','A$192.32','Paid','green'],['02 Sep 2026','Deposit','PayID · NPP','A$5,000.00','Settled','green'],['18 Aug 2026','Withdrawal','To CBA ••4471','A$1,500.00','Settled','green'],['10 Aug 2026','Distribution','3 trusts','A$190.84','Paid','green']])},
+   activity:{code:'INV-03',title:'Activity',sub:'Every order, deposit and payout on your account.',tbl:tbl(['Date','Type','Property','Detail','Amount','Status'],[['22 Sep 2026','Buy (offer)','Kent Street Terrace','10 @ A$238.40','A$2,395.92','In escrow','amber'],['10 Sep 2026','Distribution','Marion Street Warehouse','60 tokens','A$121.37','Paid','green'],['10 Sep 2026','Distribution','Hawthorn Grove Townhouse','100 tokens','A$39.85','Paid','green'],['10 Sep 2026','Distribution','Bay Road Apartment','120 tokens','A$31.10','Paid','green'],['02 Sep 2026','Deposit','—','PayID · NPP','A$5,000.00','Settled','green'],['03 Jul 2026','Buy (offer)','Hawthorn Grove Townhouse','100 @ A$161.30','A$16,210.65','Allotted','grey']])},
+   statements:{code:'INV · Statements',title:'Distributions and tax',sub:'Monthly payment advices, annual AMMA tax statements and transaction confirmations.',kpis:[{l:'FY27 to date',v:'A$576.96',d:'Jul–Sep 2026'},{l:'FY26 total',v:'A$1,944.20',d:'AMMA issued 28 Jul'},{l:'Tax withheld',v:'A$0.00',d:'TFN on file'}],tbl:tbl(['Document','Trust','Period','Issued','Status'],[['AMMA statement','All trusts','FY2026','28 Jul 2026','Ready','green'],['Payment advice','All trusts','Sep 2026','10 Sep 2026','Ready','green'],['Payment advice','All trusts','Aug 2026','10 Aug 2026','Ready','green'],['Confirmation','Hawthorn Grove Townhouse','Buy RX-ORD-51877','03 Jul 2026','Ready','green'],['Annual statement','All trusts','FY2026','14 Aug 2026','Ready','green']])},
+   sell:{code:'INV-05 · P2',title:'Sell tokens',sub:P.name+' · you hold '+sellH.qty+' tokens.'},
+   spDash:{code:'SPN-02',title:'Harbour & Co Property',sub:'3 trusts on RealX · 1 offer live · 1 listing in review.',kpis:[{l:'Raised in live offer',v:'A$1.53m',d:'Kent Street · 64% of cap'},{l:'Investors',v:'314',d:'Across 3 trusts'},{l:'Next distribution',v:'A$2,592.00',d:'Bay Road · 10 Oct'},{l:'Reporting',v:'1 due',d:'August rent roll · 30 Sep'}],tasksTitle:'Needs you',tasks:[task('Approve September distribution','Bay Road Apartment · A$2,592.00 · proposed by Leo P.','Your approval','green',go.spDist),task('Attest August property report','Bay Road Apartment · due 30 Sep','Due in 7 days','amber',go.spReport),task('Respond to RealX review','Marine Parade Apartment · 2 marketing phrases flagged','Changes requested','brick',go.spNew)],tblTitle:'Listings',tbl:tbl(['Listing','Type','Token price','Investors','Status'],[['Kent Street Terrace','Residential','A$238.40','128','Offer live','green'],['Bay Road Apartment','Residential','A$115.20','186','Funded','grey'],['Marine Parade Apartment','Residential','A$189.00','—','In RealX review','amber']])},
+   spNew:{code:'SPN-03–06',title:'New listing',sub:'Four steps. RealX reviews every listing before it goes live.'},
+   spOffer:{code:'SPN-07',title:'Offer monitor',sub:'Kent Street Terrace · live applications. Money waits in escrow until the soft cap.',kpis:[{l:'Applications',v:'128',d:'+9 today'},{l:'Raised',v:'A$1,525,760',d:'6,400 tokens'},{l:'To soft cap',v:'A$262,240',d:'1,100 tokens'},{l:'Largest holding',v:'4.6%',d:'Cap 5%'}],tblTitle:'Latest applications',tbl:tbl(['Time','Investor','Type','Tokens','Amount','Status'],[['22 Sep 10:41','A. Morgan','Individual','10','A$2,395.92','Escrow','amber'],['22 Sep 09:12','Kwan Family SMSF','SMSF','200','A$47,918.40','Escrow','amber'],['21 Sep 16:30','R. & S. Patel','Joint','40','A$9,583.68','Escrow','amber'],['21 Sep 11:05','Ridgeline Pty Ltd','Company','460','A$110,208.32','Escrow','amber'],['20 Sep 14:22','J. Whitford','Individual','25','A$5,989.80','Refunded','grey']])},
+   spRegister:{code:'SPN-08',title:'Investor register',sub:'Bay Road Apartment Trust · mirrors the trustee register. Last reconciled 23 Sep 2026, 06:00 AEST.',kpis:[{l:'Holders',v:'186',d:''},{l:'Units',v:'10,000',d:'= 10,000 tokens'},{l:'Largest holding',v:'4.8%',d:'Cap 5%'}],tbl:tbl(['Holder','Type','Units','% of trust','Wallet','Status'],[['Kwan Family SMSF','SMSF','480','4.80%','0x91…e4','Active','green'],['Ridgeline Pty Ltd','Company','450','4.50%','0x3d…0a','Active','green'],['A. Morgan','Individual','120','1.20%','0x7a…1e','Active','green'],['Estate of H. Lowe','Individual','60','0.60%','0x4b…19','Frozen','red'],['T. Nguyen','Individual','40','0.40%','0x8c…22','Active','green']])},
+   spDist:{code:'SPN-09',title:'Distributions',sub:'Fund accountant prepares, sponsor owner approves, RealX checks and pays.',tblTitle:'Past runs',tbl:tbl(['Month','Trust','Total','Per token','Paid','Status'],[['Aug 2026','Bay Road Apartment','A$2,560.00','A$0.2560','10 Sep 2026','Paid','green'],['Jul 2026','Bay Road Apartment','A$2,604.80','A$0.2605','08 Aug 2026','Paid','green'],['Jun 2026','Bay Road Apartment','A$2,572.80','A$0.2573','10 Jul 2026','Paid','green']])},
+   spReport:{code:'SPN-10',title:'Property reporting',sub:'Attest each property every month. Late reports pause new offers from this sponsor (G19).',tasksTitle:'Bay Road Apartment · August 2026',tasks:[task('Rent roll','Tenant paid in full · A$3,120.00','Uploaded','green'),task('Arrears and vacancies','None','Confirmed','green'),task('Maintenance log','1 item · hot water unit A$1,480.00','Uploaded','green'),task('Insurance still current','Policy to 30 Jun 2027','Confirmed','green'),task('Operator attestation','Sign to submit to RealX',S.distOk?'Signed':'Sign now','amber',()=>this.toast('Report attested and sent to RealX'))]},
+   adCmd:{code:'ADM-01',title:'Command center',sub:'Wednesday 23 Sep 2026 · all figures reconciled at 06:00 AEST.',kpis:[{l:'Client money',v:'A$18.42m',d:'Reconciled 06:00'},{l:'Live offers',v:'3',d:'A$3.05m in escrow'},{l:'Approvals waiting',v:String(apRemain.length),d:'2 high risk'},{l:'Open alerts',v:'3',d:'1 high'}],tasksTitle:'Alerts',tasks:[task('Register break · Gympie Road Retail','Registry file shows 9,998 units; token supply 10,000',  'High','red',go.adRecon,'06:02'),task('14 wholesale certificates expire within 30 days','Investors will be blocked from new offers (G04)','Medium','amber',go.adKyc,'05:00'),task('Marion Street valuation due in 21 days','Sponsor notified · G20','Medium','amber',go.adListing,'Yesterday'),task('Listing waiting for review','Marine Parade Apartment · Harbour & Co','Review','grey',go.adListing,'5h')]},
+   adApprovals:{code:'ADM-30',title:'Approvals inbox',sub:'Every high-risk action needs a second person. Approvals are bound to signing requests.'},
+   adListing:{code:'ADM-07',title:'Listing review',sub:'Marine Parade Apartment · Harbour & Co Property · submitted 22 Sep 2026 by Tom H.',tasksTitle:'Gates',tasks:[task('Sponsor and owners verified (G03)','Harbour & Co · 2 directors','Pass','green'),task('Licence perimeter (G21)','Trustee under own AFSL; wholesale only','Pass','green'),task('Proof of property (G19)','Title search 12 Sep 2026','Pass','green'),task('Valuation current (G20)','Panel valuer · A$1,924,000 · Aug 2026','Pass','green'),task('Residency and FIRB (G06)','Established residential · foreign persons blocked','Set','green'),task('Marketing claims (G17)','“guaranteed income” on IM p.3 · “beats the market” on listing copy','2 flags','amber',()=>this.toast('Changes requested from Harbour & Co')),task('Insurance certificate','Not uploaded','Missing','red')]},
+   adKyc:{code:'ADM-10',title:'Identity review',sub:'Case INV-00912 · referred by the identity provider at 08:14.'},
+   adToken:{code:'ADM-14',title:'Token operations',sub:'Every on-chain operation needs an approval ID and a 2-of-3 custody quorum before broadcast.',tblTitle:'Recent',tbl:tbl(['Time','Operation','Trust','Approval','Tx','Status'],[['22 Sep 17:04','Mint','Hawthorn Grove Townhouse','APR-2270','0xa1…9f','Confirmed','green'],['22 Sep 11:30','Transfer (trustee)','Bay Road Apartment','APR-2268','0x5e…03','Confirmed','green'],['21 Sep 09:15','Pause','Marion Street Warehouse','APR-2261','0x0c…d8','Confirmed','green']])},
+   adRecon:{code:'ADM-17',title:'Register and reconciliation',sub:'Trustee register, token supply and client-money ledger compared daily. The register is the legal record.',kpis:[{l:'Trusts matched',v:'7 of 8',d:'Run 06:00'},{l:'Breaks open',v:'1',d:'2 units'},{l:'Oldest break',v:'4h',d:'SLA 24h'}],tbl:tbl(['Trust','Register','Token supply','Client money','Last run','Status'],[['Kent Street Terrace','6,400 (escrow)','0','Matched','06:00','Matched','green'],['Marion Street Warehouse','10,000','10,000','Matched','06:00','Matched','green'],['Bay Road Apartment','10,000','10,000','Matched','06:00','Matched','green'],['Ann Street Office Floor','2,800 (escrow)','0','Matched','06:00','Matched','green'],['Hawthorn Grove Townhouse','10,000','10,000','Matched','06:00','Matched','green'],['Gympie Road Retail','9,998','10,000','Matched','06:00','Break · 2 units','red'],['Unley Road Cottage','9,100 (escrow)','0','Matched','06:00','Matched','green']])},
+   adTreasury:{code:'ADM-18',title:'Treasury and client money',sub:'Client money is held in trust accounts, separate from RealX’s own funds.',kpis:[{l:'Client money',v:'A$18,420,316.44',d:'4 accounts'},{l:'NPP in today',v:'A$412,880.00',d:'96 deposits'},{l:'Payouts queued',v:'A$96,214.30',d:'Withdrawals + distributions'}],tbl:tbl(['Account','Bank','Purpose','Balance','Last statement','Status'],[['Client money · wallets','Bank A ••2201','Uninvested investor cash','A$9,812,404.10','06:00','Reconciled','green'],['Offer escrow','Bank A ••2202','Primary offers','A$3,048,880.00','06:00','Reconciled','green'],['Distributions','Bank B ••8810','Trust payouts','A$5,559,032.34','06:00','Reconciled','green'],['RealX operating','Bank B ••8811','Fees (not client money)','A$1,204,331.90','06:00','Separate','grey']])},
+   adAml:{code:'ADM-25',title:'AML cases',sub:'Owned by the MLRO. Suspicious matter reports go to AUSTRAC within 3 business days.',tbl:tbl(['Case','Investor','Trigger','Opened','Owner','Status'],[['AML-118','INV-00377','Deposits from 6 third-party accounts','19 Sep','MLRO','Wallet frozen','red'],['AML-117','INV-00811','Rapid deposit then withdrawal','17 Sep','Analyst','Investigating','amber'],['AML-116','INV-00290','PEP match on beneficial owner','12 Sep','MLRO','EDD requested','amber'],['AML-114','INV-00533','Unusual SMSF contribution','04 Sep','Analyst','Closed · no SMR','grey']])},
+   adAudit:{code:'ADM-31',title:'Audit log',sub:'Append-only. Every action, who made it, who approved it.',tbl:tbl(['Time','Actor','Action','Object','Approval','Result'],[['23 Sep 09:02','Jordan B. (CCO)','Approved','Listing change · Unley Road','APR-2279','OK','green'],['23 Sep 08:47','Priya N. (Treasury)','Proposed','Distribution run · Bay Road','APR-2291','OK','green'],['23 Sep 08:14','Identity provider','Referred','INV-00912','—','Referred','amber'],['23 Sep 06:02','Recon job','Detected break','Gympie Road Retail','—','Alert','red'],['22 Sep 17:04','Custody quorum','Signed 3/3','OP-7726 mint','APR-2270','OK','green']])}
+  };
+  const pgRaw=PG[S.screen]||{};
+  const pg={...pgRaw,hasKpis:!!pgRaw.kpis,hasTbl:!!pgRaw.tbl,hasTasks:!!pgRaw.tasks,tblTitle:pgRaw.tblTitle||''};
+  const appPage=['port','buy','wallet','activity','statements','sell'].includes(S.screen);
+  const codes={home:'PUB-01 · Home',invest:'PUB-03 · Investments',prop:'PUB-04 · Property page',fees:'PUB-06 · Fees',onb:ONB[S.onb].code+' · Onboarding'};
+  return {
+   roles,shell,go,s,pubNav,spNav,adNav,isVisitor:r==='visitor',isInvestor:r==='investor',
+   screenCode:codes[S.screen]||pg.code||'',login:()=>this.setState({role:'investor',screen:'port'}),
+   feat:decorate(byId.p1),openProps:PR.filter(p=>p.isOpen).map(decorate),howSteps,
+   list:list.map(decorate),listCount:list.length,typeChips,sortChips,
+   P,SPN,tabs,tab:{[S.tab]:true},tabSponsor:()=>this.setState({tab:'sponsor'}),docs,proof,fees,ackDoc:()=>this.toast('Opens the PDF (G12 acknowledgement recorded)'),
+   buyClick,buyLabel,
+   onbSteps,onbCur,onbNext,onbBack,onbBackOp:S.onb===0?.4:1,
+   appPage,pg,holdings,
+   qty:S.qty,qtyInc:()=>this.setState({qty:Math.min(500,S.qty+1)}),qtyDec:()=>this.setState({qty:Math.max(1,S.qty-1)}),
+   qtyPresets:[5,10,25,50].map(n=>({l:n+' tokens',click:()=>this.setState({qty:n})})),
+   buySteps,bs,buyGates,orderTimeline,orderLines,orderTotal:$(sub+fee),buyNext,buyBack,
+   buyNextLabel:['Review order','Confirm and pay','View activity'][S.bstep],buyBackLabel:S.bstep===1?'Back':'Back to property',buyNextOp:S.bstep===1&&!S.ack?.45:1,
+   toggleAck:()=>this.setState({ack:!S.ack}),ackBg:S.ack?'#1F5E4B':'#fff',ackBd:S.ack?'#1F5E4B':'#E3DED4',ackMark:S.ack?'✓':'',
+   withdraw:()=>this.toast('Withdrawal of A$1,000.00 requested · arrives in minutes'),
+   sellH,band:{lo:$(P.val*.85),hi:$(P.val*1.15)},placeSell:()=>this.toast('Resale board opens in 2027 · order saved as draft'),
+   sellChecks:[chk('Lock-in period (G08)','No lock-in on this trust','Clear','green'),chk('Trading halt (G10)','No meeting in progress','Open','green'),chk('Price band (G09)','±15% of latest valuation','Set','green'),chk('Board status','Opens with retail launch','2027','brick')],
+   distChain,distCanApprove:!S.distOk,approveDist:()=>{this.setState({distOk:true});this.toast('Sent to RealX for approval');},
+   lSteps,lCur,lBack:()=>S.lstep>0&&this.setState({lstep:S.lstep-1}),lNext:()=>{if(S.lstep<3)this.setState({lstep:S.lstep+1});else{this.go('spDash',{lstep:0});this.toast('Listing submitted to RealX for review');}},
+   apList,ap:ap||{},apHas:!!ap,apEmpty:!ap,apApprove:apAct('approved · sent to signing'),apReject:apAct('rejected · maker notified'),
+   tokenOps,kycChecks,kycOpen:!S.kycDone,kycClosed:!!S.kycDone,kycDone:S.kycDone,kycClear:kycAct('cleared and verified'),kycEsc:kycAct('escalated to MLRO'),kycRej:kycAct('rejected'),
+   hasToast:!!S.toast,toast:S.toast
+  };
+ }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "The row-level security model for platform-level investors, partners and cross-tenant readers is not defined and, as written, mandates a leak. Section 4 says investor sessions see 'their own rows plus rows of tenants listed in tenant_consent', which means every row of a consented sponsor tenant (other investors' orders, register entries, distribution lines). A11 resolves every investor and partner to the PLATFORM tenant, and A16 puts investor ledger accounts in the platform tenant, so a plain tenant_id policy would let investor X read investor Y's investor, kyc_case, tax_profile, wallet and ledger rows. It is also not stated what tenant_id an investor-owned row in a sponsor vehicle carries, or how a sponsor reads its own holders' names (SPN-08). The two-tenant test seeds only sponsor tenants A and B, so it cannot catch this. The inventory's 'RLS class' column is referenced but the classes are never defined.",
+   "fix": "Add an 'RLS classes' table with one predicate per class and the class of every table: (1) tenant-owned; (2) investor-owned, which spans tenants: investor_id = app.investor_id, plus the sponsor tenant of the row's vehicle; (3) investor master data: own investor_id, plus sponsor read only where tenant_consent(investor, sponsor) is active, through a masked view; (4) partner-scoped: vehicle_id = ANY(app.vehicle_scope), with a named assignment table; (5) platform-only; (6) public reference; (7) need-to-know. Delete the 'rows of tenants listed in tenant_consent' wording. Extend the generated suite with two investors in the platform tenant and two in each sponsor vehicle, and assert zero rows of investor Y are visible to investor X in every class-2 and class-3 table, zero investor master rows for a sponsor without consent, and nothing outside vehicle_scope for a partner."
+  },
+  {
+   "severity": "high",
+   "issue": "Table ownership collides with the downstream specs, and each side defines different shapes. A04 creates register_entry, order, rule_pack, compliance_rule, gate_evaluation, threshold_monitor, halt, custody_account and custody_op in core migrations. But A18 defines `register_entries` 'in the packages/db schema slice owned by this node' with different bitemporal columns and lots[] as an array (A04 says lots are never JSON). A37 defines `orders` in 'the packages/db slice this node owns'. A19 declares rule_packs, compliance_rules, gate_evaluations (partitioned by month), threshold_monitors and halts through the registry. A15 declares custody_accounts and adds columns to custody_ops from its own migrations, though the registry only adds tables. Plural names mean no migration clash is raised: two legal-register tables could coexist and a wrong build would pass. The pass-criterion walk checks only for missing tables, never for duplicates.",
+   "fix": "Add a 'Table ownership map' listing every table once with its owner (A04 core, with the domain node that shapes its columns, or a module node through the registry). Take A18's, A37's, A16's, A19's and A14/A15's column sets into the core tables now, reconciling A18's bitemporal columns and A19's partitioning. Make registerModuleSchema refuse a table whose name, or its singular/plural variant, exists in core, and refuse ALTERs to core tables. Add the pass criterion that every table in every node spec has exactly one owner and a singular name. Flag A15, A18, A19 and A37 for a matching edit."
+  },
+  {
+   "severity": "high",
+   "issue": "The audit_event contract with A10 is inconsistent, and A10's write path fails under this node's RLS. (a) A04 says A10 adds anchors and exports through the registry; A10 says it adds no migration and that audit_anchor and audit_export are A04's, so neither node creates them. (b) The columns do not match: A04 has object_type/object_id where A10 uses object_ref; gate_evaluation_id is missing; the result enum (ok|referred|alert|refused) is not pinned; A04 stores actor_label and object_label, which A10 forbids and which would put PII in an immutable table that can never be erased. (c) A10's one live chain reads the head with ORDER BY seq DESC LIMIT 1, but per-tenant forced RLS hides another tenant's head, so cross-tenant writes fork or fail UNIQUE(prev_event_sha256). (d) prev_event_sha256 is not NOT NULL, so multiple NULL-predecessor rows (a genesis fork) are allowed.",
+   "fix": "Define audit_anchor (insert-only) and audit_export with A10's columns. Use object_ref, add gate_evaluation_id, make result a pgEnum, and drop the label columns. Make prev_event_sha256 NOT NULL with CHECK length 64. Add a partition column and an audit_chain_head table maintained by an AFTER INSERT trigger and read only through a SECURITY DEFINER audit_next_link(partition) that takes the advisory lock and bypasses RLS. Add a test of 1,000 alternating two-tenant writes that leaves one linear chain."
+  },
+  {
+   "severity": "high",
+   "issue": "Missing context fails closed, and withTenant/withPlatform are the only sanctioned way to set it, but several required reads happen before any context exists or legitimately across tenants, and the spec gives no path for them: A12's agentAuth reads api_token by lookup before setting context; A11 reads session, passkey and account at login; webhook and bank callbacks resolve the tenant from the payload; worker SVCA jobs (outbox relay, recon, alert sweeps) read across tenants, yet platform_access is 'true only for RealX staff sessions'. Builders will call withPlatform for logins or bypass the client, and the A04 tests catch neither.",
+   "fix": "Specify narrow SECURITY DEFINER functions, EXECUTE-granted to realx_app only: auth_lookup_token(lookup) returning only the token id, secret_hash, state, principal, tenant, environment and sandbox_of; auth_lookup_session(hash); auth_lookup_passkey(credential_id). Add withSystem(svcaCtx, fn) for named service_account principals, audited. State that platform_access is granted to staff and to listed SVCA principals only. Test that each function returns only its columns and that a direct SELECT with no context still returns zero rows."
+  },
+  {
+   "severity": "high",
+   "issue": "The D04 agent-access tables contradict the frozen A12 spec, and each node leaves the missing tables to the other. A12 uses api_token.status with a 'pending' value, a limits column, agent_mandate.signing_key, a mandate_usage table (UNIQUE(mandate_id, day)) and a feature_flag row agents.traffic as the kill switch; it says it creates no tables and requests agent_confirmation through A04.1. A04 has a state column with pending_cosign and pending_owner_approval, no limits column, and says A12 registers mandate_signing_key, agent_confirmation, agent_counter, agent_rate_bucket and agent_switch itself. A12's interim two-step stores the approver's assertion id on the token, but there is no column for it. created_with_assertion_id is nullable, so the database accepts a token created without the non-delegable passkey step-up.",
+   "fix": "Make A04's agent-access list the single source, using A12's names: api_token.status with the A03 sub-states, limits or explicit cap columns, approved_by_principal_id, approved_with_assertion_id, and created_with_assertion_id NOT NULL. Give agent_mandate signing_key_public, session_key_policy and assertion_id NOT NULL. Define agent_confirmation and mandate_usage in core (one name). State that the platform switch is the feature_flag row and that A101 adds the tenant and user tiers. Add a trigger refusing in-place widening of api_token.scopes or agent_mandate (a widening inserts a new version with a new assertion), and a CHECK that agent_principal's owner is a HUMAN or PARTNER principal."
+  },
+  {
+   "severity": "high",
+   "issue": "The insert-only and no-hard-delete rules contradict columns and jobs other specs rely on. bank_transaction is insert-only but has match_state, which A17 and A20 update. register_version is insert-only but has a certification state. Insert-only tables still carry updated_* and deleted_at. The trigger refusing hard DELETE for every role blocks A09's worker sweep of expired idempotency_key rows and any cleanup of processed_event and rate buckets.",
+   "fix": "For each INSERT_ONLY_TABLES member, move mutable state into a companion table or add its columns to a column-restricted update trigger (like outbox_event.published_at), and list the allowed columns in the constant. Exempt insert-only tables from updated_* and deleted_at. Add a RUNTIME_PURGEABLE list that realx_worker may hard-DELETE when expires_at < now(), and test both the allowed and the refused deletes."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec claims the database half of G13 and G22, but no database constraint stops an AGNT or SVCA principal from being a checker, approver or custody signer, or makes segregation of duties count an agent as its human. approval_decision, custody signatures and break-glass activations accept any principal, which contradicts the node's own 'enforced by the schema, not by discipline' rule for the most important D04 rule.",
+   "fix": "Add constraint triggers on approval_decision, on custody signature rows and on break-glass activations that refuse a decider or signer whose kind is not HUMAN or PARTNER, any row with on_behalf_of_id or token_id set, and a decider equal to the maker or to the maker's owner_principal_id when the maker is an agent. Add direct-SQL challenges for each."
+  },
+  {
+   "severity": "medium",
+   "issue": "The runtime tables are defined twice and named inconsistently with A09. processed_event, system_clock and job_schedule_fire are in A04's runtime.ts, and A09 also declares them through the registry in src/core/schema.ts. A09 calls the outbox `outbox` where A04 has `outbox_event`. The registry's discovery path (services/api/src/modules/<module>/migrations) does not cover A09's src/core. A04 says withTx calls withTenant, while A09 says withTx runs SET LOCAL itself.",
+   "fix": "Give each runtime table one owner and flag the other spec. Use one outbox name and A09's column list. Define the registry discovery roots explicitly. Require withTx to call withTenant/withSystem, with a lint rule forbidding set_config/SET outside packages/db/src/client."
+  },
+  {
+   "severity": "medium",
+   "issue": "oracle: no does not match the content. This node carries money and holdings invariants that oracle nodes build on and do not re-implement: the commit-time ledger balance trigger (A16 'builds on this'), custody_op.approval_id UNIQUE NOT NULL ('one approval id binds both') and the legal register's as-of. The spec asks for hidden tests before the build, but the Gauntlet loop section has no Oracle step, so an orchestrator driven by the flag skips them.",
+   "fix": "Set oracle: yes in the frontmatter and in final-graph.json and app-graph.json, use the standard Oracle rule wording with this node's scope, and add an explicit 'Oracle (Fable 5.1, before the build)' step with oracleVersion and hiddenCasesHash recorded in A04.json."
+  },
+  {
+   "severity": "medium",
+   "issue": "Two constraints cannot be built or tested as written. (1) 'A CHECK on register_entry refuses a vehicle_id whose offering is not past finalising': a CHECK cannot read another table. It also wrongly blocks transfers, recoveries and adjustments while a follow-on offering is open, and 'past finalising' is not a pinned SM-04 state. (2) The G13 challenge refuses 'a feature_flag on with no licence_bound_to', but A12's agents.traffic kill switch and the phase flags default to on without a licence.",
+   "fix": "(1) Use a constraint trigger on provenance: an issue-type entry linked to an allocation needs that offering in a named A03 state (for example allotted), and other entry types are not affected; test it with a second offering open on a vehicle that already has holders. (2) Add feature_flag.requires_licence and CHECK (NOT (state='on' AND requires_licence AND licence_bound_to IS NULL)), and reword the challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "Per-tenant crypto isolation and the insert-only guarantee are weaker than claimed. tenant_key is exempt from RLS, so any realx_app session can read every tenant's wrapped DEK and have kms unwrap it. realx_migrator owns the tables, so any core or module migration can ALTER TABLE ... DISABLE or DROP TRIGGER on audit_event, ledger_entry or register_entry, and no check looks for this.",
+   "fix": "Put tenant_key under RLS or behind a SECURITY DEFINER kms_get_wrapped_key that checks the context, and test that tenant A cannot read B's key row. Make a NOLOGIN realx_owner own the tables. Make db:check fail on DISABLE TRIGGER, DROP TRIGGER, session_replication_role or OWNER changes on guarded tables. Add a verify test that pg_trigger.tgenabled = 'O' for every guard trigger."
+  },
+  {
+   "severity": "medium",
+   "issue": "The owned paths do not cover files the spec requires: src/index.ts (the export lists), the module-schema registry, the db:check and db:inventory scripts, the generated test suites, and app/docs/schema/inventory.md, which no node in final-graph.json owns.",
+   "fix": "Add to owned_paths in the spec and the graph: packages\\db\\src\\ (root files), packages\\db\\src\\registry\\, packages\\db\\scripts\\, packages\\db\\test\\ and <workspace>\\app\\docs\\schema\\. Also state how A06 adds its db:seed script to package.json."
+  },
+  {
+   "severity": "low",
+   "issue": "The mask() criterion cites 'TFN ••• ••• 471', which is not in RealX App.dc.html. The prototype shows 'TFN on file' and 'TFN provided', BSB '062-000' unmasked, and '••••4471' and 'CBA ••4471'.",
+   "fix": "List the exact snapshot strings from the prototype, and state the TFN mask format as a spec decision."
+  },
+  {
+   "severity": "low",
+   "issue": "SET LOCAL cannot take bind parameters, so a builder is likely to concatenate token- or session-derived ids into SQL. The hard-delete trigger names a retention role that A102 adds later, while the tests require exactly four roles.",
+   "fix": "Specify select set_config('app.x', $1, true) with values validated as A02 ids first. Create realx_retention now as NOLOGIN with no grants, and let A102 only add grants."
+  },
+  {
+   "severity": "low",
+   "issue": "The estimate of 8-12 agent-hours is light for about 115 tables, the RLS classes, the roles, the triggers, the registry, the checksummed migration runner, the PII codecs and seven generated suites plus 1,000-case hidden suites, more so once the fixes above are added.",
+   "fix": "Raise the estimate to 12-18, or split into A04a (schema, conventions, migrations, registry, inventory) and A04b (roles, RLS classes, triggers, auth functions, PII codecs), with A04b depending on A04a."
+  }
+ ]
+}

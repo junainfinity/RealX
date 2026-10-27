@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Section 5 leaves out many product-map maker-checker actions (data_admin.py). Downstream console nodes (A70, A71, A69) say they build only what HG-REVIEW has seen, so a missing frame means a missing action. ADM-05 draws no actions at all, but the product map has 4: IC approval, title verification, flag distressed or legal hold, and sale completion; these are J12 steps and a J08 step. ADM-08 is missing 'Finalise and mint' (CAPM to CFO + CCO) and 'Revert and refund' (CAPM to CFO, J05). ADM-09 is missing Suspend account (SGL+R), Change residency and Record death or estate. ADM-12 is missing Deliver tokens. ADM-13 is missing Change signer policy (SECO to the 3-of-5 quorum). ADM-16 is missing Publish pack, lock-up dates, investor override, the pre-trade block, the FIRB matrix and the decision log. ADM-19 is missing Lock period, zero or reduced distribution, and exit waterfall. ADM-20 is missing withholding rule, remit and CRS/FATCA. ADM-21 is missing venue mode, list instrument and surveillance case. ADM-22 is missing reserve top-up and court order. ADM-23 is missing certify and execute. ADM-24 is missing legal hold and void envelope. ADM-26 is missing publish KPIs and metric definition. ADM-27 is missing convert ticket, redress and AFCA escalation. ADM-29 says 'no actions', but the product map has Onboard partner, Set revenue share and Suspend sponsor (SGL+R). ADM-32 is missing API keys, webhooks, 'Enable an agent write tool' (SECO to CCO) and the RPC switch. ADM-33 is missing Create tenant (J11 step 4). ADM-34 is missing Change fee schedule. ADM-02 is missing Bulk acknowledge (Sev3/4 only), Create incident and MTTA/MTTR.",
+   "fix": "In section 5, add a per-screen action table generated verbatim from data_admin.py actions (label, maker, checker, gates, on-chain flag, policy code from A03/A14). Require each action to be drawn with its button, policy pill, modal, blocked state and not-eligible state. Pass criteria: 100 percent of product-map actions are drawn, with no DF escape for them."
+  },
+  {
+   "severity": "high",
+   "issue": "Several drawn maker-checker rows contradict the product map, and the manifest test compares only delegability, so a wrong maker or checker passes. ADM-24: Publish is 'CCO', but the product map has LEGL to CCO. ADM-28: the maker is MKTG, but the product map has IRCM publishing with CCO (+ LEGL). ADM-27: Acknowledge and Resolve are CMPH alone, but the final response needs a CCO checker and redress needs CCO (+ CFO). ADM-06: the checker is the CFO only, but the product map has a committee of CFO + an independent member. ADM-20: there is no checker, but the product map has TAXO to CFO. ADM-19: the maker is Priya N. (TRSY) while the chain and the product map make FINA the maker. ADM-35: the staff-token checker is SECO (A12's choice) but the product map says line manager, and this is not recorded as a DF finding.",
+   "fix": "Align each row with the product map or with A14's seeded policy rows, and record every intended divergence as a DF finding. Extend the manifest test to compare each action's maker role, checker roles and policy code with A03/A14 data, not only its delegability."
+  },
+  {
+   "severity": "high",
+   "issue": "The persona bar (CCO, TRSY, compliance, REGO, CAPM, SECO, MLRO, CFO, TOKO, KYCA, SUPP and one AGNT) cannot render the required states. These need PART (ADM-03 not-eligible), VALO (ADM-06), LEGL (ADM-15, ADM-23), FINA (ADM-12, ADM-19), SUPER (SOD_HARD_CONFLICT, ADM-34), ENGO, TAXO, CMPH, MKTG/IRCM, MKTO, ASTM, PROP, INVM, CEO, and partner TP-* personas for ADM-35. The only agent is 'agent of Priya N.' (TRSY), and items are hidden rather than greyed, so the check 'zero approval buttons on all 31 screens' passes trivially on every screen TRSY cannot see, and Prepare controls are never exercised.",
+   "fix": "Add a persona for every maker or checker role named in section 5 and at least four agent personas (agents of SECO, CCO, CFO and CAPM or LEGL). Change the AGNT challenge so it runs for each agent persona over the screens its human can open. It must assert a positive count of 'Prepare' controls ending in 'Sent to <human> to confirm' and zero approval-class controls, and it must list the screens covered."
+  },
+  {
+   "severity": "high",
+   "issue": "Dependencies are missing. Graph deps are only A05 and A00, but the spec freezes or tests against A50's blocks.md (TextArea, ThresholdMeter, the secret card, and 'shared' MandateTable), A03's cells, delegable.ts and state vocabulary, A12's refusal and status vocabulary, A101's holds and anomalies, A09's operationId convention and openapi.json, A14's policy rows, A21/A08 flag keys, and A48's platform switch. A50 is a sibling in the same milestone (deps A05, A00), so its blocks.md may not exist when A51 starts. A scheduler that follows deps could also start A51 before A03, A12 or A101 exist.",
+   "fix": "Add A03, A09, A12, A14, A21, A48, A101 and A50 to A51's deps in final-graph.json and in the 'Depends on' line. Alternatively, define TextArea, ThresholdMeter and the secret card in A51 or A05, and drop A50."
+  },
+  {
+   "severity": "high",
+   "issue": "ADM-35 (D04, G22) is incomplete against the product map, A101 and A77. There is no Platform agent policy view (allowed scopes per user type, maximum limits and expiry, rate limits) and no 'Change platform agent policy' action (SECO to CCO). The kill-switch 'user type' tier is missing, although both the product map and A101 have it. Releasing a tier (4E, engager not eligible) is not drawn. 'Your tokens' has no Rotate, Change limits, widen (step-up + approval), narrow or per-token Activity. There is no sensitive-action notice log, no partner-user (TP-*) token rows and no SUPP revoke. The KPI strip ('Approvals by agents 0') is missing. The refusal list omits A12's TOKEN_SIGNATORY_REQUIRED, TOKEN_COSIGN_EXPIRED, TOKEN_ILLEGAL_TRANSITION and PHASE_NOT_ENABLED, and A101's AGENT_HELD, while the pass criterion demands 'all A12 refusal codes'.",
+   "fix": "Add a Platform agent policy tab with a SECO to CCO 4E flow. Add the type tier to KillSwitchBanner and draw release as 4E with the engager not eligible. Add Rotate, Change limits (widen with a hardware-key step-up and SECO approval; narrow at once), Activity, the notice log, partner personas and rows, SUPP revoke and the KPI strip. Test refusal coverage against the A12 and A101 OpenAPI error enums, not a hand list."
+  },
+  {
+   "severity": "medium",
+   "issue": "The Hold example contradicts A101 and A09. The spec says 'ADM-35 Hold token -> A101 agent-access.tokens.suspend, agent-maker under SGL+R', and section 5(e) says 'Hold token / Hold user (SGL+R)'. In A101, a token hold is POST /v1/agent-guard/holds: an immediate protective act by SECO or SUPP with a reason, not SGL+R, which an agent may only prepare with a 428 confirmation. The user, tenant and type tier engages are SGL+R and human-only for agents. The example operation names also break A09's '<module>.<verb>.<noun>' rule.",
+   "fix": "Take operation names from openapi.json. Set Hold token to 'immediate, reason required, agent-maker with confirmation' and the user, tenant and type tier engages to 'SGL+R, human-only'. Add a manifest test that every named operationId exists in openapi.json."
+  },
+  {
+   "severity": "medium",
+   "issue": "ADM-34 invents flag keys (retail.track, stablecoin.rails, auto.invest, minors) instead of the A21/A08/A48 keys (offers.wholesale, offers.retail, resale.board, payouts.stablecoin, platform.inflow_freeze, platform.marketplace_suspend, agents.traffic). offers.wholesale is missing, although it is the only flag on at launch. 'Emergency pause' replaces 'marketplace suspend'. A Fable challenge relies on the invented 'retail.track', and A69 already has to work around this.",
+   "fix": "Use the registry keys and their launch states. Draw platform.inflow_freeze and platform.marketplace_suspend as the kill switches, and update the challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "The shared-block contract with A50 conflicts. A50 defines ScopePicker and MandateSummary and no MandateTable, yet A51 says MandateTable is 'reused by ACC-05 and SPN-16 in A50' and makes it a D04 done condition. A51 also invents its own scope picker for ADM-35. Token cells are 'prefix only' in A51 but 'prefix and lookup' in A50 and A12.",
+   "fix": "Name one owner for MandateTable and ScopePicker in both specs. Reuse A50's ScopePicker in the ADM-35 create flow, and show prefix + lookup in token cells."
+  },
+  {
+   "severity": "medium",
+   "issue": "The code home for the nine new blocks is contradictory. A51 says A53 codes them in packages/ui/src/ext/admin/. A05 reserves src/ext/ for A50 and A51. A53 refuses that path and builds in apps/console/src/shell/blocks/. A69 imports them from packages/ui/src/ext/. MandateTable is also needed by apps/web (A60).",
+   "fix": "Assign packages/ui/src/ext/admin/ to A53 in final-graph owned_paths (and narrow A05's exclusion), or have A51 code the blocks there. Make the text in A51, A53 and A69 name one path."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some module ids are wrong compared with the product map: ADM-08 is given M05 (the product map has M04), and ADM-33 is given M02 and M24 (the product map has M27). screens.json feeds A53's nav.ts and the console nodes.",
+   "fix": "Take module ids from data_admin.py, and add a test comparing screens.json modules with data_admin.py."
+  },
+  {
+   "severity": "medium",
+   "issue": "The mock numbers contradict the seed. ADM-08 reads Committed 128 and Funded 121 with committed = A$1,525,760, but the seed has 128 applications and A$1,525,760 raised (6,400 tokens) in escrow, and recon shows it Matched, so funded must equal A$1,525,760 and the Δ A$0.00 strip cannot hold with 7 unfunded orders. ADM-12 shows 'Orders 128, Requested 7,900 tokens' against the same 128 applications for 6,400 tokens at the same as-of date.",
+   "fix": "Set Funded = 128 / 6,400 / A$1,525,760, with unfunded orders only as extra, labelled rows. Make ADM-12's requested total consistent with ADM-08, or label it as a post-close scenario with its own date. Add a challenge that checks these sums across ADM-08, ADM-12 and adRecon."
+  },
+  {
+   "severity": "medium",
+   "issue": "The pass criterion '100 percent ticked ... or every unticked item is a recorded DF finding' lets a build pass with any number of catalogue requirements dropped. Only HG-REVIEW stands between that and console nodes that build only what was reviewed.",
+   "fix": "Allow a DF finding only where placing the item would need a new token or would contradict a drawn prototype screen. Require 100 percent of product-map actions, maker-checker rows, gates and states, and report and cap the other exemptions."
+  },
+  {
+   "severity": "medium",
+   "issue": "ADM-27 draws acknowledgement 'day 5 of 7' as a fact without the counsel label. The catalogue (QA item 8) says complaint deadlines are parameters set with counsel under RG 271, and RG 271 expects acknowledgement within 24 hours (1 business day) and an IDR response within 30 calendar days. The deadlines are missing from HG-LEGAL.",
+   "fix": "Render the deadlines from parameters with a 'counsel to confirm (RG 271)' caption. Add them to HG-LEGAL, and show the AFCA details once the 30-day response deadline passes."
+  },
+  {
+   "severity": "medium",
+   "issue": "The harness loads ../../../design/support.js from outside the app repo. This conflicts with A50, which keeps a verbatim, hash-checked copy and states that 'A51 keeps its own copy'. It also conflicts with the 'npm run verify green from a clean clone' criterion, because a clean clone has no design folder.",
+   "fix": "Copy support.js verbatim into design-ext/admin/runtime/ with its SHA-256 recorded against the original. Run the design-folder SHA check only when the folder is present, and report it as skipped otherwise."
+  },
+  {
+   "severity": "low",
+   "issue": "The ADM-13 paymaster threshold 'runway under 14 days (amber)' is invented; the product map says 'under 3 days: Sev2'. The ADM-32 'Indexer lag above 5 min: Sev3' state is missing.",
+   "fix": "Draw the product-map thresholds or record the change as a DF finding."
+  },
+  {
+   "severity": "low",
+   "issue": "14 wikilinks (A50, A67 to A77, A92, A93) use ':' but the filenames use '-', so they do not resolve.",
+   "fix": "Use the filename form, for example [[A67 - Console- users, roles, access reviews and break-glass (ADM-37)]], as A53 does."
+  }
+ ]
+}

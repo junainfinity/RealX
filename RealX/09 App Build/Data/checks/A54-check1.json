@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Graph dependencies miss interfaces and fixtures the spec uses. A43 (site_copy, public_kpi_set, announcements, fee notices, the watch endpoint) is not an ancestor, which the spec itself admits in its 'Graph note'. The same is true of A06 (seed invariants and the J01 journey against the seed), A23 (Docker stack for the Playwright J01 run), A32 (the expired-certificate fixture and the classification data G04 needs), A42 (the AML-restriction fixture and the tipping-off rule) and A104 (the MCP tool names the parity map records). The generator does not model milestone priority, so the scheduler can start A54 before A43 or A32 has passed. A Specify-time 'confirm A43 passed' check is not a graph edge.",
+   "fix": "Add the edges A43, A06, A23, A32, A42 and A104 -> A54 to the node data and final-graph.json. All are in AM0 to AM3, so milestone order holds. Then delete the Graph note workaround and update Depends on."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec lists upstream read-contract fields as if they exist, but A36's frozen contract does not carry them. The card (GET /v1/public/offerings) has no regime or residency_rule (needed for the eligibility chips on every card), no property kind taxonomy (Type filter), no state (Location filter), no published_at (Newest sort), no supply_units (count line), no yield basis or date (G17 rule), no opens_at and no proof-due flag (the 'Proof due' card chip). The detail (GET /v1/public/offerings/{code}) has no regime, payment_rule, sponsor_retained_stake_bps, state_reason or fee_schedule_doc_id. Interface requests 1 and 2 (the A43 watch endpoint, A33's per-vehicle planned vs actual and bands) are also still unanswered in the A43 and A33 specs. As written, the build either stalls at Specify or parses strings like 'Paddington NSW 2021' locally.",
+   "fix": "Before the build, amend A36's public card and detail schemas with every listed field, and A34 with the public property projection and proof flag per vehicle. Add the watch endpoint to A43 and the per-vehicle track-record lines and bands to A33. In A54, list these as named interface request 4 with the exact field list, so Fable can check each against the OpenAPI hash at Specify."
+  },
+  {
+   "severity": "high",
+   "issue": "The CTA dry run cannot produce 'Buy tokens' as specified. A19's gate-sets.ts evaluates the order kind over G22? G01 G02 G03 G04 G05 G06 G07 G11 G12 G14 G16 G21. On the property page there is no order quantity and no disclosure acknowledgement, because G12 is recorded later on INV-02, so G12 (and possibly G11 and G16) fails for every signed-in investor and the button is always 'blocked'. The spec assumes a narrower set (G01, G04/G05, G06, G07 headroom, G22) but never says who narrows it; if the page filters gates, business rules live in the page. G02 sanctions and PEP failures are also in the set, but only G14 is mapped to the generic line, so a sanctions review could be named to the investor (tipping-off risk).",
+   "fix": "Have A19 own a pre-trade eligibility kind (for example kind = order_eligibility). It evaluates G22 (tokens), G01, G04/G05, G06, G07 headroom, G10 halt and G21, and returns G11, G12 and G16 as deferred or not_applicable. A19 (with A42's tipping-off ACL) also returns an investor-safe reason that already redacts G02 and G14 to the approved generic line. The page renders only A19's ordered first failure and its fix-it link. Add G02-under-review to challenge (c) and to the AML case."
+  },
+  {
+   "severity": "high",
+   "issue": "The SM-03 and SM-04 public-state rules contradict each other and are incomplete. The SM-03 rule says 'States before listed are 404 in public', but in data_states.py `spv_formed --> listed : offer live`, so the property behind an approved or scheduled ('Coming soon') offering is still in spv_formed. The SM-04 rule, however, requires Coming soon to render. The SM-03 states withdrawn and under_sale are unmapped. Precedence between an SM-03 exit state (unavailable CTA) and SM-04 minted (funded_no_resale or sell) is undefined, and the spec takes cta_kind from A36 while also applying SM-03 rules itself.",
+   "fix": "Decide public visibility and cta_kind only from A36's public read, and have A36 fold the SM-03 state into cta_kind with a stated precedence. Replace the SM-03 bullet with a full 20-state table (public or 404, CTA, banners), including spv_formed with an approved offering, withdrawn and under_sale. Make the generated state test in the pass criteria iterate SM-03 x SM-04 pairs, not the two lists separately."
+  },
+  {
+   "severity": "high",
+   "issue": "D04 parity is broken for PUB-03 and PUB-05. The six filters, seven sorts, closest-match relaxation, count line, sponsor proof summary ('Items current ok of total') and retained-stake shortfall are computed only inside the web server (public-core/listing.ts), while A36's API accepts only status, type and sort. An agent calling the API or MCP cannot get 'the same view with the same parameters'; the web URL is not an API. Also, if A36 paginates (a D04 surface requirement), filtering one page gives wrong counts and wrong relaxation results, which the spec never addresses.",
+   "fix": "Move filtering, sorting and relaxation into the A36 endpoint: GET /v1/public/offerings?investment=&type=&state=&status=&eligibility=&sponsor=&sort=&closest=true returns items, n, m and relaxed_filter. Alternatively, put them in a shared packages/domain function that A36 serves. The page then calls that endpoint. Have A33 return the proof summary and stake shortfall. The parity map must then point each filter, sort and summary to that endpoint and its MCP tool, and Fable's 2,000-set reference test runs against the API as well as the page."
+  },
+  {
+   "severity": "medium",
+   "issue": "'Token sessions' on the property page are not defined. The spec and challenges drive web pages 'as a token', but A52's shells use passkey sessions, and accepting API bearer tokens as web page credentials would be a new, unreviewed auth surface. The G22 CTA challenge (token restricted to Bay Road) is therefore either untestable or pushes a security change into A52.",
+   "fix": "Define the agent path as an API call: the same A19 eligibility endpoint called with the token, or a GET /v1/offerings/{code}/cta endpoint. Fable asserts that the page CTA for the person equals the API CTA for the person's token, except for the added G22 line. State explicitly that web pages never accept API tokens."
+  },
+  {
+   "severity": "medium",
+   "issue": "The page does money arithmetic and holds a threshold, contrary to A52's rule 'No money arithmetic in the app' and to its own 'no threshold in this node'. The discount is computed from price and valuation with a +/-0.05 percent cut-off, and Property value = nav_per_unit_cents x supply_units. That product is net assets, not property value: A34's formula subtracts debt, so Bay Road at 25 percent LVR is mislabelled, which is a G17 misleading-claim risk inherited from the prototype. The seed invariant 'A$1,186,000.00' also contradicts the design's 'A$1,186,000' while the spec demands byte-for-byte strings.",
+   "fix": "Consume A36's discount value and tone (A36 already returns discount from A34) and a server-computed net-assets or property-value field from A34. Relabel the fact 'Net assets' or have A34 publish property_value_cents, and log the label as a founder or counsel question. Fix the seed invariant to one agreed format. Keep hidden vector (b) against the API field, not a page function."
+  },
+  {
+   "severity": "medium",
+   "issue": "SM-04 omits A03's documented extension live -> reconfirming -> live | refunding (material change). The 'fourteen states' matrix has no label or CTA for it. The spec's own soft-cap challenge (Ann Street soft_cap_bps changed through a material change) opens a re-confirmation window that the page never shows.",
+   "fix": "Reconcile with A03 and A36: either A36 exposes reconfirming (or a material_change_open flag), or A03 drops the extension. Add the state or flag to the matrix with its label and CTA and a 'Terms changed {date}' banner from approved copy, and include it in hidden matrix (c)."
+  },
+  {
+   "severity": "medium",
+   "issue": "J01 step 4 ('Invest panel explains the checks needed', for a visitor) is not met. A visitor gets only 'Sign up to invest' plus the wholesale note. The named checks appear only for signed-in investors, and the J01 Playwright run is for the visitor.",
+   "fix": "For visitors, render the list of checks an order needs (identity, wholesale status, residency and FIRB for this listing's residency_rule, holder cap) from A19's gate catalogue titles and approved copy. Assert it in J01 step 4."
+  },
+  {
+   "severity": "medium",
+   "issue": "The general-advice warning is missing. The product map's PUB-01 components include 'the general-advice warning'. A52's footer carries only the CAR/AFSL disclosure (no general-advice text), and A54 shows yields, growth and buy buttons on PUB-01, PUB-03 and PUB-04 without it.",
+   "fix": "Render an approved site_copy general-advice warning (the GA-01 key A55 uses) on PUB-01, PUB-03, PUB-04 and PUB-05, or open an A52 loop to put it in the public footer. Add it to the J01 gate-bearing string assertions."
+  },
+  {
+   "severity": "medium",
+   "issue": "The seed and fixtures the spec asserts do not exist in A06. A06 seeds 8 trusts: 3 live, 4 funded, and Marine Parade in compliance_review with no public row. There is no 'approved Coming soon (the second seeded offering)', so the coming-soon line, the FeaturedCard fallback and the visitor and signed-in Notify me paths have no seed row. A06 also says the live offers reconcile as 'matched' (register 0, chain 0), while A54 expects result = not_issued for open offers to render 'Applications {n} (escrow)'. Separately, Harbour & Co's 'Trusts on RealX 3' counts the hidden Marine Parade, an existence leak against the 404 no-leak rule.",
+   "fix": "Add an A06 scenario with an approved or scheduled offering (or approve MPA01 through APR-2290 in a scenario) and use it in the invariants. Pin in A20 and A06 that a live or unclosed offer is not_issued. Have A33 count only publicly visible vehicles, and update the Harbour & Co invariant."
+  },
+  {
+   "severity": "medium",
+   "issue": "A52's intent allow-list is only qualify, watch and buy:<code>. A54 sends visitors to sign-up with intent=follow:<slug>, which A52 will reject.",
+   "fix": "Raise an A52 loop to add follow:<slug> (slug pattern validated), or use intent=watch with a validated return, and state which one in the spec."
+  },
+  {
+   "severity": "low",
+   "issue": "The ownership and interface text disagrees with the graph and upstream specs. A55 owns the separate (public-info) group, not routes 'in the same group'. Sign-in and get-started are A52's (auth) group, not files inside (public). formatAud comes from @realx/ui through src/shell/format.ts, not from packages/domain. The token scopes 'public:read' and 'the notifications cell' are not A03 scope ids (A03 scope ids are matrix action ids such as ACC.token.create).",
+   "fix": "Correct the owned-paths paragraph and the formatter source. Name the exact A03 cells (or request them from A03) for public reads, watch/follow and document open."
+  }
+ ]
+}

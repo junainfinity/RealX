@@ -1,0 +1,80 @@
+{
+ "node": "A88",
+ "check": 2,
+ "reviewer": "Opus 5.5, independent third-party auditor (ultracode)",
+ "date": "2026-09-24",
+ "pass": false,
+ "check1_followup": {
+  "critical_1_unit_model": "fixed: units are now the owners' own run groups, each started from its documented reset, with a journey-to-group map and generated personas kept for the probes only",
+  "high_2_clock_collisions": "fixed: each group has its own clock origin at AS_OF after its reset, and shuffling happens only across resets",
+  "high_3_baseline_break": "fixed: a generated baseline-expected set now holds the GYM01 break, alert, halt and APR-2292, and A81's real drifts are listed",
+  "high_4_money_identity": "partly fixed: the formula is now per bank account and read from the bank sandbox, but it leaves out transfers between the client-money accounts, so it fails on correct behaviour (see the new high finding)"
+ },
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The G05 P1 form contradicts A19. A19 says a retail-regime (au_mis_retail) vehicle in P1 returns `fail G05_PHASE_OFF`, 'the only result reachable in P1'; `not_applicable` is only for wholesale regimes. A88 requires the retail-listing probe's G05 row to be 'exactly not_applicable with fix-it gate.not_applicable_phase'. It also defines G05's ledger form, pass criteria, challenge and hidden fixture (4) around not_applicable on a refused action. A correct build therefore fails REGR_GATE_FORM_MISSING on every run.",
+   "fix": "Section 5 (G05 probe), section 6 (gate-ledger form), Requirements covered, Pass criteria, the phase-gate challenge and hidden fixture (4): G05's P1 form is at least one `fail` with reason `G05_PHASE_OFF` on the refused retail-regime action, beside the G21 fail row, with zero `pass` rows ever. Wholesale actions' `not_applicable` rows do not count. Keep `not_applicable` as the required form only for G09 and G15. Take G05's expected code from A19/A32's registry at Specify."
+  },
+  {
+   "severity": "high",
+   "issue": "The money identity per client-money bank account is incomplete, and a failure is Critical. A17 seeds separate client-money-wallets, offer-escrow and distributions accounts plus realx-operating. Order funding into escrow, refunds from escrow to wallets and distribution payouts from distributions to wallets are transfers between client-money accounts. None of them fits any term (pay-ins, sponsor funding, withdrawals, refunds, escrow releases, fees). Returns to payer (A79 C2 has them; AML third-party deposits and failed payout lines produce them) and bank interest credits (A17 `interest.float`) are also missing. Correct runs of J04, J05, J06 and J15 would raise false Critical escalations, or the builder would tune the formula.",
+   "fix": "Section 7: add the terms '+ Σ transfers in from other client-money accounts − Σ transfers out to other client-money accounts + Σ interest credited − Σ returns to payer'. Classify every statement line of the account into exactly one term by its reference, and fail on an unclassified line (REGR_MONEY_IDENTITY naming the line). Also check A79's C2 total identity across all client-money accounts, where the transfers cancel. Fable's hidden queries recompute both."
+  },
+  {
+   "severity": "high",
+   "issue": "The reset check compares the post-reset state with the baseline-expected set 'exactly'. It also requires the A06 baseline contentHash, the baseline audit chain head, and chain supplies equal to the post-deployment baseline. Many groups' resets load a scenario on top of the baseline: A79-RUN-B (soft-cap-missed), every A80 group (ops:reset includes A06's insurance-lapse delta), the A81 scenario groups (unknown-holder puts tokens on an unregistered wallet, cash-delta, stale-valuation), A79's sod-conflict negative and PROBES-PHASE (p2-preview). Loading a scenario writes audit events and may change chain state, halts and alerts. So REGR_RESET_INCOMPLETE fires on correct resets and blames the reset's owner.",
+   "fix": "Section 3: for each group, the expected post-reset state is the baseline-expected set plus the reset scenario's own `expect` block and hash. Generate this per group at Specify into the manifest as `reset_expected`, with the expected audit head or event count after the scenario load. Compare against that exactly. Section 2 table: keep the `reset` field including the scenario."
+  },
+  {
+   "severity": "high",
+   "issue": "The orphan check in the kill-and-resume run cannot pass on a correct product. For the J04 orphan it moves the clock 'past the offer close' (KST01 closes 14 Oct 2026, three weeks after AS_OF) and runs the jobs, and it allows only three transitions. Moving the clock that far also fires seeded time-based transitions: HAW01's lock-in ends 25 Sep, 14 wholesale certificates expire within 30 days (SM-02), seeded approvals APR-2285 to APR-2292 pass their 72-hour TTL (SM-00), KST01 itself goes live to closed (SM-04), and SLA clocks run. The rule 'any other transition fails the drill' therefore fails it every time.",
+   "fix": "Section 9: apply the allowed-transition list only to the orphan's own objects (the order, the run, the approval and their child rows), identified by the ids recorded in the orphans file. For every other object, require the transitions to equal those of a control: the same clock advance and job run on a stack reset to the same group start without the orphan, recorded once at Specify or run by the harness. Alternatively, advance the clock only to the order's payment deadline and the approval TTL, never past the offer close, and list the seeded transitions expected in that window."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some gates' only owner refusals are UI-side and may write no gate_evaluation fail row. Examples: A79's G12 negative ('Confirm and pay' disabled until acknowledged) and G01 (direct URLs redirect to onboarding). Only G06 got a replacement SDK probe. If the gate-source table finds no server fail row at Specify, the fixed probe list offers no source, and the run fails REGR_GATE_FORM_MISSING forever or the builder improvises.",
+   "fix": "Section 2 (gate-source table) and section 5: at Specify, any of G01-G21 whose required fail row has no owner source that writes a server-side row gets a PROBES-CORE SDK probe through an existing public route. Name G12 at least (an SDK order without the acknowledgement, expecting A35/A19's code) and G01 (an SDK order from a referred persona). Each probe is listed in gate-sources.json."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G22 probe is not feasible as written. (a) It says a 'generated staff persona's token, issued with a passkey step-up on ADM-35'. A77 and A12 require staff tokens to be issued under a hardware-key assertion, and write-family tokens activated by a SECO. A generated staff user would need ADM-37 IAM with maker-checker, which the probe surfaces do not include. (b) It says the in-cap order 'goes on to settle inside the group', but PROBES-CORE never moves the clock. KST01 settles only after its close on 14 Oct or at the hard cap, followed by CFO/CCO release and a custody-quorum mint.",
+   "fix": "(a) Use a seeded staff persona and its seeded token, or one issued on ADM-35 with A11's simulated hardware key and SECO activation, per A77. Say so in section 5. (b) Make the 'G22 pass that led to a settled order' source A79-RUN-A's alex-portfolio-bot KST01 order, which A79 settles, in gate-sources.json. The PROBES-CORE in-cap order then asserts only pass plus an order in awaiting_funds or funded."
+  },
+  {
+   "severity": "medium",
+   "issue": "The non-delegable refusal code is left open: 'AGNT_NOT_ALLOWED or A03's SCOPE_NON_DELEGABLE family'. A12 is normative here. A requiresHuman route returns `403 AGNT_NOT_ALLOWED` with reason code `G22_SCOPE_NON_DELEGABLE`. A03's SCOPE_* codes are issue-time only. A12's verify step `check-agent-refusal-codes` fails any test expecting G22_SCOPE_NON_DELEGABLE as the code of an x-realx-requires-human operation. The never-checker probe likewise returns AGNT_NOT_ALLOWED with reason G22_AGENT_NEVER_CHECKER.",
+   "fix": "Section 5 G22 bullet: expect `403 AGNT_NOT_ALLOWED` with `reason_codes` containing `G22_SCOPE_NON_DELEGABLE` for the bank-account change and token creation. Expect `403 AGNT_NOT_ALLOWED` with `G22_AGENT_NEVER_CHECKER` for the staff approve attempt. Both write the three rows A12 defines. In section 6, count distinct G22 reason codes from `reason_codes`, not from the envelope code."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G08 probe cannot run under the probe rules. Probes 'use generated personas only', but a generated persona holds no locked lots unless it buys and settles, which needs clock movement that PROBES-CORE does not allow. The allowed surfaces (SDK, MCP, UI, sandbox panels, clock) also do not include submitting an on-chain transfer from a passkey smart wallet. So part (b), the indexer's reverted-transfer record, is unreachable.",
+   "fix": "Section 5 G08 bullet: allow the probe to use seeded Alex Morgan's HAW01 lot, locked until 25 Sep 2026, before any clock move in PROBES-CORE. Name the permitted submission path, for example A29's wallet SDK through the bundler sandbox with A11's simulated passkey. List that path in the probes' allowed surfaces and the static scan's allow-list. Also align the recovery bypass evidence with A19: reason code `LOCK_IN_BYPASSED_BY_KIND` on an evaluation set whose action_kind is `recovery`."
+  },
+  {
+   "severity": "medium",
+   "issue": "The read-only database role conflicts with A04. A04 fixes exactly four login roles, one of them `realx_readonly` for exports and reporting, and a test asserts exactly seven roles. A04 also says nothing connects as a superuser. A88's compose-override init script creates a new read-only role, which needs superuser, changes the role set, and misses grants on tables created later by migrations.",
+   "fix": "Sections 1 and 4 and the stack folder: connect as A04's existing `realx_readonly` login and create no role. If it cannot read a table or partition the ledgers need, or RLS hides rows without a tenant context, raise a fix item on A04, as the Specify precondition already says. Fable's 'only SELECT' log check targets realx_readonly sessions from the harness."
+  },
+  {
+   "severity": "medium",
+   "issue": "The boundary that excludes seeded rows is defined only through A10's audit chain head. gate_evaluation, evaluation_set, api_token_activity, ledger and approval rows are not audit events. Under the local fixed clock, rows written after a reset carry evaluated_at = AS_OF, the same as the latest seeded rows. So the gate, agent and state ledgers cannot reliably separate seeded history from the group's own rows.",
+   "fix": "Section 4: right after each passing reset check, record per ledger table the set (or max sequence) of existing primary keys in `.runs/<runId>/groups/<groupId>/baseline-ids.json`. Count only rows not in that set. Make this rule part of Fable's hidden queries."
+  },
+  {
+   "severity": "medium",
+   "issue": "The coverage re-check requires every Later row (P2/P3 journeys J07, J08, J16, J18, SM-09, SM-10 and P2/P3 screens and modules) to have 'one refusal on its route recorded'. No group or probe produces the J08 vote or J18 Auto Invest entry refusals, or refusals for Later screens and modules. The re-check fails, or the builder adds unplanned probes.",
+   "fix": "Section 10: name the source per Later row. Add J08 (vote entry) and J18 (Auto Invest mandate entry) refusals to PROBES-PHASE through existing routes. For Later screens and modules, accept A21/A19's phase-leakage evidence and A100's parity evidence by hash. A Later row with neither is a fix item on its owner."
+  },
+  {
+   "severity": "low",
+   "issue": "Forcing trace 'on' for every owner test overrides A79's failure-only, PII-masked traces. It also captures copy-once token secrets from token-create responses (A82 step 1) in the traces. The token-pattern scan covers logs, evidence and reports but not `.runs\\` traces or checkpoint renders.",
+   "fix": "Keep the owners' masking hooks active under the override. Add the `.runs\\` traces and checkpoint outputs to the token-pattern scan, allowing matches only for sandbox tokens revoked before run end, or redact secrets in the post-processor. State that traces follow the same retention rule as the extracts."
+  },
+  {
+   "severity": "low",
+   "issue": "The end-of-group sequence is not fixed: the undeclared-effect snapshot (s3), the A20 full reconciliation (s7), the invariants (s4) and the extract. The harness-triggered reconciliation writes recon runs, audit events and possibly alerts, and no principal is named for the call ('as REGO would').",
+   "fix": "Fix the order: snapshot, then the reconciliation through a named seeded staff credential (for example REGO's seeded read and recon token), then invariants, then extract. Declare the reconciliation's own rows as a harness effect that the ledgers exclude, and state that re-detecting GYM01 must not open a second break."
+  }
+ ]
+}

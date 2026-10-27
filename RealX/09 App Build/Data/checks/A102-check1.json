@@ -1,0 +1,95 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The restore target is not isolated from shared external systems. The destination project shares the running Hardhat chain (and, in check 8, 'the sandbox bank') with the source, yet the spec only holds back API writes. The restored worker (outbox dispatcher, pending custody ops, scheduled distributions, A46 webhook deliveries, A20 break handling) would start on restored state and could submit chain transactions, bank-sandbox instructions or webhooks a second time. restore_hold is modelled as an A48 manual Halt with scope 'all'. A48 manual halts need an SGL+R approval_id and a human opened_by, and they are mirrored to the on-chain HaltModule. The destination could therefore halt the source's tokens on the shared chain, and an A20 break in the destination could raise halts that reach the chain.",
+   "fix": "Add a RESTORE_MODE that the restore script sets on the destination. In it the worker scheduler, outbox dispatch, webhook delivery, bank-rail adapter writes and every chain-writing adapter (A27 send, A28, A29 bundler, A48 HaltModule mirror) are disabled at boot, and the chain adapter is read-only. Implement restore_hold as this stack-level flag rather than an A48 halt, so no approval is needed and nothing is mirrored on-chain. Run check 8 as an A20 dry run with no effects, and name which bank sandbox it reads: the source's live sandbox, read-only. Add a challenge: during a full drill, the destination sends zero chain transactions, zero bank-sandbox writes and zero webhook deliveries (counted at the Hardhat node, the bank sandbox and the webhook sink)."
+  },
+  {
+   "severity": "high",
+   "issue": "action_after is never set per record class, and the realx_retention role gets DELETE on every table listed in retention_policy. Only audit_event is named 'keep'. The seven-year list includes ledger journals (A16), register_entry and register_version (A18, the s169 legal record, which the spec itself says RealX must not touch), approval decisions, custody_op and distribution lines. Several of these are A04 INSERT_ONLY_TABLES, and the A04.n migration is only asked for retention_guard(), not a change to the insert-only triggers. A builder that sets these classes to 'purge' would delete ledger rows (changing A16 balances and the zero invariant) and register rows. The 10,000-triple property test would pass, because it only compares the sweep with isDeletable. Purging documents also never mentions deleting the A08 storage objects.",
+   "fix": "Add a seeded table of action_after for every class. Mark 'keep' (report past-window counts only, like audit_event) for audit_event, audit_anchor, ledger journals and entries, bank_transaction, register_entry, register_version, register_instruction, approval_request and approval_decision, custody_op and distribution runs and lines, until counsel supplies a checkpoint design. Allow 'purge' only for sessions, idempotency keys, processed events, sandbox partitions and similar operational classes. Document purge must go through A35's isRetained and A08's deleteObject, with object deletion audited. Grant realx_retention DELETE only on 'purge' classes, and add a hidden test that the sweep never targets an INSERT_ONLY_TABLES member or any table read by A16 totals or A18 register evidence. Also add a property: after a sweep at clock+10y, A16 totals and every A18 register hash are unchanged."
+  },
+  {
+   "severity": "high",
+   "issue": "The erasure effector cannot run as written. It is 'one database transaction on the realx_retention pool' whose role has no INSERT or UPDATE outside erasure_seal and the pseudonymisation columns. Inside that transaction it must (e) revoke tokens, mandates, sessions, passkeys and webhooks, which are UPDATEs to A12, A11, A46 and A43 tables, (d) update free-text columns, and (i) insert audit and outbox rows. A29's session-key revocation also submits an on-chain transaction through the bundler, which cannot sit inside a database transaction. The function the spec calls, A12 'revokeAllFor(principal, reason)', does not exist in A12's spec: A12 only revokes through its own event subscriptions such as account closure and investor.offboarded. The builder would have to invent grants or edit A12, which it does not own.",
+   "fix": "Split execution into ordered, idempotent steps under the approved request. Step 1: revoke through each owner's existing public interface on the normal worker pool. For A12, rely on the investor.offboarded revocation and assert zero active tokens and mandates, or request an exported revokeAllFor from A12 as a follow-up loop A12.n. For A29, use revokeSessionKey and wait for on-chain confirmation, which is required before 'completed'. Step 2: one retention-pool transaction for the seal, the pseudonymisation walk and the ledger line. List the exact grants for realx_retention in the A04.n request: UPDATE on the PII_PATHS columns, INSERT on erasure_seal, and audit writes through A10's record function (SECURITY DEFINER or an explicit grant). Re-check the preconditions in step 2. Add a crash-between-steps test."
+  },
+  {
+   "severity": "high",
+   "issue": "Free-text redaction breaks retention and immutability rules set by other nodes. Step (d) redacts 'ticket messages, case notes, reason fields'. A44 defines ticket_message as insert-only, and A42 defines aml_case_note as insert-only, encrypted and need-to-know. AML case notes are AML/CTF records that must be kept seven years (G14), and step (f) itself says AML rows stay unchanged. The redaction would either be refused by the owners' triggers or quietly change AML and complaint records.",
+   "fix": "Exclude all A42 AML tables (alerts, cases, notes, RFIs, restrictions, filings), complaint and complaint_event rows, and approval reason fields from the redaction walk. For insert-only free-text tables that are not statutory records (ticket_message bodies), move the original body under the erasure seal and replace it through an owner-approved function: request it from A44 as follow-up loop A44.n rather than editing directly. Put the redaction table list in the frozen spec as data. Add a test that A42's AML rows are byte-identical before and after erasure."
+  },
+  {
+   "severity": "high",
+   "issue": "Replaying the erasure ledger after restoring an older set destroys the statutory record and can leak before replay. When a set taken before the erasure is restored, the restored database has the person's full data but no erasure_seal row, because the seal was written after the backup. The spec says only that the replay 'pseudonymises the person again'. It does not say the replay rebuilds the seal from the restored rows. As written, replay would overwrite the KYC, AML and tax subset that must be kept seven years, and the seal id in the ledger would point at nothing. Replay is also required only 'before the API accepts any write', while the challenge says 'before the API accepts a request', so reads (search) could expose the person during the gap.",
+   "fix": "Make replay re-run the full effector idempotently. If the ledger's seal id is missing, rebuild the seal from the restored rows with the same seal id and pseudonym, and check it against a plaintext-subset sha256 stored in the ledger line (so the ledger holds a hash, never personal data). If the seal exists, skip. Require that the API and worker containers do not start, or bind no port, until replay and check 9 pass. Add a challenge: an older set is restored, then the seal is unsealed through 6E, and its content equals the pre-erasure subset hash."
+  },
+  {
+   "severity": "high",
+   "issue": "The privilege boundary for running restores and drills is undefined, and agents can reach it. POST /v1/ops/restore-drills is delegable to ENGO and SECO agents, and the monthly backup.drill job starts, stops and restores whole compose projects. That needs Docker Engine control from the API or worker, which amounts to host-level privilege. The spec never names the container that holds the Docker socket. The challenge shows the caller supplying the target project, and backup:restore 'refuses a non-interactive terminal' with RESTORE_HUMAN_REQUIRED, yet the drill job and route run it non-interactively. The builder is likely to mount docker.sock into the worker or the API.",
+   "fix": "State that only the backup-profile runner service holds the Docker socket, and that it is never on the api or worker services (add a verify check over the compose files). The route and the job only insert a drill request row. The runner picks it up and runs a fixed drill command whose only input is a set id. The target project name and ports are generated by the runner, never taken from the caller. Define an explicit drill mode for restore.ts that only the runner can invoke (a runner-local secret or file), separate from the interactive human restore. Add an A83 challenge that api and worker have no Docker access, and that a crafted request cannot target the running project."
+  },
+  {
+   "severity": "high",
+   "issue": "The RPO/RTO criterion can be passed without working point-in-time recovery. The pass criterion accepts 'or the measured values and the gap recorded for the founder'. Check 1 for PITR only needs the reached head to 'appear in the source chain', which a base-backup-only restore also satisfies. A build with WAL archiving broken or missing would restore to the base backup, record a large RPO and still pass.",
+   "fix": "Make the structural RPO bound binding and independent of the founder target: for the design-seed drills, RPO must be at most archive_timeout plus 60 s. The drill must plant marker transactions after the set's stop LSN and at least two archive_timeout intervals before the loss, and assert that they are present after PITR. Assert that the restored head seq is greater than the manifest's evidence seq. Only the load-profile RTO may be recorded as a gap for the founder."
+  },
+  {
+   "severity": "high",
+   "issue": "A pass criterion depends on a node that is not upstream. 'A100's harness confirms each status against the running API' is required, but A100 (AM8) is neither a dependency nor a descendant of A102: both only feed A88. A100's matrix is built from UI screen actions, so without an edge it will not contain these mostly UI-less routes. The criterion cannot be measured when A102's gate runs.",
+   "fix": "Either add the edge A102 -> A100, so A100 depends on A102 and must include A102's agent-status table, or rewrite the criterion so A102's own suite walks every route with a session and a token of each role and asserts delegable, maker-only, non-delegable or no-route. Then record in A100's spec that it imports A102's table. Update final-graph.json accordingly."
+  },
+  {
+   "severity": "medium",
+   "issue": "Dependencies are missing for interfaces the spec uses. A99's sandbox-partition purge (sandbox_of) in erasure step (e), A98's TP-AUD and TP-OBS engagement scoping for exports, A101's sensitive-action notice, and A85's runbook format for docs/backup are all used, but A98, A99, A101 and A85 are not ancestors of A102 in final-graph.json.",
+   "fix": "Add A98, A99 and A101 to A102's deps. All three are AM3, and none of them depends on A102, so no cycle. Either add A85 (AM8; it depends on A79 and A80, so no cycle) or drop the 'A85 runbook format' reference and define the runbook format locally."
+  },
+  {
+   "severity": "medium",
+   "issue": "Upstream data this node needs is never handed off. The five approval action codes and their policy rows (retention.policy.change, privacy.erasure.approve, privacy.erasure.refuse, retention.export.pii, privacy.seal.unseal) and the A13 SLA clock privacy_request_30d exist in no other node spec. The Specify step lists them as if committed, but the hand-off list only sends M25 and M26 scope cells to A03 and alert types to A13.",
+   "fix": "Add them to the hand-off list: the five action codes with policy 4E or 6E, maker and checker roles, and SoD rows as an A03 data diff (and A14 policy seed rows); privacy_request_30d (owner LEGL, period set with counsel) as A13 data. Add a seed-equality test between A102's builders and those rows, as A48 does."
+  },
+  {
+   "severity": "medium",
+   "issue": "Three A48 interfaces are used inconsistently. (1) backup.drill is to 'raise A48's runbook.drill_due', but A48 computes that alert only from its R1-R9 runbook rows. (2) For J21, the sweep 'treats every record family listed in A48's trust_retention row as retained until its retention_until', which reads the editable column that A48's challenge says must not be trusted (the audit-anchored value through retentionHold() is the source). (3) A48's challenge expects an erasure for an investor in a wound-down vehicle to be 'refused and logged', while A102 moves it to 'deferred', shown to the investor as in_progress.",
+   "fix": "Raise a separate A13 alert backup.drill_due as data, or request an A48 runbook row for the restore drill as a follow-up loop. State that the sweep and erasure only call retentionHold() and never read trust_retention columns, and add the column-tamper case to the retention challenge. Settle the A48 conflict at Specify: either A48's challenge expects deferred plus a delete_refused audit, or A102 refuses; record which one in both specs."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag disagrees with the gauntlet the spec requires. Frontmatter and graph say oracle: no, but the spec requires Fable to write hidden tests before the build: comparator, tamper set, retention oracle, erasure probes and an agent-misuse matrix. The node also moves authority: erasure, unsealing and PII exports under 4E and 6E. An orchestrator that schedules the Oracle step from the flag would skip it, and the hidden tests would never exist before Build.",
+   "fix": "Set oracle: yes in final-graph.json and in the frontmatter (authority moves here, per the brief's 'oracles where money or authority is involved'). Keep the oracle paragraph with the standard wording."
+  },
+  {
+   "severity": "medium",
+   "issue": "Tipping-off parity is only defined for the first 30 days. An AML-deferred request stays in_progress indefinitely, while an ordinary request completes within the response period, so after privacy_request_30d the two become distinguishable. The spec does not say what the investor sees when the period ends with a deferral, or what the SLA breach does. 'p95 latency indistinguishable' has no numeric threshold, so the check cannot be measured.",
+   "fix": "Define behaviour at the end of the period for any request not yet completed, whatever the reason: the same generic notice and status (for example could_not_complete, 'we are required to keep some records; we will write to you'), with the text a counsel row. Extend the parity challenge past the period, to 90 days of clock time. Give the latency test a threshold, for example p95 difference no more than 20 ms over at least 200 samples, with work padded to a constant."
+  },
+  {
+   "severity": "medium",
+   "issue": "Who can be erased, and how they reach the route, is undefined for non-individual accounts and closed accounts. Joint accounts (one holder asks), SMSF, company and trust accounts (entity data versus natural-person member and beneficial-owner rows) and wholesale or foreign investors are not addressed. The route is /v1/me with a passkey assertion, but nothing says an offboarded investor can still sign in. A30 makes offboarded terminal and A12 revokes on it, yet the challenge has 'two closed investors' making requests.",
+   "fix": "Add a subject-scope table. For individual accounts, all person rows. For joint accounts, only the requester's person rows, and only after the joint account is closed. For entity accounts, only natural-person member and beneficial-owner rows, with entity data kept. State the sign-in rule after offboarding: a passkey sign-in limited to /v1/me/privacy/*, or an assisted identity-checked request that SUPP logs as maker. Add a fixture and a test for each case."
+  },
+  {
+   "severity": "medium",
+   "issue": "The screens that render this node's data are built and gated before it, with no guaranteed rework. ACC-01 (A59, AM5), ADM-09 (A68, AM7), and ADM-26 and ADM-32 (A76, AM7) are required to render this node's data. A76 is not even related to A102 in the graph. The 'contract test the screen nodes reuse unchanged' cannot run on nodes that already passed, and the follow-up loops are only conditional (spec point b).",
+   "fix": "Make the follow-up loops unconditional and put them in the graph: A59.n (the 'close account and delete my data' action and status), A68.n (privacy tab) and A76.n (exports list and backup job rows with RPO/RTO), each depending on A102 and feeding A88. Or state that A87 or A88 runs A102's contract tests against those screens."
+  },
+  {
+   "severity": "low",
+   "issue": "The challenge calls things the spec never defines or names differently. 'Call retention.purge directly' refers to a function the spec never exports: only retention.check and minimiseForExport are exported. A10 requires purges to refuse held or in-window rows with its code audit_hold_active, while A102 uses RETENTION_ACTIVE and retention.delete_refused without mapping the two.",
+   "fix": "Either export a retention.purge(class, ids) entry point that goes through retention.check, or reword the challenge to use the sweep executor. State that RETENTION_ACTIVE carries A10's audit_hold_active as a reason when the cause is a hold."
+  },
+  {
+   "severity": "low",
+   "issue": "The erasure request uses a different convention from A03 for counsel-pending acts. Erasure request and withdrawal are treated as a counsel question but are hard-coded requiresHuman with AGNT_NOT_ALLOWED. A03's delegable.ts has a 'counsel' value, which behaves as non-delegable and gives SCOPE_PENDING_COUNSEL, so a counsel answer changes only data.",
+   "fix": "Mark these cells 'counsel' in A03's delegable.ts through the same diff. Keep refusal before scope evaluation, and have the parity table show 'non-delegable (pending counsel)'."
+  },
+  {
+   "severity": "low",
+   "issue": "The estimate is low for the scope. This one node covers WAL/PITR backups, encrypted manifests with escrow, a restore and drill harness, a load-profile drill, the retention sweep with a raw-SQL refusal harvest, an erasure engine with seal and unseal, minimised exports and full agent parity. At 5-8 agent-hours it sits below A12 (8-12), and each fix loop re-runs a full drill.",
+   "fix": "Raise the estimate to 10-16 agent-hours, or split the node into A102a (backups, restore, drill) and A102b (retention, erasure, exports), both feeding A88."
+  }
+ ]
+}

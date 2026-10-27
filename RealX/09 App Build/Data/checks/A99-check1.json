@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Graph dependencies are missing. A99's ancestors do not include A05 (tokens.css for /docs), A23 (the compose stack the overlay extends), A15, A17 and A22 (custody, bank and identity adapters that are partitioned), A30 and A32 (wholesale certificate), A33 (sponsor tenant), A36, A37, A38, A39 and A40 (the J04 offer, order, allocation, escrow, mint and the pending distribution), A41, A42, A44, A45, A47 and A48 (J20 queues, portfolio, halts), A43 (claims lint G17 and notices), A98 (partner profiles) or A101 (NoticePolicy). At A99's gate, the J04 and J20 doc-tests, the profiles, the per-operation examples and the docs-completeness count cannot run.",
+   "fix": "Add these as dependencies (A99 lands at the end of AM3, and its dependents are AM5 and later), or split the node. A99a (versioning, compat, packaging, PgRateLimitStore, docs generator) stays early. A99b (per-user sandbox, profiles, counterparts, J04 and J20 doc-tests, example capture) depends on A49 or on the full AM3 set. Update final-graph.json and the links."
+  },
+  {
+   "severity": "high",
+   "issue": "Follow-up loops are incomplete. The spec promises per-partition worker jobs (the 02:00 recon on the partition clock), sandbox-only A43 notices, no live A13 alerts or A101 anomalies from sandbox events, halts scoped to the sandbox (A48), and adapter state keyed by partition. The loops (a)-(g) cover only A03, A04, A06, A08, A09, A10, A27 and A46 webhooks. There is no loop for the A46 scheduler fan-out, A20, A13, A43, A48, A101, A15, A17, A18 or A22, so the builder cannot deliver these behaviours honestly.",
+   "fix": "Add numbered follow-ups: A46 scheduler per-partition jobs with ctx.sandbox_of; A20 per-partition recon; A13 alerts carrying sandbox_of; A43 channel resolver limited to the sandbox inbox; A48 halt scope including sandbox_of; A101 excluding or separating sandbox tokens; A15, A17, A18 and A22 state keyed by sandbox_of. List them in the Specify frozen inputs."
+  },
+  {
+   "severity": "high",
+   "issue": "The oracle flag contradicts the spec. The graph and frontmatter say oracle: no, yet the spec has an Oracle rule paragraph, Fable writes hidden tests to gauntlet\\hidden\\A99, and the first pass criterion is 100% of hidden tests. The conventions allow that paragraph only when oracle is yes, and the orchestrator schedules the Oracle stage from the graph flag, so the hidden-test criterion may be vacuous.",
+   "fix": "Set oracle: true in final-graph.json and oracle: yes in the frontmatter. Use the standard Oracle rule wording plus the listed scope, and add A99 to App Gauntlet section 2's oracle list (authority and isolation)."
+  },
+  {
+   "severity": "high",
+   "issue": "The J20 criterion is wrong and can be met with a fake. It says 'steps 1-12 as read-only calls with a CCO's and an ENGO's sandbox token', but step 8 (ADM-24, LEGL publishes a disclosure update, G12 and G13) is a write, and the REGO, SECO, LEGL, PART and TAXO steps need those roles' cells. A token can never exceed its owner's cells. The approval request the agent submits is never named.",
+   "fix": "Rewrite as a table of step, role token (the sandbox owner of each J20 role, or counterparts), operation id and expected verdict. Step 8 is a LEGL agent drafting the disclosure update (agent-draft), approved by a counterpart under A14. Assert G22_AGENT_NEVER_CHECKER when the agent tries to approve."
+  },
+  {
+   "severity": "high",
+   "issue": "An agent can drive checker or custody signing in the sandbox. developer.trigger.sandbox_event is 'agent' and includes custody_sign and registry_ack, so the agent controls when the custody quorum signs its own human's mint or payout. That contradicts the spec's rule that an agent cannot be its own checker even in a sandbox, and its G13 done criterion. Counterpart mode 'manual' is undefined and may make the owner the checker.",
+   "fix": "Split events: receive_payment, return_payment, drift_register and valuation_due are agent-allowed; custody_sign and registry_ack are person-only or honoured only through the counterpart engine under the current mode. Define 'manual' as the owner's passkey session releasing a specific pending approval to the counterpart principal, recorded as the counterpart and never the owner. Add a challenge: an agent triggers custody_sign, gets G22_SCOPE_NON_DELEGABLE, and no signature is recorded."
+  },
+  {
+   "severity": "high",
+   "issue": "Freezing baselines/v1.0.0.json at A99 (AM3), with no override and 'a checker exception needs a new major version', blocks any breaking correction in AM3 to AM8 fix loops before launch (a request field made required, an enum closed, a status changed). The result is escalations or a pre-launch /v2, although no customer holds v1 before HG-LAUNCH.",
+   "fix": "Use pre-release baselines v1.0.0-pre.N. api:compat warns and logs these in the changelog with the node id, and enforces zero breaking changes only against released baselines. Freeze v1.0.0 at A89 (HG-LAUNCH). A99's checker tests use the fixture corpus."
+  },
+  {
+   "severity": "medium",
+   "issue": "The J04 parity criterion is not reproducible. (1) The 'seeded live scenario' does not exist: A06 has no WLG01, and A49's J04 uses KST01 at A$238.40. (2) One 100-token order against a A$1.0m soft cap misses the soft cap on clock advance, which takes the J05 refund path, unless other funded orders are seeded, and scale-back would change the 100-token result. (3) The counterparts lack FINA, the maker of step 9. (4) The persona needs a valid wholesale certificate (INV-W, G04). (5) With A$100,000 cleared the wallet is not short, so receive_payment does not fund the order.",
+   "fix": "Define the sim scenario j04-wlg01-sandbox: A$250, 10,000 units, soft cap 4,000, hard cap 10,000, fictional funded orders of 9,900 units, an INV-W persona with a valid certificate, A$0 cleared so a PayID receive_payment of A$25,125.00 funds the order, and FINA added. The reference is the same seed loaded in live mode into a disposable database and run through A49's J04 steps."
+  },
+  {
+   "severity": "medium",
+   "issue": "The liveDigest() exclusions are not frozen. Sandbox operations legitimately change live rows: sandbox_partition (clock_offset_seconds, generation, state, row_count, reset_at), rate_limit_window sandbox buckets, api_token_activity for sandbox tokens, and the live developer.sandbox.reset event. So the isolation criterion is either unmeetable or can be gamed with ad-hoc exclusions.",
+   "fix": "Freeze an exported exclusion constant that the hidden tests import (sandbox_partition, sandbox-prefixed rate_limit_window rows, api_token.last_used_at and last_used_ip, sandbox-token activity rows, developer.sandbox.* and sandbox token.issued audit events). Any other exclusion fails. Alternatively, place these tables under sandbox_of."
+  },
+  {
+   "severity": "medium",
+   "issue": "developer.purge.sandbox is agent-draft with 'only SECO in person executes', but it has no approval code and no draft mechanism. Because segregation of duties counts the agent as its human, a SECO's agent drafting and the same SECO executing is self-approval.",
+   "fix": "Make purge person-only (a SECO passkey session with a reason, under a named A14 code such as SGL+R), or make it an A14 request whose executor must be a different SECO. Add a refusal test."
+  },
+  {
+   "severity": "medium",
+   "issue": "No worker path is owned, yet the node registers the deprecation_notices job, the nightly idle purge, the consistency scan and the worker-run counterparts. A09 owns worker core and A46 owns the scheduler, so the builder would edit another node's path.",
+   "fix": "Add <workspace>\\app\\services\\worker\\src\\jobs\\developer\\ to owned_paths in the graph and the spec, as A101 does, and list the jobs with their cron times and keys."
+  },
+  {
+   "severity": "medium",
+   "issue": "Docs completeness and example capture are checked only at A99's gate. Operations added by later nodes are never forced to have docs sections, delegation rows or examples, and there is no capture fallback for operations whose preconditions a fresh partition lacks.",
+   "fix": "Put the docs comparison test and docs:test into the standing npm run verify (App Gauntlet section 4). Each operation requires a captured example from a named scenario or an explicit example_scenario entry, or docs:build fails. Stubs show only the grey pill."
+  },
+  {
+   "severity": "medium",
+   "issue": "The deprecation rule 'no replacement when an agent-delegable replacement is needed' is untestable. The compat rules also ignore delegation changes: a counsel answer that makes a cell person-only either fails api:compat or passes silently.",
+   "fix": "Require replacement_operation_id when the deprecated operation is agent or agent-draft, with the same scope family and the same or wider delegation. Allow delegation narrowing and counsel flags without /v2, list them as 'may now refuse', and notify recent token owners. Add fixtures."
+  },
+  {
+   "severity": "medium",
+   "issue": "The packaging criterion conflicts with the design. Verdaccio has no uplinks, but the SDK uses openapi-fetch and the MCP package uses an MCP runtime library, so a clean install from localhost:4873 cannot resolve dependencies unless they are bundled or mirrored. The spec requires neither, which invites adding an uplink.",
+   "fix": "Require either runtime dependencies bundled into dist/ (dependencies empty, SBOM lists the bundled components) or pack:dev publishing the lockfile versions from the local npm cache into Verdaccio offline. Put them in the allow-list and SBOM check."
+  },
+  {
+   "severity": "medium",
+   "issue": "The scope is out of proportion to the 8-12 h estimate: a compat checker with at least 50 fixtures, a full per-user sandbox across all modules with a second chain, counterparts and purge, a docs site with captured examples, a staff bundle, a try-it panel, doc-tests, Verdaccio with SBOM, a Pg rate-limit store, and about 10 upstream follow-up loops.",
+   "fix": "Split into A99a (versioning, docs, packaging; 8-12 h) and A99b (sandbox and parity doc-tests; 12-16 h), or re-estimate at 18-26 h."
+  },
+  {
+   "severity": "low",
+   "issue": "The rate-limit test (exactly 10 of 1,000 in one window) does not pin the clock, and attempts across a fixed-window boundary may admit up to 20.",
+   "fix": "Fix the injected clock inside one window, and add a boundary case that expects at most 10 per window."
+  },
+  {
+   "severity": "low",
+   "issue": "/docs is a new user-facing page with no design-extension key, so the founder never reviews it under HG-REVIEW. A99 also 'corrects' downstream A50 (the sandbox passkey step) without a numbered follow-up.",
+   "fix": "Add design-ext:DOCS-01 to A50 and to design_refs, or add a founder review step at A99's gate. Add follow-up (h) for A50's sandbox-create passkey step."
+  }
+ ]
+}

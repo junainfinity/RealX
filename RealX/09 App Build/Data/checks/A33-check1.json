@@ -1,0 +1,105 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Licence records are owned twice, and the two owners conflict. A21 (AM1) already owns the `licence` table, including sponsor licences. It has kinds afsl, trustee_appointment and re_authorisation, states draft, active, suspended, expired and revoked, row-level security by tenant, its own perimeter.expiry_sweep, evaluateG21, GET /v1/licences/summary (which produces 'Own AFSL' and 'Trustee: hired RE'), and a seed of the three sponsors' licences. A33 defines the same table again with different kinds (sponsor_afsl, trustee_licence, authorised_rep), different states (declared, verified, unverified, expired) and a second expiry sweep. It also says A21 reads sponsor licences through A33's index.ts, which is impossible because A21 is built two milestones earlier. A33 does not depend on A21, so it cannot call evaluateG21 at admission. onboarding->active and vehicle `formed` require a `verified` state that A21 does not have. The `licence_expired` pause reason is missing from the pause enum.",
+   "fix": "Add A21 to deps. Delete A33's licence schema, states and sweep, and use A21's rows and states. A33 keeps only the applicant's declared licence claim, as a sponsor_application_check row linked to the A21 licence id. The sponsor.kyb.approve and tenant.create prechecks call evaluateG21({activity:'issue_wholesale_units', actorEntityId: trustee}) and store the GateEvaluation id. onboarding->active and vehicle `formed` require the A21 licence to be `active`. Subscribe to A21's expired, suspended and revoked events to set a licence_expired pause, and add that reason to the enum. The public Licence fact comes from A21's summary, and sponsor licences are seeded only by A21. Hidden test: a sponsor with an expired A21 licence cannot reach tenant_created."
+  },
+  {
+   "severity": "high",
+   "issue": "The tenant's internal approval rules have nowhere to be enforced on A14's real decision path. evaluateSponsorApproval is registered as an A14 precheck hook. A14 runs prechecks at submit, before any approver exists, and its decide step checks only required_checkers[] from A11's eligibleCheckers, which has no hook for tenant rules. So neither required_count distinct approvers nor 'not the human behind a drafting agent' is enforced when someone decides. A function-level test would pass while A14's decide endpoint ignores the rule. Nothing covers listing.submit when the tenant has one SP-OWN who is also the submitter. A36 already expects a refusal OFR_SECOND_HUMAN_REQUIRED and an A33 guardrail named `sponsor.min_approvers`, and neither exists in A33.",
+   "fix": "Name the integration point. Either A14 exposes registerCheckerSetResolver and registerDecisionGuard (a spec point that reopens A14 and A11 upstream), or say exactly how the tenant rule becomes required_checkers[] sets at submit and is re-checked at decide. State the one-owner fallback: refuse with a named code, or add PART as the second person. Align names with A36. Pass criteria must drive self-approval, sibling-agent and required_count cases through A14's real POST /v1/approvals/{id}/decide, not only through the function."
+  },
+  {
+   "severity": "high",
+   "issue": "Reinstatement bypasses identity checks. Suspension moves every tenant_user to `suspended`, and tenant.reinstate moves memberships back to `active`. An invited or pending_identity member with no approved identity case (G01) therefore becomes active without verifying. A member that SP-OWN had suspended for cause before the tenant suspension is also reactivated.",
+   "fix": "Record suspended_by_approval_id and state_before_suspension on each membership the tenant suspension changes. Reinstatement restores exactly state_before_suspension, and only for rows tagged with that suspension's approval id. Add hidden tests for a pending_identity member and an individually suspended member across a suspend and reinstate cycle."
+  },
+  {
+   "severity": "high",
+   "issue": "D04 coverage is only partial. The spec has no per-route delegation table, so the builder must guess, for each A33 endpoint, the scope cell, whether it is delegable or requiresHuman, and whether an agent call notifies the person. Staff single-person acts have no checker, so an agent 'acting as maker' would make the final decision: FINA record-payment (which lifts a listing pause), PART kyb/open, background check pass or fail, request-info and decline, watchlist open and close. The same applies to sponsor acts: role changes, demotion, removal, and sending invitations (the spec says 'draft' but the endpoint sends immediately). The SPN-16 sponsor agent policy card (allowed families, maximum expiry, IP allow-list, loosening with a second owner) has no backend owner. A60 expects A33 to be the 'agent-policy home', and neither A33 nor A12 defines it.",
+   "fix": "Add a D04 table for every A33 route: A03 action and scope cell, delegable (true, false or counsel), requiresHuman, sensitive-notice flag, and the expected agent refusal code. Make the staff judgement acts either requiresHuman or agent drafts that a human confirms. Make sponsor role changes, removals and invitations either notified or drafts. Add a versioned tenant_agent_policy table with routes: tightening takes effect at once; loosening needs a second SP-OWN, or PART when the tenant has one owner; the policy never exceeds the platform policy. Define the provider A12 reads, or move this to A12 and fix A60. A100's parity fixtures must come from this table."
+  },
+  {
+   "severity": "high",
+   "issue": "The public sponsor profile publishes figures that have not been approved, which bypasses the product map's 6E 'Publish public KPIs and track record' (IRCM maker, CFO and CCO checkers, claims reviewed, G17) and the rule 'audited metrics only'. Section 7 serves capital raised, on-time percentage, proof score, retained stake, incidents and the sponsor-declared 'Assets managed' straight from the latest automatic snapshot. The contract also leaves out fields PUB-05 requires: planned vs actual per trust, retained stake per trust, years operating, and the state 'overdue proof item or missed distribution shows here'.",
+   "fix": "Add sponsor_profile_publication versions, created from a snapshot through ApprovalRequest sponsor.profile.publish (6E, IRCM maker, CFO and CCO checkers) with the G17 claims check as a precheck. Public routes serve only the latest approved publication, with as_of and approval id. Add rows per trust and live proof_overdue and distribution_missed flags, as the one stated exception because PUB-05 requires them to be current. Hidden test: an unapproved snapshot never appears publicly."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec does not list the routes behind most screen actions, but it claims every screen action already exists as an endpoint above. Undefined routes: ADM-03 request info, decline, record a check, attach the fee agreement; SPN-01 read my application, answer information requests, withdraw, accept the fee agreement; SPN-14 GET /v1/sponsor/team with actions[] and invitable_roles[] (A62 and A98 rely on it), approval rules read and write, member reinstate, invitation resend and cancel; SPN-15 'Pay invoice' (the product-map action and J19 step 6) plus payment instructions and pause_on; ADM-33 tenant list and detail; ADM-29 metrics, watchlist and revenue-share routes; the sponsor dashboard read A62 needs. The builder would invent these paths and the screens would not match.",
+   "fix": "Add a route catalogue: method, path, principal cells, request and response fields, and error codes for every action in SPN-01, SPN-02, SPN-14, SPN-15, ADM-03, ADM-29, ADM-33 and ADM-39. Include payment instructions that point to the operating account, never a client-money account. Settle A62's specify points (dashboard read, actions[], invitable_roles[], pause_on) in this spec."
+  },
+  {
+   "severity": "high",
+   "issue": "Several cross-node interface names do not match what the other nodes' specs say. A33 consumes `tenancy.listing.went_live` from 'the offerings node (A37)', but the offerings node is A36 and it emits `offering.live`. It reads `holdersAsOf` from A18, which A18 does not define. It exports vehicleSetActive, which A38 never calls. A34 and A98 need an entity field `panel_valuer`, entity types audit_firm and regulator, and a teamPartnerRows hook, none of which A33 defines. The applicant's 'own application' self-scope cell is said to be reserved in A11's matrix diff, but neither A11 nor A03 mentions it, and the applicant's principal kind is undefined.",
+   "fix": "Fix the names against the frozen specs: consume A36's offering.live; name an A18 read that exists, or say which node wires the real BillingInputProvider and MetricProvider implementations; have A38 call vehicleSetActive, or make it an event. Add panel_valuer (with registration and expiry) to entity. Add audit_firm and regulator to the entity_type enum, or reject them explicitly. Add registerTeamRowsProvider for A98. List the applicant principal kind and self-scope cell as an explicit diff that reopens A03 and A11."
+  },
+  {
+   "severity": "medium",
+   "issue": "The maker-checker for fee schedule changes contradicts the product map. The spec seeds tenant.fee_schedule.set as 4E with PART maker and CFO checker. The product map (MAKER_CHECKER table and ADM-34) says CFO maker, CEO checker, 4E, with a notice period (G13, G17). The 'zero cells disagree with A14 policy rows' criterion will fail, or will pass against the wrong row.",
+   "fix": "Use CFO maker and CEO checker, with effective_from at least now plus the 30-day notice. If PART should draft, record it as a founder question."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some privileged transitions have no action code or approval: tenant offboarding (terminal), clearing a watchlist_hold pause, and tightening-only approval rule changes.",
+   "fix": "Add tenant.offboard (4E, PART maker, CCO checker; precheck TENANT_HAS_LIVE_VEHICLES), tenant.listing_pause.clear (4E, PART maker, CCO checker) and tenant.approval_rule.tighten (tenant 4E, second SP-OWN) to the proposed A14 policy rows, and update the '11 rows' counts."
+  },
+  {
+   "severity": "medium",
+   "issue": "The claim 'a tenant without an approved KYB is impossible by construction' is overstated. A04's PRIVILEGED_TABLES CHECK only makes approval_id non-null, and A04 names the column approval_id, not admitted_by_approval_id. SQL that inserts a tenant with an unrelated approved request id (for example a flag.toggle) satisfies the CHECK.",
+   "fix": "Use A04's column name. Add a constraint trigger requiring the referenced approval to be tenant.create, in state approved or closed, with a payload application id that has a closed sponsor.kyb.approve. Add a hidden SQL test with a foreign approval id."
+  },
+  {
+   "severity": "medium",
+   "issue": "Nothing defines when an invoice becomes overdue. month_end runs on the 1st, and issued->overdue has no job or cadence, yet the challenge expects the pause at 00:00:01 Sydney.",
+   "fix": "Add billing.overdue_sweep (daily at 00:00 Australia/Sydney, idempotent). Also evaluate overdue at read time in canSubmitListing and the billing reads. Test both paths."
+  },
+  {
+   "severity": "medium",
+   "issue": "Invoices ignore GST. RealX's fees to Australian sponsors are expected to be taxable supplies, and a tax invoice over A$1,000 (INV-1002 is A$3,044) needs the supplier ABN, the GST amount and the recipient's identity or ABN.",
+   "fix": "Add gst_cents per line and in total, tax-invoice fields, and GST treatment per fee line as data. Record GST treatment as an accountant or founder question. Include GST rounding in the fast-check totals."
+  },
+  {
+   "severity": "medium",
+   "issue": "Challenge 2 contradicts the schema. Mia cannot act 'through her SP-OPS colleague's account as the same person_id', because UNIQUE (tenant_id, person_id) forbids a second membership, so the challenge tests nothing.",
+   "fix": "Rewrite it: the database refuses a second membership for the same person_id; a submission by Mia's investor principal or her membership in another tenant cannot be approved by her SP-OWN principal; keep the agent and staff-token cases."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'refused at draft, no approval request exists' claims (GUARDRAIL_LOCKED, APPROVAL_RULE_BELOW_MINIMUM) cannot be met. A14's generic POST /v1/approvals accepts drafts with no payload validator hook, so a draft row can exist through that path.",
+   "fix": "Ask A14 (upstream spec point) for registerDraftValidator(action_code), or have A14 refuse generic drafts for module-owned codes. Otherwise restate the challenge as refused on A33's route and refused at submit on the generic path, and test both."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag does not match the spec. The node is oracle:no, yet it controls authority (sponsor-side SoD for listings and distributions, admission, and suspension that revokes tokens), and D04 asks for oracles where authority is involved. The spec already has Fable write hidden tests before the build, which contradicts the graph flag.",
+   "fix": "Set oracle: yes in the graph and frontmatter, and use the standard oracle rule paragraph with the list of hidden cases."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 6-10 agent-hour estimate is too low for the scope: four state machines, admission, guardrails, users and rules with A14 integration, billing jobs, metrics, watchlist, revenue share, the public contract, entities and vehicles, suspension races, seeds, and contract tests for four screen nodes. A30 is 8-12 hours for less.",
+   "fix": "Raise the estimate to 12-18 hours, or split into A33a (admission, entities, vehicles, tenants, users, rules, suspension) and A33b (billing, performance, watchlist, revenue share, public profile), and update the graph deps."
+  },
+  {
+   "severity": "medium",
+   "issue": "'Trustee: hired RE' depends on the trustee entity being a `responsible_entity`. P1 wholesale unregistered trusts have trustees, not REs (an RE is P2, registered MIS), so seeding Yarra Bend's hired professional trustee as an RE gets the Australian structure wrong.",
+   "fix": "Show 'Trustee: hired RE' when the trustee entity is a third-party professional trustee (entity_type trustee, not the sponsor's own group) or, in P2, an RE. Seed Yarra Bend with a trustee entity holding an A21 trustee licence."
+  },
+  {
+   "severity": "low",
+   "issue": "A pass criterion refers to the future: 'the MCP catalogue (A104, later) will list the maker tools', but A104 is AM1 and exists at A33's gate.",
+   "fix": "Regenerate A104's catalogue in the integration step and assert the maker tools are present and the approval, suspension, guardrail and owner-grant tools are absent."
+  },
+  {
+   "severity": "low",
+   "issue": "The tipping-off guard covers only the applicant's read. The tenancy.application.declined event goes to A43 for notices and may carry kyb_failed or a sanctions reason into a sponsor-facing message.",
+   "fix": "Carry reason_class: withheld to non-staff consumers for KYB and sanctions declines, and add a hidden test on the A43 notice payload."
+  },
+  {
+   "severity": "low",
+   "issue": "Suspension does not name A98's SP-VAL and SP-PM memberships, sponsor integration API keys (ADM-32) or sponsor webhook subscriptions.",
+   "fix": "List them in the suspension effector, or require the consumers of tenancy.tenant.suspended to cover them, and assert each in the suspension contract test."
+  }
+ ]
+}

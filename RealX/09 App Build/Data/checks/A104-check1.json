@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The node's money and gate proofs rely on routes and nodes that do not exist at its gate. Its dependencies are only A12 and A09, so the ancestors are A00-A04, A08-A12. The spec still requires the following. (1) The G13 challenge and done criterion expect A14's APR_CHECKER_MUST_BE_HUMAN, but A14 is an AM1 peer and not a dependency. (2) Refusal parity is measured over 'the A12 and A19 fixture sets', but A19 is not a dependency. (3) The J22 step 2 done criterion says 'the order-placement tool exists ... against the AM1 sandbox rail', and the 'Retry and signature under the cap' challenge places an A$1,000 order through the MCP tool. The orders routes belong to A37 (AM3). At A104's gate they are absent, or they are stubs, which A104 itself excludes as `stub`, so no order tool can exist. (4) The refusal-parity challenge lists G04, G07, G08, G09 and G10 from A82 and A100 (AM8), and those routes come from A32, A37 and A48 (AM3). Fable cannot run these checks as written. A builder could only meet them with a fake money route, and a Fable run could treat them as vacuously passed.",
+   "fix": "Add A14 and A19 to A104's deps. Both are AM1 and do not depend on A104, so no cycle is created. Name a test-mode money fixture operation from A12 or A09 that carries x-realx-money: true, the confirmation header and the mandate caps, and that is published in the catalogue under RUN_MODE=test. Run the retry, signature and over-cap challenge against that fixture. Reword the J22 criterion: at this gate, the money-tool shape (idempotency_key, confirmation_signature, verbatim 428 and G22 envelopes) is proven on the fixture. The real order tool (A37) is proven by A82 and A100, and A104's hidden suite is re-run at the AM3 exit. Limit the refusal-parity list to G22, MANDATE, TOKEN, kill-switch (platform tier), RATE_LIMITED and the A19 simulator gates. Move the G04/G07-G10 cases to A82 and A100."
+  },
+  {
+   "severity": "high",
+   "issue": "The classification order contradicts A03's data and makes the G13 done criterion unreachable. A03 §7 says delegable.ts marks 'every approve, ratify and sign cell' `false` (derived from kind). A104 checks `non_delegable_scope` (delegable.ts false) before `agent_never_checker`. Every checker operation is therefore labelled `non_delegable_scope`, and none gets `agent_never_checker`. Yet the G13 done criterion requires `agent_never_checker` in excluded.json, and A100 and A77 read the reason. Separately, the 'personal or checker act smuggled' challenge rewrites an approval-decide route to a maker scope and expects `agent_never_checker` 'whatever the scope family says'. The spec classifies checker status only from the scope cell's action (A/O), so a maker cell gives no checker signal. A correct build fails the challenge, and a build can pass only by adding an unspecified heuristic such as the verb name.",
+   "fix": "Move `agent_never_checker` before `non_delegable_scope` in the classification order (after requires_human). Add an explicit second checker signal that does not depend on the scope cell: for example an `x-realx-checker: true` extension emitted by defineRoute for A14 decide, ratify, veto and sign routes (requested with the A09 follow-up), or A14's exported list of checker operation ids. Classify on either signal. Or change the challenge's expected result: the tampered route is published, and the API refuses the call (APR_CHECKER_MUST_BE_HUMAN / G22_AGENT_NEVER_CHECKER). Then state which of the two outcomes the gate requires."
+  },
+  {
+   "severity": "medium",
+   "issue": "The delegable.ts tamper test contradicts A03's model, and the fail-closed rule does not cover it. A03 §7 says delegable.ts 'lists the actions flagged false' or 'counsel', so a cell that is absent is delegable. The challenge expects `MCP_GEN_FIELD_MISSING` when a 'counsel' row is removed, but the generator has no way to tell 'removed' from 'delegable by default'. §2 defines fail-closed only for a missing x-realx-requires-human. A correct build either fails the challenge or hard-codes the counsel list.",
+   "fix": "Choose one of two options. (a) Pin delegable_sha256 at Specify and make `mcp:check` fail with MCP_GEN_INPUT_CHANGED when the hash differs from the frozen value unless a Decisions id is recorded. The tamper then fails by name. (b) Change the challenge's expected result to 'the operation is published, the API still refuses it (G22_SCOPE_NON_DELEGABLE / AGNT_NOT_ALLOWED via requiresHuman), and the catalogue diff names it'. Also state the rule for a scope cell that is missing from scopes.ts (fail with MCP_GEN_FIELD_MISSING)."
+  },
+  {
+   "severity": "medium",
+   "issue": "The tool annotations misstate the MCP semantics on the money path. `idempotentHint` is set true for every write 'idempotent by key'. But when idempotency_key is omitted the server mints a fresh ULID, so a repeated identical call creates a second order, which the spec's own retry challenge confirms. `destructiveHint` equals x-realx-money, so non-money writes such as cancel order, revoke token, delete webhook or submit for approval are marked non-destructive, and clients may auto-approve them. A money call with confirmation_signature but no idempotency_key can never verify, because A12's signature covers the idempotency key. The spec does not require the key in that case.",
+   "fix": "Set idempotentHint=true only for reads, or make idempotency_key `required` in the inputSchema of every money tool and set idempotentHint=true only where the key is required. Set destructiveHint=true for every write, or for every write except those an explicit allow-list marks additive. Make idempotency_key required whenever confirmation_signature is present. Add hidden tests that assert each annotation from the x-realx fields."
+  },
+  {
+   "severity": "medium",
+   "issue": "The kill-switch behaviour contradicts A12. §7 says that with the kill switch on, 'tools/list still returns the catalogue, because introspection reports the switch rather than failing'. A12's agentAuth runs evaluateG22 on every bearer request, and evaluateG22 checks 'no kill switch on' before anything else, so POST /v1/agent-access/introspect itself returns 423 AGENTS_PAUSED. tools/list therefore has no scopes to filter by, and the spec does not say what it returns.",
+   "fix": "Choose and state one of two options. (a) Request from A12, in the follow-up loop, that introspect is exempt from the kill-switch and scope checks (self-introspection only) and reports kill_switch state. (b) Specify that when introspect returns 423, tools/list returns the API's AGENTS_PAUSED envelope as a JSON-RPC error, or returns an empty list with _meta.realx.agents_paused {tier}. Add a hidden test for that behaviour."
+  },
+  {
+   "severity": "medium",
+   "issue": "The client label ('Last used · Today 09:14 · MCP' on ACC-05, 'client label (API or MCP)' on ADM-35) is attributed to A12's 'client-label handling', which is listed as a frozen Specify input. A12 defines no X-RealX-Client capture, and neither does A04's api_token_activity column list. A60 says 'when A12 records it'. The header is also client-asserted, so any REST caller can claim to be MCP.",
+   "fix": "Add the X-RealX-Client capture to the upstream follow-up requests (A12 records a normalised `client` of api | mcp | sdk on api_token_activity and last_used, with the A04 column). State that the label is informational and self-declared, never an authority input. Add a test that a REST call carrying the MCP header is still gated identically."
+  },
+  {
+   "severity": "medium",
+   "issue": "The upstream follow-up loop is named 'A09.1', but A46 already defines a different A09.1 (SchedulePolicy and dead-letter queue). Neither version appears in A09's own spec or in final-graph.json. A104 needs four upstream changes: x-realx-requires-human, openapi_sha256 in /v1/meta, the module mount line and the trusted-proxy entry for X-Forwarded-For. Because of the name clash, both nodes will reference 'A09.1 landed' for different content, and the security-relevant trusted-proxy change has no owner or test.",
+   "fix": "Rename A104's loop, for example to A09.2, or merge both requests into one numbered A09 follow-up list recorded in A09's note and the graph data. Give each item an owner test: for the trusted proxy, that the API ignores X-Forwarded-For from any peer except the mcp service. Make A104's Specify freeze cite that list by id."
+  },
+  {
+   "severity": "medium",
+   "issue": "The catalogue route collides with A46's API namespace. A104 mounts an API module with routes GET /v1/integrations/mcp/catalogue and operation ids `integrations.get.mcp_catalogue` / `integrations.list.mcp_excluded`. A46 owns services/api/src/modules/integrations/ and the `integrations` module (GET /v1/integrations/{name}, /{name}/config and similar). A09's registerModule tags operations by module name and mounts at /v1/<prefix>, so two modules claim one prefix and one operation-id namespace. `mcp` will also collide with A46's {name} parameter.",
+   "fix": "Give the catalogue route its own module prefix, for example `mcp`: GET /v1/mcp/catalogue (`mcp.get.catalogue`) and GET /v1/mcp/catalogue/excluded (`mcp.list.excluded`). Or move ownership of these two routes into A46 with A104 providing only the data loader. Update A77's contract test reference to match."
+  },
+  {
+   "severity": "medium",
+   "issue": "The generator has no rule for operations outside the scope-cell model. A09 allows `requiredScope: 'public'` for unauthenticated routes (for example /v1/meta, public listings and the fees page) and non-/v1 paths (/healthz, /readyz, /metrics, /internal/health/adapters with staff scope). `public` has no delegable.ts or scopes.ts cell, and /internal/health/adapters does not match the `/v1/internal/*` service_only rule. The 'seven reasons' list and the bijection therefore cannot classify them deterministically, and the builder must invent a rule.",
+   "fix": "Add explicit rules. Non-/v1 infrastructure paths are excluded with reason `infrastructure`. Operations with scope `public` are published as read tools with scope 'public', or are excluded as `public_unauthenticated`; choose one at Specify. Update the reason list (A100 and A77 read it) and the fast-check generator to include both kinds."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several pass criteria depend on downstream nodes that do not exist at A104's gate, so they would pass vacuously or cannot be run. These are: 'every A50 mcpTool name for a delegable action is present' (A50 is AM4); 'A23's stack check and A77's catalogue contract test pass unchanged' (A23 depends on A104, and A77 is AM7). A23's own spec also still says tool names equal the '/v1 operations minus stub routes', which contradicts A104's seven exclusion reasons. A104 notes this but leaves A23 unamended, so A23's gate will fail on requires_human and similar exclusions.",
+   "fix": "Reword the criteria: 'the contract tests this node ships for A23, A60 and A77 pass', and 'the A50 mcpTool cross-check is added to A100's suite'. Record a required edit to A23's spec (tool names equal the operations minus every excluded.json entry, imported from @realx/mcp/catalogue) as a spec defect raised against A23 before A23's Specify."
+  },
+  {
+   "severity": "low",
+   "issue": "The resource `realx://me/token (introspection)` maps to POST /v1/agent-access/introspect. §2's own rule requires every mapped operation to be a GET read, so generation would stop with MCP_GEN_RESOURCE_INVALID.",
+   "fix": "Drop that resource, or request a GET /v1/agent-access/tokens/self (read) from A12, or allow the mapping to name a non-mutating POST explicitly flagged x-realx-mutation: false."
+  },
+  {
+   "severity": "low",
+   "issue": "'No argument validation beyond JSON parsing' leaves how path parameters and unknown keys are handled unspecified. An order_id of '../../admin/tenants/X/suspend' or unknown top-level keys (for example a `headers` object) could reach a different operation or a header if the SDK mapping does not encode them. The API still gates the call, but the tool = operation mapping and the audit attribution break.",
+   "fix": "State that only path, query, body, idempotency_key and confirmation_signature are mapped. Path values are percent-encoded per segment (a '/' or '..' inside a value never changes the route). Unknown keys are ignored and never become headers. Add a hidden test for each rule."
+  },
+  {
+   "severity": "low",
+   "issue": "The oracle flag is `no`, while D04 asks for oracles on the dedicated agent nodes 'where money or authority is involved', and the spec itself calls this node the channel for agent money and authority. It still requires Fable's hidden tests. An orchestrator keyed on the flag might skip the Oracle stage, leaving an empty hidden folder that the '100 percent of hidden tests pass' criterion treats as passed.",
+   "fix": "Set oracle: yes for A104 in final-graph.json and the frontmatter, or add a pass criterion that the hidden folder is non-empty and that hiddenCasesHash is recorded before Build."
+  }
+ ]
+}

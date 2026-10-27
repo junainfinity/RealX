@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The D04 'second lock' is hollow. sessionAssurance is a string the caller supplies, and the only check is that it equals 'passkey_present'. The adapter therefore cannot tell a real passkey step-up from a forged one. The spec's own challenge (a caller-supplied 'passkey_present' string must not start a verification) cannot be met by the design it specifies, and the pass criterion tests only the literal value. A56 names A11 requireFreshAssertion as the proof, but A22 neither uses it nor depends on it.",
+   "fix": "Make sessionAssurance a signed step-up assertion: {kind:'passkey_present', principalType:'HUMAN', userId, purpose:'identity_verification', caseRef, issuedAt, expiresAt <=5 min, nonce, sig}, signed by A11's assertion key and checked with kms.verify. Refuse with IDV_PERSON_NOT_PRESENT when the assertion is missing, forged, expired, replayed, for the wrong purpose, or from an agent, token or MCP principal. Add A11 to deps (both are AM1, no cycle) and add a pass criterion for each of these refusal cases."
+  },
+  {
+   "severity": "high",
+   "issue": "G03 UBO arithmetic multiplies along one chain but never says effective interests are summed across paths. A walker that treats each chain separately passes every listed vector (24% not a UBO, 25% is, cycle refused, trust) yet misses a person holding 15% directly plus 12% through a subsidiary (27%). That leaves a beneficial owner unverified. The G03 and ONB-04 rules also cover authorised signatories, and the fixtures model neither signatories nor unit-trust unitholders at 25% or more.",
+   "fix": "Define effective interest as the sum over all ownership paths of the product of percentages, and return every contributing chain. Add vectors: 15% direct + 60%x20% = 27% (UBO); two paths of 12.5% = 25% (UBO); diamond ownership. Add role 'signatory' to UboResult persons and a unit-trust fixture with a 30% unitholder."
+  },
+  {
+   "severity": "high",
+   "issue": "The FRAUD marker relies on an 'A08 documented extension list' that A08 does not define. A08's markers are a fixed suffix list in packages/adapters/core/magic.ts, which A08 owns and freezes. The builder would have to edit A08's path, and the other AM1 adapter nodes building in parallel (A15, A17, A18) might edit the same file. Separately, the challenge 'Maria PEP Santos returns pep: clear' contradicts A08's suffix-only rule, so Fable would fail a correct build.",
+   "fix": "Amend A08's spec now (A08 is not built yet) so its marker table includes ' FRAUD', or give A08 a registerMarkers(adapter, rows) API that generates MAGIC-INPUTS.md. Rewrite the challenge so 'Maria Santos PEP' must give a PEP review and 'Maria PEP Santos' is treated as a plain name."
+  },
+  {
+   "severity": "high",
+   "issue": "The seed subjects belong to A06, which is not a dependency. Two things need them: update-01 must match 'INV-00377's fixture name', and the pass criterion needs 'rescreening all seed subjects produces exactly one new review'. The names and DOBs for INV-00377, INV-00912, INV-00841, INV-00290 (AML-116 PEP) and the others live in A06's packages/db/seed. The criterion therefore cannot be measured. A builder-invented name would also break A42's gate, and planted list names may collide with seed names.",
+   "fix": "Add A06 to deps (A06 is AM0). The fixture generator reads A06's exported seed-subject list and asserts two things: the baseline list gives exactly the reviews A06 seeds, and update-01 adds exactly one hit, on INV-00377. Name the source file and list the exact baseline and post-update review sets in the pass criteria."
+  },
+  {
+   "severity": "high",
+   "issue": "The P1 wallet part of G02 is missing. The product-map G02 rule screens wallet addresses at onboarding, J02 step 9 (ONB-08) says 'wallet risk screened', and the ADM-10 and AML mocks show 'Wallet risk 8' and 'Wallet risk 71'. A22 instead returns not_applicable_in_phase in P1 and P2, following the architecture brief. No decision record or coverage-matrix deviation covers this departure from the gate rule.",
+   "fix": "Add a P1 list-only screenWallet: exact match of the address against wallet entries in the fixture sanctions list, returning {outcome:'clear'|'review', mode:'list_only', score:null}. Add fixture entries and conformance vectors, and keep KYT scoring for P3 (A96). Otherwise record the deferral in Decisions.md and the coverage matrix as a G02 deviation and raise it as a counsel question."
+  },
+  {
+   "severity": "medium",
+   "issue": "A96 plans an 'A22.1' change (scored screenWallet with 0x5A5A and 0x5B5B prefixes) that edits packages/adapters/sanctions, a path A22 owns. A22 does not define any P3 behaviour.",
+   "fix": "Specify the P3 screenWallet contract and its prefixes in A22 now, behind PHASE=P3, with conformance cases, so A96 only turns it on. Otherwise name A96 as an authorised extender in both specs."
+  },
+  {
+   "severity": "medium",
+   "issue": "The pass criteria require a kms signature on every VerificationResult, but the frozen VerificationResult shape has no signature, key ref or canonicalisation field. The spec also does not say who signs once a vendor implementation replaces the sandbox.",
+   "fix": "Add signature {keyRef, alg, sig} with JCS (RFC 8785) canonicalisation to VerificationResult, ScreeningResult and UboResult. The adapter wrapper signs after any implementation returns, so vendor results are signed too. Add a conformance case that tampers with each field in turn."
+  },
+  {
+   "severity": "medium",
+   "issue": "No truth table maps checks and screening to a decision (does a PEP or SANCTION review count as refer or pass?). riskScore has no rule. ADM-10's 'Extracted vs entered fields' match column and its 'Risk factors and points' have no fields in the result, so A30 would have to invent them.",
+   "fix": "Add the decision rule: fail if any check fails or fraudSignal is set; otherwise refer if any check refers; otherwise pass. Keep screening.outcome separate. Give riskScore a deterministic formula with riskFactors[{code, points}] and pin the value for each persona. Add fieldMatches[{field, extracted, entered, match: exact|order|partial|none}]."
+  },
+  {
+   "severity": "medium",
+   "issue": "There are seven Check codes, but the spec says 'the six codes map onto six rows', and the pass criteria require exactly six rows. The spec never says whether an adverse_media row is emitted when adverse media is clear.",
+   "fix": "checks[] always holds the six design rows, in design order. An adverse_media row is appended only when there is an adverse-media hit. Fix the README wording and add a conformance case that asserts seven rows."
+  },
+  {
+   "severity": "medium",
+   "issue": "The matcher's numbers conflict. The Daniel Okafor PEP entry has a 'low base score' and a DOB mismatch that subtracts, yet the design needs the PEP row to read Review, and PEP hits are reviewed only at 70 or more. The 'planted low-score sanctions entry' in the pass criteria is never defined. The decoys only need to stay under 70, but a sanctions-category decoy at 50-69 still triggers a review. How a hit turns into a check's review or clear result is not stated.",
+   "fix": "Define the score formula, or pin target scores (for example Daniel Okafor PEP at 72-78 with low confidence). Add the planted sanctions entry at 50-69. Require every decoy to come out clear, which means below 50 for sanctions-category decoys. State the rule that turns hits into each check's result."
+  },
+  {
+   "severity": "medium",
+   "issue": "'completedAt 08:14' has no timezone. The design shows 08:14 AEST on 23 Sep 2026, before the 4 Oct daylight-saving change. A build that seeds 08:14Z passes the criterion but displays 18:14 AEST.",
+   "fix": "Pin completedAt to 2026-09-23T08:14:00+10:00 (22:14Z on 22 Sep), taken from A06's CLOCK_AS_OF, and assert the exact ISO string."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ONB-03 refer fallback (document upload, liveness, utility bill) has no verb. The fallback therefore has to restart the verification, which counts against the 5-per-24h limit and loses the link to the referred result. The electronic-only name, DOB and address path from the product map is also not allowed by the subject schema.",
+   "fix": "Add addEvidence(verificationRef, {kind: document|liveness|proof_of_address, captureRef, sessionAssurance}). It returns a new result version and webhook and does not count toward the rate limit. Allow subjects with no document; they get refer with DOCUMENT_REQUIRED when fewer than two sources match. Add conformance cases for both."
+  },
+  {
+   "severity": "medium",
+   "issue": "IDENTITY_SANDBOX_WEBHOOK_URL and SANCTIONS_REVIEW_THRESHOLD would be added to A08's closed envSchema, a path A08 owns. Separately, the sandbox POSTs webhooks over HTTP while its README must say that no code talks to a network host.",
+   "fix": "Use an A08 config-extension point, or list these keys in A08 now. Deliver webhooks through A08's in-process or outbox emitter. If HTTP is kept, restrict it to loopback or compose-internal hosts and reword the README sentence."
+  },
+  {
+   "severity": "low",
+   "issue": "Two cross-references are wrong. The ADM-32 sandbox panel is attributed to A69, but A76 owns ADM-32. ADM-10 and its buttons are attributed to A30 or A30/A42, but A68 owns ADM-10.",
+   "fix": "Replace A69 with A76, and A30 with A68 for the screen (A30 keeps the case API). Make the same correction in A08."
+  },
+  {
+   "severity": "low",
+   "issue": "The 4-8 agent-hour estimate is low for this scope: two adapters, a fixture generator, a matcher, DVS rules for 8 states, webhooks, encrypted storage, ABN/ACN and UBO engines, two conformance suites and 100% branch coverage.",
+   "fix": "Raise the estimate to 8-12 hours and regenerate the graph."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec does not say whether the webhook replay store survives a restart, and it does not reject timestamps in the future.",
+   "fix": "Persist seen eventIds in the encrypted store for at least the 5-minute window. Reject timestamps more than 30 s in the future with WEBHOOK_STALE, and add both cases to the hidden suite."
+  }
+ ]
+}

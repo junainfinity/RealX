@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Escrow release figure is wrong. J04 step 9, the checkpoint table ('A$2,384,000.00 subscription money + sum of allocated-line fees') and pass criterion 2 require the release to include the transaction fees. Upstream, A16's order.fund posts the 0.5% fee to fee_payable_realx at funding (it never enters offer_escrow), A38 F4 requires offer_escrow = allocated_total_cents, and A39's release posts exactly allocation_total_cents and refuses otherwise (ESC_ALLOCATION_MISMATCH). The suite as written cannot pass, and if the upstream nodes were bent to meet it, RealX's fee income would be paid to the trustee.",
+   "fix": "Change J04 step 9, the 'Escrow release' checkpoint row and pass criterion 2 to: release = allocation_total_cents = 10,000 x A$238.40 = A$2,384,000.00 exactly, fees excluded. Add a checkpoint that fee_payable_realx for KST01 = sum of fees on allocated lines (A02 half_up per line) and is never paid to the trustee."
+  },
+  {
+   "severity": "high",
+   "issue": "The mint flow contradicts A38, A28 and A72. In A38 F5 the mint approval allocation.mint (6E+Q, CAPM maker -> CFO + CCO) is drafted and approved BEFORE the register instruction; the one approval id then binds the register instruction, the custody op and the chain transaction. A72 says mints from a locked allocation file are driven by A38, appear in ADM-14's pending list and are never raised there. A79 J04 steps 10-11 instead have the register entry land first with no approval, then 'Kai raises the mint from the locked allocation file' on ADM-14 as maker. Knock-on effects: the G13 negative 'Kai signing his own mint is refused' is invalid, because Kai (TOKO) is not the maker under A38 and is a legitimate V2 signer. N11 ('ADM-14 refuses the KST01 mint request') describes a request that nobody makes under A38. C5 would then be checked against the wrong maker.",
+   "fix": "Rewrite J04 steps 10-11 in A38's order: (i) after escrow release, Tom (CAPM) is the maker of allocation.mint (it may be drafted by the module), and Helen and Jordan approve 6E+Q on ADM-30; (ii) the register instruction goes out under that approval id and REGO sees the entry on ADM-17; (iii) the op shows in ADM-14's pending list, and two V2 signers who are not the maker (any two of Kai, Helen and Jordan) press Sign, the second presses Broadcast. Replace the 'Kai signs his own mint' negative with 'Tom (the maker) cannot sign or approve'. Restate N11 as: with the registry ack held, the run stays register_pending, no CustodyOp exists, and a direct A28 requestMint citing the approval is refused with A28's register-first code."
+  },
+  {
+   "severity": "high",
+   "issue": "The J04 step 5-6 deposit mechanism is incoherent with A17 and with this node's own G14 negative. Under A17 a receipt whose normalised payer name exactly equals a verified name auto-matches, and the A$10,000 threshold applies only to MANUAL matches of receipts that are already held. So a A$23,959.20 PayID deposit from the investor's own name is credited at once and never becomes 'held(manual)'. The only way this step gets held as written is a name mismatch (the persona's verified legal name is 'Sam Carter REFER' while the payer is 'Sam Carter'). TRSY would then be manually crediting a payer_name_mismatch receipt, which is a third-party deposit that the G14 negative says must never be credited. The same defect repeats in J15 step 2 (the A$85,000 deposit) and in section 7's treasury-drafter 'second, smaller receipt', which must be above A$10,000 for the CFO step to exist.",
+   "fix": "Pin the legitimate held path: the deposit is sent with a wrong or absent PayID reference (A17 held: unknown_destination) from the persona's exact verified legal name, as A30 records it with the marker or as A22 strips it (state which). Then TRSY matches it on ADM-18 and, because the amount is above A17's manual-match threshold, the CFO approves on ADM-30. Alternatively, cite A16's ledger.deposit.manual_review_cents as the rule and file a spec defect on A17 to apply it. Give the treasury-drafter receipt an explicit amount above A$10,000 and an owner persona, and add both to the C2 figures."
+  },
+  {
+   "severity": "high",
+   "issue": "J15's cash figures cannot work. The J02 persona's only new cash is the A$85,000.00 deposit (its J04 deposit was fully used). J15 then withdraws A$30,000.00 and A$50,000.00, runs the boundaries A$25,000.00 and A$25,000.01 'on fresh days' (the persona is not named, so it defaults to this persona), and section 7 adds a A$2,000.00 mandate withdrawal plus the person's equivalent A$2,000.00. That is A$134,000.01 against A$85,000.00. The boundary requests would fail with LDG_INSUFFICIENT_AVAILABLE, not produce AUTO and 4E, and the builder would have to invent extra deposits that Fable's re-derivation does not contain.",
+   "fix": "Add a J15 cash-plan row to the checkpoint table: name the persona for each withdrawal (for example the boundaries run on a separate fresh persona funded with auto-matched deposits under A$10,000 each, or one larger held-and-matched deposit), list every deposit and withdrawal in order with the running available balance, and include the section 7 mandate and person withdrawals. Make every figure re-derivable."
+  },
+  {
+   "severity": "high",
+   "issue": "The single 50-unit scaled-back line is impossible under the spec's own market rules, and the allocation rule is not pinned. market.ts funds each generated investor with one receipt at or below A$10,000 so it auto-matches. That caps each market order at 41 units (41 x A$238.40 x 1.005 = A$9,823.29; 42 units = A$10,062.87). No single last order can be scaled back by 50 units. Under first-come, the 50 units spread over at least two lines (the last refunded in full, the previous one reduced), which contradicts 'the last line scaled back by 50 units', 'one scaled-back line' and 'A$11,979.60, paid once'. The per-line half-up fee recomputation in A38 F3 can then make the fee refund A$59.59 or A$59.61 rather than A$59.60, depending on the seed. KST01's allocation_rule (first_come or pro_rata) and allow_oversubscription are never fixed. Under pro_rata the J04 persona's own 100 units would be scaled back too.",
+   "fix": "Pin KST01's allocation_rule = first_come and allow_oversubscription from A06/A36 (the design's ADM-12 rule line) as a spec point. Either (a) fund the crossing market investor from seeded cash, or from a receipt manually matched through the console by TRSY and the CFO, so that one order of at least 51 units crosses the hard cap by exactly 50; or (b) restate the checkpoint as a per-line table (the lines and the units scaled back) and the total, with the fee refund = sum of per-line fee differences under A02 half_up. Fable re-derives that total for each seed. Keep 'each line refunded exactly once, after the allocation approval'."
+  },
+  {
+   "severity": "high",
+   "issue": "A06 seeds no CLSR (classification reviewer). Its staff roster lists Jordan Blake, Priya Natarajan, Tom Hargreaves, Grace Lim, Sam Reilly, Nadia Farah, Owen Whitlock, Helen Tran, Kai Watanabe, Marcus Bell, Aisha Karim, Dev Sharma, Ruth Adeyemi, Ben Cole and Lena Moss, and no CLSR. A79 relies on 'the CLSR persona A06 seeds' for J02 step 8, J03 steps 6-7, J05's fresh persona, J17 step 5, N07, the SM-02 rfi and rejected states, and G04. Every run would stop at PERSONA_CREDENTIAL_MISSING, so the journeys, SM-02 coverage and G04 cannot pass.",
+   "fix": "Add a spec point at Specify: A06 is reopened (A06.n) to seed a named CLSR persona with a sandbox hardware key and non-conflicting SoD data, and A79 names that persona and its id in section 1. Until then, list it as a blocking input in the Specify step."
+  },
+  {
+   "severity": "medium",
+   "issue": "SM-01 'offboarded' is required by a path the state machine does not allow. The product map (and A30, which refuses any transition not in the table) has only suspended -> offboarded. A79 requires offboarded for 'a zero-balance fresh persona closing the account on ACC-01', which would be whitelisted -> offboarded. The test either fails or pressures an illegal transition.",
+   "fix": "State the exact path the close takes, as A30/A44 define it (for example ACC-01 close -> suspended -> offboarded with the audit events). If A30 has no such path, record a spec defect against A30 or A03 (a loop like A03.1) and reference it. Assert that whitelisted -> offboarded directly is refused with SM01_ILLEGAL_TRANSITION."
+  },
+  {
+   "severity": "medium",
+   "issue": "4E_SECOND_APPROVAL is never defined in terms of who must approve. A14 and A03 do not define it; A16 and A39 only name it. A79 J15 step 3 asserts only 'the CFO approves on ADM-30', with no TRSY release step, and gives no checker set. A build where 4E_SECOND_APPROVAL behaves exactly like 4E (or needs fewer people) passes, although the design promises 'a second RealX approval'.",
+   "fix": "Pin the required roles for 4E_SECOND_APPROVAL (for example TRSY maker or System threshold -> CFO plus a second distinct approver such as the CCO, or whatever A14/A39 settle), file a spec defect on A14/A03 if it is undefined, and assert in J15 step 3 and on APR-2286 that approval with one checker leaves the request pending and that the second checker must be a different person."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G13 self-approval negatives can pass for the wrong reason. Priya (TRSY) approving her own match, Tom (CAPM) approving his own allocation lock, and Dev (FINA) approving a batch his agent drafted are all people whose role is not a checker role for those policies (all are -> CFO). They are refused by the role or permission check before segregation of duties is ever tested, so 'SoD counts the agent as its human' is never proven.",
+   "fix": "Require the refusal code to be A14's segregation-of-duties code (not a role or permission code), and add at least one case where the maker also holds the checker role: A06's sod-conflict scenario, or the CFO's own agent drafting a CFO-checked request and the CFO then trying to approve it. The approval must be refused as SoD, with the agent counted as its human."
+  },
+  {
+   "severity": "medium",
+   "issue": "Two behaviours are asserted but have no dependency edge. J15 and section 7 assert A101's sensitive-action notice to the person, but A101 is not in A79's dependency closure. N12 asserts that 'no console action clears the halt by hand (every listed route tried)', but A48 (halts and kill switches), which owns the manual halt routes, is not in the closure and the route list is not named. A79 could be scheduled or gated before those nodes pass.",
+   "fix": "Add A101 and A48 to A79's deps (both are earlier milestones, so the milestone order holds), or drop those assertions. Name the source of the halt route list (A20's halt contract plus A48's routes from packages/sdk/openapi.json)."
+  },
+  {
+   "severity": "medium",
+   "issue": "D04 coverage on the money path is incomplete. The person-only refusal list omits 'widening an API token' (an agent raising its own withdrawal band, scope or daily cap), which is the most direct overreach on the money path. The rule that staff agents are never custody signers is not probed, although J04 exercises V2 signing.",
+   "fix": "Add to the person-only list: PATCH on the persona's own token (a wider band, scope or allowed trusts) under the token itself, refused with AGNT_NOT_ALLOWED before scope evaluation and leaving no row. Add a probe in which Kai's (TOKO) agent token tries to Sign the KST01 custody op and is refused with G22_AGENT_NEVER_CHECKER or A15's signer-must-be-human code."
+  },
+  {
+   "severity": "medium",
+   "issue": "J02's oracle hook 'a deposit made through the sandbox bank before step 10 is held and never credited' gives no amount and no final outcome for that money. It could be credited later, after whitelisting, which would break J04 step 3's 'funds short shows the deposit shortcut' and J04's figures. Or it stays in suspense, which breaks the negatives' 'no stray money' rule and makes C2 ambiguous.",
+   "fix": "Fix the amount (for example A$100.00) and the outcome: it is held until whitelisting and then returned to the payer through A17's return path (TRSY -> CFO 4E), or it is credited on whitelisting and the J04 order is sized so that funds are still short. Add it to the C2 figures."
+  },
+  {
+   "severity": "low",
+   "issue": "The status line names milestone AM8 'Hardening and launch readiness', but the graph (final-graph.json) and sibling nodes A80 and A81 call it 'Journeys, hardening and launch'.",
+   "fix": "Change the status line to 'AM8 (Journeys, hardening and launch)'."
+  },
+  {
+   "severity": "low",
+   "issue": "J03 treats the SMSF qualifying on an accountant's certificate for the fund's net assets as a 'proposed reading'. Whether a superannuation fund trustee may rely on the s761G(7)(c) certificate, or only on the A$10 million net-assets test and the other professional-investor limbs, is a legal question and is not recorded as one.",
+   "fix": "Add to Human gates touched (HG-LEGAL): which wholesale bases an SMSF trustee may use for trust units. Run J03 on whatever A32's rule pack currently allows, and record the answer as a counsel question rather than a settled reading."
+  },
+  {
+   "severity": "low",
+   "issue": "The bot's refused 30-unit order (A$7,187.76) is placed when Alex's available cash is only about A$1,024.26, after RX-ORD-55120 and the bot's own order. If the ledger reservation is evaluated before G22, the refusal code is LDG_INSUFFICIENT_AVAILABLE, not G22_LIMIT_EXCEEDED. Separately, reusing the name 'Sam Carter' for both the J02 and J03 fresh personas risks duplicate-identity handling.",
+   "fix": "State that G22 is evaluated before any reservation (cite A12 or A37's order of evaluation), or fund Alex enough first that only the per-order cap can refuse. Give the J03 principal a distinct name."
+  }
+ ]
+}

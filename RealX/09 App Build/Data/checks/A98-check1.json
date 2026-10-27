@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The TRUSTEE_OF_VEHICLE checker resolver relies on hooks A11 and A14 do not provide. A11's eligibleCheckers(request) has no way to register a resolver. A14's policy rows are fixed checker_role_sets[][], and a stricter row can be picked only by amount or variance thresholds, never by a vehicle attribute. So the per-vehicle trustee set and the trustee_countersign_all_runs flag ('no A40 code changes') cannot be built inside the owned path. Also, if the stage sits on the row and returns nobody when the flag is false, A14 raises approval.no_eligible_checker and the run stalls. The Specify section still lists 'A11's eligibleCheckers resolver registration' as a frozen input.",
+   "fix": "Add spec point (f), settled before hidden tests are written: an A11/A14 follow-up loop that adds (1) registerCheckerSetResolver(name, fn) in A11, called from eligibleCheckers; (2) A03 policy rows that name the set TRUSTEE_OF_VEHICLE on register.certify, register.adjust, token.forced_transfer/recovery (where named), distribution.exit.approve, property.approve_exit and winddown.trustee_control; (3) an A14 row-selector predicate, registered by A98, that picks a distribution.run.approve variant carrying the trustee stage only when the vehicle flag is true. State that an empty trustee set on a row that names the trustee fails closed and is never skipped. Add both follow-ups to the escalation list."
+  },
+  {
+   "severity": "high",
+   "issue": "The data-room grant is circular. A TP-OBS has no scope outside an A45 data_room_grant, and part of TP-AUD scope is grants too, but A45 depends on A98, so no grant exists when A98 reaches its gate. Oracle test (1) (grants), the 'Observer after the bell' challenge, the grant-revoke case in the scope-latency pass criterion and TP-OBS agent parity for D04 cannot run as written.",
+   "fix": "In A98, define a GrantSource interface (listActiveGrants(principalId), grant change callback) with a fixture implementation that is enabled only in the test profile. Run A98's grant tests against that fixture and say so in the Oracle and Challenge sections. Move the real-grant versions (A45 effector, reporting.dataroom_sweep, SECO revoke) into A45's challenges, which already depend on A98."
+  },
+  {
+   "severity": "high",
+   "issue": "Some acceptance checks need nodes that are not ancestors of A98. The J06 'done' (a trustee stage on an exit run and on a flagged vehicle, TP-AUD reads run evidence) and the 'trace of one exit-run approval' need A40. The J14 'done' (SP-PM receives overdue tasks, audience=partner) needs A43. TP-LIC reads of marketing and complaints need A43 and A44. The Challenge sweep covers every route of A28, A36, A43, A45 and A48. Only A18, A34 and A35 are guaranteed built, so Fable cannot run these checks at A98's gate, or a builder could meet them with fakes.",
+   "fix": "Add A40 and A43 (and A44 if the TP-LIC reads stay) to deps. None of them depends on A98 directly or indirectly, so this creates no cycle. If that is not wanted, rewrite the J06, J14 and TP-LIC criteria as A14-level contract tests on fixture requests, and move the run-level and task-level checks to A80 and A65. Limit the route sweep to ancestor modules plus A98's own routes, and hand the rest to A100 and A83."
+  },
+  {
+   "severity": "high",
+   "issue": "G20 independence has no data behind it. A98 checks 'A33's related-party list for the firm', but A33 defines no such list. A33 emits entities.entity.reverification_required only on legal-name or ABN edits, so editing a related party cannot trigger the suspension that Challenge 'Independence through a side door' part 3 expects. A33 also has no way to register validatePartnerInvitation: A33 is upstream and cannot import A98.",
+   "fix": "Either have A98 own a partner_related_party table, with an event partner.related_party.changed that re-runs independence, suspends affected engagements and flags draft valuations for VALO, or request these in an A33 follow-up: a related-party model, a change event and registerInvitationValidator(role, fn). List this as a spec point to settle before hidden tests are written, like point (c)."
+  },
+  {
+   "severity": "medium",
+   "issue": "SP-VAL/SP-PM and TP-VAL/TP-PM are not clearly the same thing. §1 grants cells to TP-VAL and TP-PM. Engagements, invitations and tokens use SP-VAL and SP-PM. A03's roles.ts has exactly 51 roles, and a test rejects any other id. A34 authorises TP-VAL and TP-PM. A builder could add new A03 roles (breaking A03's test) or check cells against the wrong row.",
+   "fix": "Say explicitly that SP-VAL and SP-PM are only A33 membership/invitation role labels, that they map 1:1 to the A03 matrix rows TP-VAL and TP-PM, that every cell check uses the TP-* row, and that roles.ts gains no role."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec contradicts itself on 403 versus 404. §4 and the edge states say an empty resolved scope returns 403 PARTNER_NO_SCOPE. The 'Observer after the bell' challenge expects 404 after the only grant expires, which leaves the scope empty. The pass criterion says every read outside scope is 404. A correct build and a wrong one cannot be told apart.",
+   "fix": "Set the precedence: an empty scope gives 403 PARTNER_NO_SCOPE (except GET /v1/partners/me), and a non-empty scope with an out-of-scope id gives 404. Update the challenge's expected code and exclude empty-scope tuples from the 404 property, or test them separately."
+  },
+  {
+   "severity": "medium",
+   "issue": "The same-person rule is enforced only when the resolver runs, and A14 resolves required_checkers[] once at submit. Stages can then be decided in any order, including an SP-OWN approval after submit, so one person could still fill two stages.",
+   "fix": "Also enforce it when a decision is made: register an A14 decide-time precheck, or ask A11 for an SoD rule, that refuses a decision whose person_id matches the maker's person or any earlier decider on the same request, whatever the stage order. Make PARTNER_SAME_PERSON a refusal code, not only an audit note."
+  },
+  {
+   "severity": "medium",
+   "issue": "partner.suspend is SGL+R, and A14's SGL+R reverts automatically if not ratified. For a protective act this fails open: a suspended partner gets access and tokens back after 2 h if nobody ratifies. The spec also does not say whether the automatic suspensions (licence expired, reverification, KYC refresh failure) go through SGL+R.",
+   "fix": "State that the automatic upstream suspensions are system acts outside SGL+R and cannot revert. For a manual suspension, confirm with A14 that missed ratification escalates (Sev2 to CCO) and keeps the partner suspended, or justify the revert explicitly. Add a test for both."
+  },
+  {
+   "severity": "medium",
+   "issue": "Oracle flag. The node decides who may act as 'the trustee' on approvals that move money and units (exit distributions, forced transfers, register.adjust). D04 asks for oracles where money or authority is involved. The graph says oracle:false, while the spec runs a full hidden-test regime anyway, so the gauntlet's oracle and publication rules become ambiguous.",
+   "fix": "Set oracle: true in final-graph.json and in the frontmatter, and reword the Oracle rule to match. Otherwise, state that App Gauntlet §2 rules for oracle nodes apply in full to A98."
+  },
+  {
+   "severity": "medium",
+   "issue": "The seed personas conflict with A50, which the design-fidelity challenge measures against. A50 names 'Trustee: Coastline Trustees' and 'Licensee: Northline Capital compliance'. Northline Capital is a sponsor, but A98 binds TP-LIC to the AFSL holder RealX operates under as a CAR (A21), and A98's seed list names neither organisation.",
+   "fix": "Pin the seed organisations in A98: Coastline Trustees as Yarra Bend's hired RE entity, and a separate licensee entity from A21's register for TP-LIC. Raise a correction to A50 so the licensee persona is not a sponsor, then freeze the organisation strings in the design-fidelity challenge."
+  },
+  {
+   "severity": "low",
+   "issue": "The licensee's time box is unclear. The summary and §7 call the licensee time-boxed, but the precheck requires an end date only for TP-AUD and TP-OBS, and the A50/A105 pill applies only to the auditor and the observer. time_box_label for TP-LIC and TP-RE is undefined.",
+   "fix": "State that TP-LIC and TP-RE are not time-boxed (time_box_label null, no pill), or define a TP-LIC time box and its maximum."
+  },
+  {
+   "severity": "low",
+   "issue": "Some product-map TP-RE acts have no pointer. 'Countersign ... meeting results' (J08 step on ADM-23, P2) and the J04 step 'Trustee issues units on the register' (ADM-17) are not mapped to the resolver or the acknowledgement route.",
+   "fix": "Add one line each: meeting-result certification in A93 uses TRUSTEE_OF_VEHICLE, and J04's trustee issuance on trustee-kept registers goes through the §5 acknowledgement route."
+  },
+  {
+   "severity": "low",
+   "issue": "One design citation has the wrong line. The ADM-30 maker-checker note 'you are not the maker, so you can approve...' is at line 673 of RealX App.dc.html, not line 881 (line 881 is the adApprovals sub-title).",
+   "fix": "Change the citation to line 673 (note) and line 881 (sub-title)."
+  }
+ ]
+}

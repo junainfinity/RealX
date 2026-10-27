@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The ONB-10 rows in the spec do not match A30's status contract. A30's GET /v1/investors/me/status returns six rows (identity, entity, tax, wholesale, wallet, bank). There is no sanctions row, no residency row and no second-holder row. The spec tells the page to render eight rows 'from the rows of GET /v1/investors/me/status' (G01, G02, G06, Entity or Second holder, Tax, Wholesale, Wallet, Bank). So the builder must invent the G02, G06 and joint rows on the client, which breaks 'no rule on the page', or fail. Three more problems follow. (1) The spec never says what the G02 row shows while identity is open. If a REFER persona's row read 'No matches' and a SANCTION persona's read 'reviewing', that difference is tipping-off. (2) The design (line 822) has five rows in the order G01, G02, G16, G04, G06, with pills 'Pass', 'Clear' and 'Valid to 30 Jun 2028'. The spec uses eight rows in another order, moves 'Valid to 30 Jun 2028' into the detail and does not define pill labels. (3) The pass criterion says 'the five green rows'.",
+   "fix": "Settle this at Specify as an A30 follow-up loop. Either A30 adds status rows sanctions, residency and joint_holder, or the spec gives an exact mapping table from A30 fields to each displayed row. Add this rule: the G02 row mirrors the identity row's state and expected_by until identity is done, and shows 'No matches' only then. State one row order and count, with the design's five rows first and then entity or holder, wallet and bank. Define pill labels per state. Make the seeded-persona criterion match."
+  },
+  {
+   "severity": "high",
+   "issue": "Invited people have no way in. The joint second holder and the trustees, directors, signatories and owners invited to an entity have step lists of ONB-03, ONB-05, ONB-10 and ONB-03, ONB-10. No screen calls A30's POST /v1/investors/{id}/joint/accept, which the spec itself lists as a requiresHuman action on these screens. There is no landing step for the invitation link. So invitees never accept the terms and privacy consent (a collection notice is needed before identity data is taken), never declare 18+ and never give their residency. That contradicts 'residency captured on ONB-01 for 100 % of new investors' and leaves joint foreign_person/FIRB incomplete. ONB-04 also lacks the product map's 'Invite person' action, and A50's per-row Invite button.",
+   "fix": "Add an invitation step for invitees (for example /onboarding/join, an ONB-01 variant). It shows who invited them and the role, takes 18+, residency and the consent version, and calls joint/accept or the KYB person-accept route. Put it first in the joint-second-holder and invited-person rows of stepsFor and in the hidden oracle. Add an Invite or Resend row action on ONB-04 bound to A30's invitation route, with tests. Change the G06 criterion to cover every person reaching ONB-03."
+  },
+  {
+   "severity": "high",
+   "issue": "The ONB-04 and branch design conflicts with A50, the visual reference, and with the product map. A50 draws ONB-04 after ONB-03 (step 4 of 9), gives joint accounts a separate 'Second person' step (9 steps), uses the pills Verified, Invited amber and Not started grey with an Invite button, and keeps Continue disabled while anyone is unverified. A56 defaults to ONB-04 before ONB-03, puts the second holder inline in ONB-02 (8 steps), uses the pills Verified, Verifying, Invited grey and Failed, and lets Submit go ahead with people in 'verifying'. The spec justifies ONB-04-first by 'J03, the product map wins'. But the product map's ONB-02 state says 'Entity types go to entity verification (ONB-04) after the individual checks', and J03 step 3 is the second trustee's ONB-03. So the screenshot comparison against A50 cannot pass, and the rationale for spec point (a) is wrong.",
+   "fix": "Default the entity order to ONB-01, 02, 03, 04, 05, 06, 08, 09, 10, which the product map's ONB-02 state, design analysis §6.2 and A50 all give, and correct the rationale. Pick one joint model and one pill vocabulary, and name which node changes (an A50 follow-up loop if A56's version wins). Reconcile Continue-disabled versus submit-while-verifying with A30's submit precondition before the oracle is written."
+  },
+  {
+   "severity": "high",
+   "issue": "Some pass criteria depend on nodes outside the dependency closure. (a) 'A100's parity check passes on the manifest': A100 (AM8) depends on A61, which depends on A56, so this is a cycle. (b) M07 is done when items appear in A68's ADM-10 and ADM-11 queues, but A68 is in AM7, a later milestone. (c) A06 (the seed and the Alex James Morgan persona used in the pass criteria) is not a dependency. (d) A36's open-offer route (ONB-06 ticket path), A35's terms version (ONB-01) and A101's sensitive-action notice (agent challenge) are not dependencies. (e) J02 must 'arrive at the portfolio', and 100 % of guard attempts must succeed once ready, but the portfolio, invest and wallet pages belong to A58, A57 and A59, which are siblings and not dependencies.",
+   "fix": "Add A06, A35, A36 and A101 to the dependencies (all AM0 or AM3). Replace the A100 criterion with the node's own manifest-versus-OpenAPI and requiresHuman/counsel test, and note that A100 consumes the manifest later. Rewrite M07 against A30's and A32's queue APIs, and leave the ADM-10 and ADM-11 screens to A68 or A88. Use a test target page or A52's placeholder for guard success, and end J02 at the 'Go to portfolio' link target."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec gets the tax self-certification's delegability wrong. A03 and A12 say the FATCA/CRS self-certification is \"counsel\" in delegable.ts, 'behaves as non-delegable until counsel answers', and is refused with SCOPE_PENDING_COUNSEL. A56 follows A41 instead, calling it 'the one declaration an agent may make today', and its challenge requires the agent's self-certification to succeed. Line 25 of the same spec says it stays \"counsel\". The manifest's true, false and \"counsel\" values have no defined test meaning. Only delegable:false is compared with requiresHuman, so \"counsel\" entries such as the wholesale declaration are unchecked. Fable's replay will fail against one of the upstream contracts either way.",
+   "fix": "Escalate the A03/A12 versus A41 conflict and record one answer before Specify. Until counsel rules, \"counsel\" behaves as non-delegable and returns SCOPE_PENDING_COUNSEL, and the challenge expects that. Define the manifest check: false means requiresHuman and AGNT_NOT_ALLOWED; \"counsel\" means SCOPE_PENDING_COUNSEL, or AGNT_NOT_ALLOWED where the route is requiresHuman; true means success within scope."
+  },
+  {
+   "severity": "high",
+   "issue": "The route guard cannot meet its pass criterion. The spec relies on A52's (investor) layout running the onboarding guard 'before any page data is fetched' and requires a 307 with no page data on direct URL, history navigation and RSC fetch. In the Next.js App Router, layouts and pages render in parallel, so a page's server fetch is not blocked by a layout redirect. On soft navigation between siblings, the shared layout is not re-rendered, so a layout-only guard is skipped. Following the spec leads to three failed loops and escalation.",
+   "fix": "Before Build, raise an A52 follow-up loop so the guards run in middleware.ts (session plus a short-cached status call) and also in a guardedPage() or requireGuards() wrapper that every (investor) page awaits before fetching data. State that the API also refuses data-bearing routes for a not-ready principal (A19 G01/G04), so the UI guard is never the only barrier."
+  },
+  {
+   "severity": "high",
+   "issue": "The tipping-off checks cover only ONB-03 and ONB-10. On a true sanctions match, A30 has A31 and A36 freeze wallets. A29's GET /v1/wallets/me returns 'frozen with reason', and ONB-08 polls that route every 10 s. The spec never forbids rendering frozen or its reason. The DOM, network and timing diff in the challenge and the pass criterion is limited to 'ONB-03 and ONB-10'. So a build showing 'Wallet frozen' on ONB-08, or a restricted PayID or deposit state on ONB-09 (A17's investor_restricted), would pass while tipping off a sanctioned person.",
+   "fix": "Add a rule: ONB-08 and ONB-09 render no frozen, restricted or hold-reason field, and a restricted person sees exactly what a referred person sees. Extend the tipping-off challenge and pass criterion to every onboarding step (including ONB-08's poll responses and ONB-09's PayID response) and to notifications. Add frozen, restricted and freeze to the static scan for branches keyed on a hit."
+  },
+  {
+   "severity": "medium",
+   "issue": "ONB-10 is missing product-map and journey behaviour. J02 step 12's outcome is 'Class, cap headroom and allowed products shown'. The ONB-10 state is \"All done: 'You can invest' with a link to open offers\", with expected review times. The spec shows only 'You're verified' and 'Go to portfolio'.",
+   "fix": "Add the class line (A32 classification/me and claim_state), the allowed-products and holder-cap headroom lines (from A19 or A30 via the API) and a 'See open offers' link. Add a criterion that they render only from API fields, and a J02 assertion on them."
+  },
+  {
+   "severity": "medium",
+   "issue": "ONB-09 does not match the product map or A17. The spec has no PayTo action, no BSB and account deposit details, and no client-money statement ('held on trust at an Australian bank'). Its copy 'money sent by someone else is returned' contradicts A17, which holds a third-party deposit (payer_name_mismatch, AML hint) and returns it only by a TRSY to CFO 4E decision; the product map says 'held and reviewed (AML)'. The spec names no API code for the nominated-account name mismatch.",
+   "fix": "Add the PayTo control gated by A08's payments.payto flag (A17 returns 501 in P1), the BSB and account deposit details, and the client-money statement as a data/counsel row. Change the copy to say that money from others 'is held for review and may be returned'. Name A17's name-mismatch error code."
+  },
+  {
+   "severity": "medium",
+   "issue": "ONB-01 captures 'Country of tax residence' (the design label) as the G06 residency input. A FIRB foreign person depends on ordinary residence, and on citizenship or visa status, not tax residence, which is the G16/CRS concept. People will be wrongly flagged or cleared. The product map asks 'Australian resident? country of residence'.",
+   "fix": "Record a HG-LEGAL counsel question and make the fields data-driven. Ask 'Country where you usually live' and whether the person is an Australian citizen or permanent resident, and let A30 compute foreign_person from them. Keep tax residency on ONB-05. Log a DF design deviation."
+  },
+  {
+   "severity": "medium",
+   "issue": "The guard exemptions are too narrow. Every non-onboarding (investor) route redirects until ready_to_invest, including ACC-04 Support and complaints, ACC-01 close account and privacy, ACC-02 recovery and ACC-05 API tokens. A person stuck in 'reviewing' cannot complain (G18, the IDR access expected under RG 271), cannot close the account, and cannot create the agent token that the spec says lets an agent follow onboarding progress.",
+   "fix": "List exemptions explicitly: /support, /recover, the close-account and privacy parts of /account, and /account/agents (A12 and A60 decide which scopes a not-ready person may grant). Add probes proving they are reachable while ready_to_invest is false."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ONB-07 slot causes an ownership collision. The spec reserves /onboarding/target-market for A90, and A90 'inserts ONB-07 through a slot in the same table'. But that page and steps.ts are under A56's owned paths, while A90 owns app\\(investor)\\target-market\\. A52's route table also lists ONB-07 under /onboarding/. A90 would have to edit A56's files.",
+   "fix": "Export a registerOnboardingStep() slot that A90 calls from its own folder, with the route at /target-market to match A90's owned path, and update A52's route row. Alternatively, ship a flag-hidden page shell that renders A90's exported component. Test that the slot is empty in P1 and that A90 edits nothing under onboarding."
+  },
+  {
+   "severity": "medium",
+   "issue": "Wholesale status (G04) for a joint account is undefined: the second holder has no ONB-06, and the spec never says whose certificate qualifies the account. The FRAUD persona claim also contradicts A30: A30 moves a fraud signal to auto_rejected, which is terminal, but the spec says FRAUD renders 'reviewing' byte-for-byte like REFER.",
+   "fix": "Add a counsel question on the joint-holder wholesale test and a data-driven A32 rule for the joint wholesale row. Require ONB-06 for both holders until it is answered. Replace the FRAUD sentence with 'renders A30's mapped code for auto_rejected (expected could_not_verify); only SANCTION and PEP must equal REFER'."
+  },
+  {
+   "severity": "low",
+   "issue": "Several mappings are incomplete. A29's registry_status values stale and deleted are unmapped, yet the pass criterion requires every registry_status rendered. SM-02's rfi state has no ONB-06 view or re-upload action. copy.ts leaves out CLS_OFFER_NOT_OPEN, CLS_SIGNATORY_REQUIRED, KYB_OWNERS_PENDING, JOINT_BOTH_REQUIRED, 409 payid_not_issued, SCOPE_PENDING_COUNSEL and FRESH_ASSERTION_*. 'Valid until {date + 2 years}' is computed on the client, which is a business rule in the UI.",
+   "fix": "Map stale and deleted to pills. Add an ONB-06 rfi view that re-submits via /evidence. Test that copy.ts covers the OpenAPI error enum for every manifest route. Take valid_until from an A32 preview field."
+  },
+  {
+   "severity": "low",
+   "issue": "The ONB-03 fields and ONB-08 recovery are thin. DVS driver-licence checks also need the card number; the spec has only licence number and state. The product map's ONB-08 'Set up recovery' and J02 step 9 ('sets recovery') are deferred to A59 without saying how step 9 is met here.",
+   "fix": "Render the identity-document fields from A22's document schema (licence number, card number, state; passport number and country). State that the default RealX guardian satisfies 'recovery on' for J02 step 9, and show it as a row."
+  },
+  {
+   "severity": "low",
+   "issue": "There are template and consistency slips. The status line says 'AM5 (Investor app)', but the graph's milestone name is 'Investor app and preview'. The account mask is '••••4471' on ONB-09 but '••4471' on ONB-10, and A17 returns '••4471' for rendering without transformation. The J03 criterion leaves out step 7 (the CCO 4E approval on the ticket path, awaiting_cco).",
+   "fix": "Use 'AM5 (Investor app and preview)'. Use A17's mask verbatim or log the deviation. Add J03 step 7: the wholesale row stays amber until A32's 4E effector fires, then turns green within one poll."
+  }
+ ]
+}

@@ -1,0 +1,80 @@
+{
+ "node": "A39",
+ "check": 2,
+ "auditor": "Opus 5.5, independent third party",
+ "date": "2026-09-24",
+ "pass": false,
+ "check1_followup": {
+  "critical_escrow_ownership": "NOT FIXED. The fixer moved ownership to A38, but the current A38, A37, A16, A74 and A79 all say A39 owns escrow release, so now no node owns it (see finding 1).",
+  "high_destination_swap": "fixed (fingerprint, snapshot version, compare at release, confirm-destination, oracle case at T+1 min)",
+  "high_agent_428": "fixed (matches the A12 section 5 cap table)",
+  "high_approval_model": "partly fixed. The rows, labels and one maker flow are now defined, but the 4E band has one human approver (see finding 2).",
+  "high_g14_interface": "fixed (A42 dependency, A19 registered evaluator, fails closed with aml_check_unavailable, A42 event names)",
+  "high_a20_interfaces": "fixed (A20 dependency, platform R10 run, assertClear(null,'payout') matches A20 line 220, contract test)",
+  "high_a22_dep": "fixed",
+  "high_allocation_precondition": "fixed (A20 blocking matrix, agreement criterion)",
+  "high_refund_path": "fixed on the refund side, but see finding 1 on the missing A38 exclusion-return contract"
+ },
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "Escrow release is now owned by no node. A39 says A38 F4 owns the escrow.release 6E approval, its effector and the journal (through A37 postEscrowRelease), and that A39 only consumes settlement.escrow_released. The current specs say the opposite. A38 line 36 says A39 owns POST /v1/treasury/escrow/{offeringId}/release, the escrow.release approval (FINA -> CFO + CCO), its effector, the A16 journal and the A17 payout, and that A38 never drafts, effects or posts a release. A38 line 93 says there is no escrow.release effector in A38 ('A39's'). A37 line 74 says there is no postEscrowRelease ('A39's'). A16's catalogue row escrow.release lists consumer A39. A79 J04 step 9 has FINA drafting A39's escrow release. A74 Specify point (f) flags the conflict. A38 emits offering.finalised and waits for treasury.escrow.released; it never emits settlement.escrow_released. A38 line 111 also asks A39 to consume settlement.exclusion_return_requested, emit treasury.exclusion_return.received, track the trustee receivable with its clock, and keep an offering's fees out of the fee sweep until its run is settled or refunded. None of this is in A39. As written, the finalise pipeline deadlocks, G11 ('release only after finalise') has no enforcer, and A49 and A79 cannot pass.",
+   "fix": "Restore A39 as the single owner, matching A16, A37, A38, A74 and A79. (1) Add POST /v1/treasury/escrow/{offeringId}/release (FINA maker; a staff token may draft as maker only). It creates the A14 escrow.release 6E request (FINA -> CFO + CCO) over a canonical payload {offering_id, vehicle_id, allocation_id, allocation_version, allocation_sha256, amount_cents = allocated_subtotal_cents}. (2) Preconditions: A38's offering.finalised for the current allocation version, consumed through a fake and a contract test; the amount equals allocated_subtotal_cents, fees excluded; A20 assertClear(vehicleId,'escrow_release'); assertBankLedgerClear(). Refuse a release before finalised with a stable code. (3) Register the one escrow.release effector with A14. It posts A16 escrow.release with external_ref offering:<id>, then runs the existing trustee bank-settlement steps (name check, G02 on the trustee, R10, createPayout escrow_settlement) and emits treasury.escrow.released {offering_id, approval_id, amount_cents, journal_id}. (4) Add the exclusion-return receivable: consume settlement.exclusion_return_requested, open a clock, and emit treasury.exclusion_return.received on the trustee's credit. (5) Exclude an offering's fees from fee.sweep until its settlement run is settled or refunded. Rewrite oracle invariant 2, challenge 2, the G11 and SM-05 'done' lines, the Build brief ownership sentence and the Escalate rule, which now forbids exactly this. Raise the estimate accordingly. The orchestrator must confirm A38 and A39 agree before Build."
+  },
+  {
+   "severity": "high",
+   "issue": "In the A$25,000.01-A$49,999.99 band (4E), a withdrawal leaves client money with one human approval only. A39 makes every request a 'System threshold' (SVCA) maker with checker set {CFO}, and turns TRSY's role into optional 'queue oversight'. G13's rule text is 'Two different people approve every money movement above threshold'. The product map ADM-18 'Release withdrawal' is TRSY maker, CFO checker. J15 is 'TRSY releases (above threshold -> CFO); CFO approves'. POR-05 says 'above the threshold it needs two approvals in Treasury'. The spec argues its way to compliance ('the product map admits this flow') and does not escalate the point. A build that pays a A$30,000 withdrawal on the CFO's approval alone would pass every A39 criterion.",
+   "fix": "Give the 4E row two distinct humans. Either keep maker 'System threshold' with checker_role_sets [[TRSY],[CFO]] (keeps the design's maker label; A14 constraint: distinct humans, neither is the maker), or make TRSY's release act the human maker for 4E rows. Record the choice as an A14 row change (A14 owns the rows) and as a founder confirmation in A39's Human gates, not only in the evidence file. Add an oracle case: a 4E withdrawal approved only by the CFO is never paid."
+  },
+  {
+   "severity": "high",
+   "issue": "The trustee settlement account that escrow settlements pay to has no owner and no verification. A39 says VehicleSettlementProvider is 'registered by A33 from Vehicle.bank_account_ref'. A33 registers no such provider: its bank_account_ref is 'the client-money trust account reference, filled by the treasury node, null until then'. That is RealX's trust account, not the trustee's bank account, and A33 expects A39 to fill it. A17 says 'A33/A39 register the real implementation'. No node captures, name-checks, KYB-verifies or change-controls the trustee's settlement bank details. Oracle invariant 2 depends on a 'KYB-verified trustee settlement account' that does not exist, so every settlement holds settlement_account_unavailable, or the builder invents an unaudited destination for the largest payment on the platform.",
+   "fix": "Make A39 own a versioned vehicle_settlement_account (bsb_enc, account_enc, account_name, trustee_entity_id, version, state). It is captured by SP-FIN/FINA. Its name must equal the A33 trustee entity's registered name and the entity must be KYB-verified (A30/A33 fact). Every change needs a 4E FINA -> CFO approval and is non-delegable to tokens. Register VehicleSettlementProvider from this table in A39's index.ts and snapshot its version and fingerprint on the escrow_settlement row, as for withdrawals. Clarify A33's bank_account_ref (the client-money account mapping) as a separate field. Add a challenge: the trustee account is changed after the escrow.release approval, so the settlement holds."
+  },
+  {
+   "severity": "high",
+   "issue": "Fee sweeps (and float-interest sweeps) have no bank primitive. A39 sends fee.sweep to operating with two bank authorisers 'on bank confirmation', but A17's payout purposes are withdrawal, refund, return_to_payer, escrow_settlement and internal_transfer. internal_transfer refuses realx-operating (422 INTERNAL_TRANSFER_NOT_CLIENT_MONEY). The spec-dependency loop A17.1 names only escrow_settlement, internal_transfer, authorisations[] and nominated_account_version. The Escalate rule fires on any A17 interface change beyond the named loops. The pass criteria require gate tests on the sweep path and a sweep in the integration run, so the build either escalates or calls the bank outside A17.",
+   "fix": "Add fee_sweep (and interest_sweep, disabled) to the A17.1 request. Destination rule: realx-operating only, source is the client-money account holding fee_payable_realx, amount <= fee_payable_realx less fees of offerings not yet settled or refunded, authorisations[] of two distinct humans, never a token, and a 4E on fee_sweep:<id>. List it under 'Spec dependencies to confirm'. Until A17.1 lands, keep the sweep route returning a stable 'not available' code, and do not count the sweep in the gate."
+  },
+  {
+   "severity": "medium",
+   "issue": "The approval thresholds are described as A16 configuration keys that do not exist. A39 says 'A16's keys ledger.withdrawal.auto_max_cents and ledger.withdrawal.second_approval_cents feed' the rows. The pass criteria list them as config keys and require that 'changing second_approval_cents changes the wallet's threshold sentence and the approval routing without a code change'. The summary says 'configuration'. A16 lines 103 and 112 say the thresholds live only in A14's approval_policies rows, that A16 keeps no config key and no literal for them, and that only an approved policy.change (6E, 24 h timelock) alters them. A39 also relies on A16 returning withdrawal_policy.second_approval_text, which A16's wallet contract does not have (it has second_approval_cents and auto_max_cents only). The oracle could test a key that cannot exist.",
+   "fix": "State that the thresholds are A14 withdrawal.release rows changed only by policy.change. Remove the ledger.withdrawal.auto_max_cents and second_approval_cents keys from the Approval rows heading, the pass criteria and HG-LEGAL. Rewrite the configuration criterion as: a seeded policy.change to the second-approval row moves routing and A16's withdrawal_policy.second_approval_cents with no code change. Drop second_approval_text, or request it from A16 as a loop, and let A50 and A59 own the rendered sentence."
+  },
+  {
+   "severity": "medium",
+   "issue": "The investor withdrawal request takes one session passkey for every account type. The seed has a 'both to sign' joint account (R. & S. Patel) and entity accounts that act through verified signatories (Kwan Family SMSF). A12 requires both signatories for a joint confirmation and a verified signatory for an entity, but A39's request step (2) accepts any single fresh assertion. Money could leave a 'both to sign' account on one holder's passkey, or leave an SMSF on a non-signatory user's passkey.",
+   "fix": "In the request step, apply the account's operating instruction. For 'both to sign', the row waits in a new pre-check state (for example awaiting_cosign) until the second holder asserts over the same payload_sha256 within the prepare or reservation window; otherwise it expires. For an entity, the asserting user must be a verified signatory (A30/A33 fact). Add these transitions to the SM-WDR table and an oracle case for each."
+  },
+  {
+   "severity": "medium",
+   "issue": "The bank_authoriser permission is used but not defined anywhere. A39 says two humans 'holding the bank_authoriser permission (A11 matrix; TRSY and CFO by default)' authorise transfers and sweeps. Neither A11 nor A03 defines such a permission or cell. A17's internal_transfer row only requires 'two distinct humans, neither the maker'.",
+   "fix": "Either declare treasury.bank_authorise as an A03 action cell requested through a named loop (A03.x/A11.x) with default holders TRSY and CFO, or define the eligible authoriser roles in A39's own agent-matrix and action rows. Add an oracle case: a non-holder (for example FINA) presenting an authorisation is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "Refund-to-bank hold-and-remind calls A43 ('the investor is reminded through A43'), but A43 is neither a direct nor a transitive dependency. A43 depends only on A14 and A35, so adding it would create no cycle.",
+   "fix": "Add A43 to deps, or emit an outbox event (treasury.refund_payout.reminder_due) that A43 consumes, and state which one. Make the reminder count testable against the event, not a notification."
+  },
+  {
+   "severity": "low",
+   "issue": "The graph fit text is stale. 'Unlocks' and the Gate line list A49, A59, A74 and A96, but app-graph.json also has A38, A45, A66, A97 and A99 depending on A39 (A38's dependency is load-bearing). The graph summary still says 'TRSY to CFO 4E' and that a mandated request above the band is 'refused', which contradicts the spec's System maker and 428 path.",
+   "fix": "List every dependent in Unlocks and the Gate line, and regenerate the graph summary from the final spec."
+  },
+  {
+   "severity": "low",
+   "issue": "The investor status mapping is incomplete and misleading. The terminal state failed has no investor status. paying maps to 'paid' before the bank confirms, and a paying row can still become failed or returned. The pass criteria require every mapping to be tested.",
+   "fix": "Map paying -> processing (or sent) and failed -> failed, with a plain message, and list every state explicitly."
+  },
+  {
+   "severity": "low",
+   "issue": "One design key is wrong. The command-centre screen in RealX App.dc.html is 'adCmd', not 'adCommand'. The 'Reconciled 06:00' KPI is in adCmd.",
+   "fix": "Replace adCommand with adCmd in the Design references."
+  },
+  {
+   "severity": "low",
+   "issue": "The estimate of 7-11 agent-hours is low for the scope: withdrawals with SM-WDR and three checks, escrow settlement, refund-to-bank, returns, transfers with dual authorisation, fees, float, R10 status, KPIs, runway and a fault-injection oracle. The estimate rises further once escrow release ownership returns (finding 1). A38, which is smaller, is at 10-14.",
+   "fix": "Re-estimate after finding 1 (roughly 12-16 h), or split escrow and transfers into a sibling node."
+  }
+ ]
+}

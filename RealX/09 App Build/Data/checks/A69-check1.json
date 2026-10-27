@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The kill-switch band, halt list and ADM-33 ratify pill must count down from ratify_by 'corrected by the offset between the server's Date header and the browser clock'. The pass criteria require the countdown to stay within one second of the server under a browser clock skewed by ±3 h, and forbid Date.now() 'without the server offset helper'. The console calls the API cross-origin (A53 limits connect-src to the API origin). Date is not a CORS-safelisted response header, so fetch cannot read it without Access-Control-Expose-Headers. No upstream node (A09, A53, A48, A14) exposes that header or returns a server time, and no node owns the 'server offset helper'. Date also has only one-second resolution, which uses up the whole tolerance. The builder must either invent an API change or fail a Critical-class challenge. Section 9 does not list this gap.",
+   "fix": "Add spec point (i): A09.1 returns server_now (epoch ms) in the response envelope, or at least on GET /v1/kill-switches, GET /v1/halts and the A14 approval detail; the header route would also need Access-Control-Expose-Headers: Date. A53.1 ships one useServerClock() helper in src/shell, and A69 uses it. Name the helper and its owner in §8 and in the pass criteria, and measure the tolerance against server_now arithmetic."
+  },
+  {
+   "severity": "high",
+   "issue": "In the challenge 'A flag on without a licence', Fable suspends the sample licensee AFSL and then expects offers.wholesale to auto-revert, the launch card to fail and /perimeter/public to return car_active:false. A21 binds offers.wholesale to the platform's CAR appointment. A binding lapses only when the bound licence is not active, the CAR has ended, authorisations shrink or a condition expires. car_active is false only when no CAR appointment is active. A21 defines no cascade from a suspended licensee AFSL to the CAR under it, so a build that is correct against A21 fails this hidden test. The G21 gap is also real: offers.wholesale stays on while the licensee's AFSL is suspended. Separately, the seed already has offers.wholesale on, so 'approves a valid offers.wholesale toggle' returns FLAG_ALREADY_IN_STATE.",
+   "fix": "Add spec point (j) and request A21.1: suspending, expiring or revoking a licensee AFSL cascades to its CAR appointments. The appointment goes inactive with reason licensee_suspended, the bindings lapse, the flags auto-revert and car_active becomes false, with A21 tests. Until then, point the challenge at the licence row the binding actually names. Make the toggle sequence explicit: off, then on under 4E, or use a tenant scope."
+  },
+  {
+   "severity": "medium",
+   "issue": "Spec point (c) leaves the launch-state confirmation (J20 step 12) as either an unapproved write with no assertion or a read-only card. The dependent AM7 exit node A78 asserts that 'the CCO records the launch-state confirmation with her hardware key' and that the confirmation is recorded. Either option breaks A78.",
+   "fix": "Settle (c) to match A78. A21.1 adds POST /v1/flags/launch-state/confirmations with a fresh hardware-key assertion through HardwareKeyConfirm (purpose confirm, no 4E). It records who, when, the assertion id and the snapshot hash as one A10 event, and is marked requiresHuman in parity.ts with a named operationId. Remove the read-only alternative, or change A78 in step."
+  },
+  {
+   "severity": "medium",
+   "issue": "D04 includes a per-tenant kill switch, and A77 says the per-tenant agent hold is 'visible here and on ADM-34 and ADM-33 with one source of truth'. A101 engages the tenant tier on tenancy.tenant.suspended and keeps it engaged after reinstatement until a separate 4E release. A69's ADM-33 detail shows neither the tenant-tier state nor that reinstatement leaves it engaged, and A101 is not a dependency.",
+   "fix": "Add A101 as a dependency. Add a read-only 'Agent traffic (tenant tier)' row on the ADM-33 Tenant card: state, source (manual or tenant_suspension), ratification, and a link 'Manage on ADM-35'. Extend the Reinstate copy to say the tenant agent hold stays engaged until it is released on ADM-35. Add a challenge step asserting it is still engaged after reinstatement."
+  },
+  {
+   "severity": "medium",
+   "issue": "Kill-switch release SoD is under-specified. Under A48, the actor who engaged a switch, and that actor's agents, can be neither maker nor checker of its release (KS_ACTOR_CANNOT_RELEASE). A69 §8 and §10 let a CCO's agent draft money-switch releases without that exclusion, and the challenge says only that the engaging CCO 'cannot approve'. KS_ACTOR_CANNOT_RELEASE is not among the codes the screen must render. The seed may have only one CCO, leaving no eligible release maker.",
+   "fix": "Render Release only when the kill-switch read lists the caller as an eligible release maker. Otherwise show it disabled with KS_ACTOR_CANNOT_RELEASE for the engaging actor and their agents, and add that code to the forced-request list. Qualify §10: 'unless its human engaged the switch'. Require the A06 seed to include a second CCO or another eligible maker."
+  },
+  {
+   "severity": "medium",
+   "issue": "§6 'Add entity' and 'Edit' call 'A33's entity create and update routes', but A33 publishes only GET /v1/admin/entities, GET /v1/admin/entities/{id} and GET /v1/admin/vehicles for staff. There is no POST or PATCH and no operationId. ADM-04's 'revoke (4E)' has no A21 route or action code: licence.revoked exists only as an audit event. Neither gap is in §9, so the builder will invent operations or drop the actions.",
+   "fix": "Add spec points. (k) A33.1: POST /v1/admin/entities and PATCH /v1/admin/entities/{id}, with the policy code, the reverification_required response and named operationIds. (l) A21.1: POST /v1/licences/{id}/revoke as licence.revoke, 4E CCO→LEGL. If either is absent at Specify, the button is not rendered and the gap is recorded in evidence. Make the ADM-39 and ADM-04 done lines conditional on the same rule."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ADM-34 design reconciliation is incomplete. A51 draws the kill-switch buttons 'Global inflow freeze' and 'Emergency pause', with states default, blocked, switch on and empty only. A69 renders 'Marketplace suspend' and reinterprets 'Emergency pause' as the halt form with reopening criteria, which A51 never draws. Also undrawn: the halt list, the release form, CAR register actions, CreateTenantFlow, the guardrail diff and the entity forms. The fidelity challenge and pass criteria excuse only point (e) and the Yarra Bend row, so Fable's token-level comparison fails or has no frame to compare against.",
+   "fix": "Add a spec point sent to A51 as a follow-up before Specify: relabel the button 'Marketplace suspend' (A48 key platform.marketplace_suspend), and draw the halt form, open-halts list, release-with-criteria form and CreateTenantFlow. List these as recorded reconciliations in the challenge and pass criteria. Build anything still undrawn only from A05/A51 blocks and record it in evidence."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ADM-34 product-map action 'Change fee schedule' (CFO→CEO, 4E, G13 and G17, effective after the notice period) and the platform fee schedule behind PUB-06 have no owner. A21 says M27 fee schedules are A45's, but A45 does not carry them, and A33's tenant.fee_schedule.set is PART→CFO. A69 point (d) only 'raises it to the user', while the ADM-34 and M27 done lines drop the action silently, so the requirement can pass unbuilt.",
+   "fix": "Name an owner before Specify, preferably A33.1: platform.fee_schedule.set, 4E CFO→CEO, 30-day notice, G17 check on the investor-facing text. A69 builds the editor on ADM-34 through PrivilegedActionFlow. If the founder defers it, record it as an open item in the Screen Coverage Matrix and make the ADM-34 done line say so."
+  },
+  {
+   "severity": "medium",
+   "issue": "The product map's ADM-04 DAF Act panel includes 'TCP/DAP status' next to the low-value exemption meter. A69 shows only the meter and a basis caption, and neither A69 nor A21 names a read for the digital-asset-platform or tokenised-custody-platform authorisation status.",
+   "fix": "Add a 'DAP / TCP status' KeyValueList that reads A21's licence register: the licence and state holding digital_asset_platform and a custody or TCP activity, the basis, the counsel caption, and 'none' when absent. Request any missing activity code as A21.1, and add the state and its screenshot."
+  },
+  {
+   "severity": "medium",
+   "issue": "The J11 console Playwright spec must take the tenant to 'active' with step 4 after step 3. Step 3 (KYCA on ADM-10) belongs to A68, a sibling that is not a dependency. Reaching active needs the owner's invitation acceptance and passkey, which is A62's side. The spec does not say how the test gets through these steps, so the hidden spec depends on unbuilt siblings or cannot finish.",
+   "fix": "State that the non-owned steps run through the SDK and sandboxes: A30 KYB approvals through A22 sandbox scenarios, and invitation acceptance plus passkey through A11's sandbox authenticator (or A65's helpers). Assert only steps 2, 4 and 5 through A69's screens."
+  },
+  {
+   "severity": "medium",
+   "issue": "§10 says 'Activity views on ADM-33 and ADM-04 list refused agent calls beside successful ones', but no section defines these views, their columns or their API. The challenges expect agent-token refusals to 'render' although an API agent never uses the console. One challenge accepts 'APR_CHECKER_MUST_BE_HUMAN or the act refusal', which is not an exact code. The agents.traffic self_subject check has no control on this node's screens, because A77 owns it.",
+   "fix": "Define the panel or delete the sentence. The panel would be a tab on the tenant detail and the licence drawer, reading A10's audit or A12's token activity filtered by object_ref, with time, 'agent TOK-… on behalf of person', operation, result, code and its states. The alternative is a link to ADM-31 and ADM-35. Assert agent refusals on the API response with one exact code each, and move the self_subject assertion to A77."
+  },
+  {
+   "severity": "low",
+   "issue": "Graph fit: the spec uses A06 (seed and scenarios), A104 (MCP tool names for parity.ts) and A98 (real TP-LIC principals, built in AM3), but none is a direct or transitive dependency. The spec says A98 'is not a dependency' although it lands before AM7.",
+   "fix": "Add A06, A104, A98 and A101 to A69's deps in final-graph.json and in the note. Test ADM-04 read-only with a real TP-LIC persona instead of the fixture PARTNER."
+  },
+  {
+   "severity": "low",
+   "issue": "Broken wikilink in §9(h): '[[A76 - Console: regulatory calendar …]]' uses a colon, but the file name uses a hyphen ('A76 - Console- …'). The plan-document links (App Build Plan, App Gauntlet, App Development Graph, Screen Coverage Matrix) do not resolve yet.",
+   "fix": "Change the link to [[A76 - Console- regulatory calendar and data room, sponsor performance, integrations and jobs]]. Check the four plan links once the plan is assembled."
+  },
+  {
+   "severity": "low",
+   "issue": "Loose test wording in four places. (1) 'Within one badge tick' is applied to the flags table, but no refetch policy is set for table queries. (2) 'Three consecutive runs with different seeds' conflicts with 'the seed reproduces the design data exactly'. (3) The Wattle & Stone fixture has '2 of 3 directors verified' but expects '1 owner unverified'. (4) The tenant-creation refusal names no exact code.",
+   "fix": "(1) Refetch the flags, kill-switch and launch-card queries on A53's 30-second tick and on focus, and invalidate them after the licence suspend. (2) Replace 'different seeds' with 'the A06 seed plus two named scenario fixtures'. (3) Align the fixture text: plant either an unverified director or an unverified 25% owner. (4) Name the exact tenant.create refusal code, for example APPLICATION_ILLEGAL_TRANSITION."
+  },
+  {
+   "severity": "low",
+   "issue": "The product map's J21 step 2 says 'Board ratifies within 24 h', and A48 returns board_ratify_by (P2) on halts and kill switches. A69 renders only the 2-hour ratification, so the P2 board clock has no label.",
+   "fix": "Render board_ratify_by as its own countdown pill when the API returns it, and include it in the state-coverage test with a P2 fixture screenshot."
+  }
+ ]
+}

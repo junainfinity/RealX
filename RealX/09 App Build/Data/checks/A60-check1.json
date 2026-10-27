@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Route premise wrong and owned-path collision. The spec's Specify point (a) says A52's frozen table names ACC-05 /account/api-tokens and SPN-16 /s/[tenant]/api-tokens. A52 actually routes ACC-05 to /account/agents and SPN-16 to /s/[tenant]/agents (A52 lines 82-83, 330). The owned folder app/(investor)/agents/ serves /agents, not /account/agents. /account/ is A59's owned path, so A60 cannot serve A52's URL without editing A59's folder. The proposed A52.1 change to /agents is needless churn, and the loop id A52.1 is already used by A57 and A92.",
+   "fix": "Carve app\\(investor)\\account\\agents\\ out of A59's owned path and make it A60's: update owned_paths in final-graph.json and add an exclusion line in A59. Keep A52's /account/agents and /s/[tenant]/agents rows. Drop the redirect request. Correct the Specify (a) text and the page paths in section 1."
+  },
+  {
+   "severity": "high",
+   "issue": "Dependencies are missing for interfaces the spec uses. A98 (valuer and property-manager tenant members, their principal kind, fixtures) is not an ancestor, yet SPN-16 must serve SP-VAL and SP-PM. A23 (Docker stack) is not an ancestor, yet all Playwright flows run against it. A37 (orders) is not an ancestor, yet 'Revoke under fire' places Kent Street orders and the revoke card lists open orders. Also, A98 models valuers and property managers as PARTNER principals linked per tenant, but section 1 admits only a 'HUMAN principal of kind sponsor_user', which locks them out of SPN-16.",
+   "fix": "Add A98, A23 and A37 to deps (all in earlier milestones). Replace the principal-kind rule with: any principal the API reports as a tenant member (a sponsor_user or an A98 tenant partner), rendered from the API's answer. Add SP-VAL and SP-PM personas to the state matrix."
+  },
+  {
+   "severity": "high",
+   "issue": "Journey pass criteria depend on nodes that are not upstream. The J17 slice needs A59's ACC-01 settings row and A58's POR-04 marker; both are in the same milestone and are not deps. The J19 slice needs the agent to prepare a distribution through 'A64's route' and the run to wait on SPN-09. A64 is in AM6, so it cannot be a dep, and the prepare API belongs to A40. So the Journeys pass criterion cannot be met at A60's gate.",
+   "fix": "J17 in A60: navigate directly to ACC-05 and its #activity anchor, then make the same read with the investor's own token. Move the ACC-01 and POR-04 entry checks to A61 or A79. J19 in A60: Priya requests, Mia approves with a passkey, the agent calls A40's prepare route through the SDK, and the API (A40/A14) shows the run waiting for a human approver. Move the SPN-09 visual check to A65, or add A58 and A59 as deps."
+  },
+  {
+   "severity": "high",
+   "issue": "The 'account frozen or under AML review: every token suspended' state has no upstream producer and contradicts A101. A101 says an AML restriction triggers nothing, because a pause would itself tip the person off. A12 has no suspension driven by an account freeze. Section 2 says the API sends no reason yet the page must render 'Paused while we review your account'. The tipping-off challenge and the state matrix expect a rendering a correct API never produces, which invites the client to infer review status itself.",
+   "fix": "Raise the conflict between the product-map state and A101 as a founder/MLRO question (HG-LEGAL). Until it is settled, render only the status and reason the API returns. Change the challenge to assert that an investor under AML review gets responses and DOM shaped like a normal account's, with no AML, sanction, PEP or case wording. If the product-map state stays, request a follow-up on A12/A30 that suspends tokens on account freeze with a generic reason code."
+  },
+  {
+   "severity": "medium",
+   "issue": "The Approve control depends on a can_approve field and a sole-owner fallback from the pending-token read. A12's contract has neither, and the spec does not list them as a Specify follow-up. The maker-checker matrix pass criterion depends on them.",
+   "fix": "Add Specify point (f): a follow-up request to A12 (and A14's 4E path) for can_approve and approver_fallback, computed server-side. Until they exist, the Approve control does not render and the node escalates."
+  },
+  {
+   "severity": "medium",
+   "issue": "An idempotency key fixed for the life of the draft conflicts with A09. After a refusal sends the person back to Scopes or Limits and they edit, the same key with a new body returns 422 idempotency_key_reused. The spec also does not say whether a stored 4xx FRESH_ASSERTION_REQUIRED response is replayed on the retry after the passkey.",
+   "fix": "Use one key per canonical payload: a new key whenever the mandate hash changes, and the same key for retries of an identical payload. Confirm with A09/A52 that 4xx refusals release the claim. Add a test: refuse, edit and resubmit creates exactly one token."
+  },
+  {
+   "severity": "medium",
+   "issue": "Passkey steps and parity entries are missing. A46 requires a fresh passkey (webhook_manage) to add or widen a webhook. A101 requires one (notice_policy_loosen) to loosen notices. Sections 6-7 do not route these through withFreshAssertion. parity.json omits: add webhook, rotate webhook secret, change notice settings, create sandbox token, reset sandbox, revoke all, owner revoke of a member's token, tenant pause and resume, and clearing a hold with resolution revoke.",
+   "fix": "Specify the step-up for each flow from the owning node's rule. Add every listed action to parity.json with its SDK operation id, scope and delegable value: loosening notices and adding a webhook are requiresHuman; tightening, removing and pausing are delegable."
+  },
+  {
+   "severity": "medium",
+   "issue": "Role-change and tenant-suspension rendering contradicts A12. A12 revokes a token only when the owner loses the last role granting any of its cells. A partial loss keeps the token active, and the lost cells fail with G22_OWNER_NO_LONGER_HOLDS_ROLE. A12 also answers TENANT_SUSPENDED to every token call from a suspended tenant's members, so the page cannot list 'Tenant suspended' revoked rows.",
+   "fix": "Add a partial-loss state: the lost cells show 'No longer yours' from introspect while the token stays active. Render TENANT_SUSPENDED as a read-only page with A33's banner, or request an A12 follow-up that allows the list read under suspension. Update the state matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "'Revoke all' and the revoke consequences card have no API. A12 has no revoke-all operation. The fallback (a user pause plus a client loop of per-token revokes) is not atomic, contradicts 'the browser never loops', and a pause is not a revoke. The card's list of open work (orders, confirmations, webhooks, session key) has no endpoint.",
+   "fix": "Request two A12 follow-ups at Specify: POST tokens/revoke-all and GET tokens/{id}/revoke-preview. Until they exist, hide 'Revoke all' rather than emulate it, and show the card without the list."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'Scope picker bypassed' challenge assumes an expired wholesale certificate greys Invest and trade as 'Not yours'. In A12 the scope ceiling is the owner's role cells from /iam/me. Certificate expiry is checked by G04 (A32) at order time and only caps max_expires_at. A correct build could fail this hidden test.",
+   "fix": "Use a fixture whose cell is truly absent from /iam/me, e.g. SP-IR asking for Distributions: prepare. Or confirm with A12/A32 at Specify that certificate expiry removes the invest cell."
+  },
+  {
+   "severity": "medium",
+   "issue": "The product map puts G01 on 'Create token' for both ACC-05 and SPN-16, but the spec gives no behaviour, state or test for a person whose identity is not verified.",
+   "fix": "Route the G01 refusal: end the flow with its sentence and a link to identity verification. Add a persona with incomplete identity and a state-matrix entry."
+  },
+  {
+   "severity": "low",
+   "issue": "The audit wording differs between screens: ACC-05 activity uses 'agent {prefix} on behalf of {person}', SPN-16 uses 'agent for {person}'.",
+   "fix": "Use one template from A10's audit wording on both surfaces and test the exact string."
+  },
+  {
+   "severity": "low",
+   "issue": "final-graph.json assigns J22 to no node, although A60 delivers steps 1, 4 and 5.",
+   "fix": "Add J22 to the journeys of A60 (and A82) in the graph data."
+  },
+  {
+   "severity": "low",
+   "issue": "The hold states are incomplete against A101. A person cannot clear a hold that staff placed (GUARD_HOLD_PLACED_BY_STAFF), and a person's clear takes a resolution of resume or revoke.",
+   "fix": "Add a staff-placed hold state (no Clear button; shows 'RealX support' and the reason) and a resume-or-revoke choice on clear."
+  },
+  {
+   "severity": "low",
+   "issue": "A12 has not frozen the name mandateHash; it ships mandate-hash.ts. The design ref puts the PayID chip at line 464 of the prototype; it is at line 466.",
+   "fix": "Cite A12's frozen mandate-hash.ts export and correct the line number."
+  },
+  {
+   "severity": "low",
+   "issue": "The 6-10 agent-hour estimate looks low for two surfaces, five parallel sub-agents, a full state matrix and 100 create/rotate secret scans.",
+   "fix": "Raise the estimate to 10-14 hours, or split the sponsor team and approval work into its own node."
+  }
+ ]
+}

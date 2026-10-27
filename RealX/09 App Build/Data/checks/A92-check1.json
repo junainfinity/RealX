@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "The investor and public API contract A92 builds against does not exist in A91's frozen spec. A92 makes up its own operation ids and routes: resale.asks.quote/create as POST /v1/resale/instruments/{code}/asks, resale.buys.*, /v1/me/resale/orders/{id} and /v1/public/resale/.../market. It also makes up scopes (resale:quote/sell/buy/cancel/read), a quote_id/book_sequence binding, a separate bid_limit_cents, and error codes (MKT_ORDER_REJECTED, MKT_QUOTE_EXPIRED, MKT_BAND_CHANGED, MKT_BOOK_CHANGED, MKT_INSTRUMENT_HALTED, MKT_NOT_CANCELLABLE). A91 sections 4 and 9 define something else. Quotes are read-only GETs: GET /v1/market/instruments/{id}/sell-preview and GET .../quote?side=buy&units=, with no quote id. There is one POST /v1/market/instruments/{id}/orders {side, units, limit_price_cents, time_in_force rest|fill_and_cancel, acknowledgements[], confirmation}. The other routes are GET /v1/market/me/orders, GET /orders/{id}, POST /orders/{id}/cancel, /book and /tracker. The scopes are market:read and market:order.sell/buy/cancel. The error codes are MKT_PRICE_OUTSIDE_BAND, MKT_LOCKED, MKT_HALTED, MKT_HOLDER_CAP, MKT_INSUFFICIENT_FUNDS, MKT_HOLDING_FROZEN, MKT_ORDER_NOT_CANCELLABLE, MKT_BOARD_NOT_OPEN and MKT_SELF_MATCH_PREVENTED. The behaviour differs too. A91 has no market orders: the buy limit is the last ask the quote needs, and the rest of the order rests at that limit or is cancelled. A book that moves fills within the limit; A91 never refuses with book-changed. The claim that a quote is a POST and preview mode therefore cannot quote is false. A91's mandate caps count units and the value at the limit, not the quoted total. Loop A91.1 only covers contract fields, so the builder, Fable's hidden mock and the parity diff would all target an API that A91 will not ship.",
+   "fix": "Rewrite sections 2-6, the investor manifest, errors.ts, the challenges and the pass criteria against A91 sections 4 and 9 verbatim: the market.* routes, the market:* scopes, the single order route with side and time_in_force, the GET quote and sell-preview (allowed in preview mode) and A91's error catalogue. Build the INV-06 resting bid as time_in_force=rest at the quoted limit. Anything extra (a separate bid limit, a quote id, a book-changed refusal) must be listed as a named A91.1 change with the owner's sign-off before Fable writes the oracle. Rewrite the 'board moves under the buyer' challenge to match A91: the order fills within its limit, the rest rests or is cancelled, and a band move cancels resting orders with BAND_MOVED. Restate the agent caps in A91's terms."
+  },
+  {
+   "severity": "high",
+   "issue": "The console actions do not match A91 and A48. A92 uses A48's halt.clear for Resume. halt.clear is 4E CCO->CEO and covers manual halts only. The product map and A91 define Resume as market.instrument.resume (4E MKTO->CCO, refused with MKT_STILL_HALTED or MKT_RECON_NOT_CLEAR). The ops cancel is written as an A14 draft 'market.order.cancel_ops', a row A91 does not have: in A91 it is the ordinary cancel route with the staff scope and a reason code. A91's market.instrument.close (4E) has no control on the screens. The draft names also do not match A91's staff routes.",
+   "fix": "Use market.instrument.resume (4E MKTO->CCO) shown per A91's allowed_actions, and render MKT_STILL_HALTED and MKT_RECON_NOT_CLEAR. Make the ops cancel a direct POST /v1/market/orders/{id}/cancel with the staff scope and a mandatory reason code. Add a 'Close instrument' control (4E) that shows the open-order count. Map every console manifest entry to A91's section 8 and 9 names and test it against A91's policy rows."
+  },
+  {
+   "severity": "high",
+   "issue": "The dependencies do not cover what the spec uses. Following A92's deps (A91, A52, A53, A50, A51, A58) down the graph never reaches these nodes:\n- A06, the P2 seed with Bay Road, Marion Street and PAD01, needed for the seed strings and J07.\n- A23 or A89, the Docker stack J07 runs against.\n- A104, the MCP server the parity challenge calls.\n- A42, the AML case that 'Open surveillance case' creates.\n- A54, whose file loop A54.1 needs.\n- A57, whose patterns and the INV-01 redirect are reused.\n- A60, the ACC-05 page for 'Waiting for your confirmation'.\n- A90, for G05 and the PDS/TMD documents on INV-06.\n- A100, the parity harness.\nThe node can be scheduled before these exist and still claim its pass criteria.",
+   "fix": "Add A06, A89 (or A23), A104, A42, A54, A57, A60 and A90 to A92's deps in final-graph.json and in the note. None of them breaks milestone order. Add A100 too, or state that A100 is the binding parity check and the preview script is only a stopgap."
+  },
+  {
+   "severity": "high",
+   "issue": "Joint and entity investors are not handled. In A91, a joint account with signing_rule both keeps its order in new_order + awaiting_cosign for up to 24 hours until the second holder signs, and an entity account needs a verified signatory. A92 says new_order only exists inside A91's transaction and shows it as 'Checking'. It gives no co-sign prompt, no screen for the second holder, and no copy for an unverified signatory. A joint holder's order would sit as 'Checking' with no way to finish it, and nothing tests this.",
+   "fix": "Add an 'Awaiting your co-holder' pill, timeline row and copy, with the 24-hour deadline from the server. Add a confirm entry point for the second holder: a passkey ceremony over the same payload hash. Add copy for what happens when the 24 hours run out, and the entity 'verified signatory required' refusal copy. Add joint and entity fixtures to the gallery and the hidden cases, and remove the 'transient only' claim."
+  },
+  {
+   "severity": "medium",
+   "issue": "Staff-agent authority and the roles on ADM-21 disagree with A91. A92 lets a MKTO or CCO agent open a surveillance case directly and does not mark that action human_only. In A91 the agent may only draft it, and the MKTO confirms with a passkey. The roles list leaves out MLRO, whom A91 lets read surveillance alerts, and CEO, who ratifies halts under SGL+R. It includes CFO, SVCA and read-only staff on a surveillance route that A91 refuses them, without saying how the page renders for them.",
+   "fix": "Make the agent path a draft with MKTO passkey confirmation, mark the confirm step human_only, and add a challenge that an agent's direct case-open is refused. Add MLRO and CEO to the roles. Hide surveillance for CFO, SVCA and read-only staff, and walk those personas in the challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "The settlement-attempt and proceeds copy contradicts A91. A91 allows 1 attempt plus 3 retries (4 attempts), with retries_exhausted after the third retry. A92 says 'after three attempts', shows '2 of 3' in the blotter, and shows Bust 'after the third failure'. The seller's page says the proceeds were 'paid to your funds available' without tying this to registered, while A91 releases seller proceeds only at registered.",
+   "fix": "Take the attempt count and maximum from the server. Word the busted copy with no hard-coded count. Show Bust only when A91 lists it. Show 'paid to your funds available' only at registered, and before that 'Proceeds arrive when the register updates'. Add fixtures."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several A91 cancellation and failure outcomes have no investor copy or fixture:\n- BAND_MOVED\n- EXPIRED (order_max_days 30)\n- INSTRUMENT_CLOSED\n- CIRCUIT_BREAKER (the rest of a fill_and_cancel order)\n- MKT_SELF_MATCH_PREVENTED\n- MKT_FREEZE_FAILED\n- a trade left settled with registration_state=rejected\nA builder could show these as a bare 'Cancelled', or as 'Settled · register updating' forever.",
+   "fix": "Add each outcome to status.ts or errors.ts with copy that is safe to show investors, and show the listing's expiry date on 'Your listings'. Add a 'Register update delayed' state. Add all of them to the state gallery and the hidden mock."
+  },
+  {
+   "severity": "medium",
+   "issue": "HoldingSplit shows '{frozen_units} listed', but A91's sell-preview returns one frozen figure that mixes tokens frozen for a listing with legal and AML freezes. The spec's own challenge requires AML-frozen units to show as 'Not available' with no reason. The fields specified cannot do that without mislabelling those units or doing arithmetic in the browser, which the spec forbids.",
+   "fix": "Name listed_units and unavailable_units (unavailable_units carries no reason code) in loop A91.1, and render both. Test that they add up to the server's frozen figure and that no reason string reaches the DOM."
+  },
+  {
+   "severity": "medium",
+   "issue": "The single-instrument manual halt has no defined control on ADM-21. The manifest lists halt.open and the agent sweep expects no Halt button, but section 7 only has Resume and 'Halt all'. The product map's 'Halt instrument' (SGL+R, with an optional token pause) is therefore unbuilt. 'The five privileged actions' is also ambiguous, since the manifest has six drafts plus halt.open.",
+   "fix": "Add 'Halt instrument' to the instrument detail page, using HardwareKeyConfirm's ratify variant with mandatory criteria and an end date, plus the optional A28 pause draft. Replace 'five privileged actions' with an explicit list."
+  },
+  {
+   "severity": "low",
+   "issue": "The J07 setup leaves out preconditions A91 requires. Step 1 cannot go PRE-OPEN->OPEN until the venue mode is changed to bulletin_board (CCO->LEGL) and the resale.board flag is on under a test binding. Step 7's 30-minute halt needs the injectable server clock to be advanced.",
+   "fix": "List the fixture steps in order: test binding, flag on through A21's 4E in the test profile, venue-mode change, then list and approve. Advance A91's injectable clock for the 30 minutes and assert on server time."
+  },
+  {
+   "severity": "low",
+   "issue": "The design key 'design:PreviewBanner' has 0 matches in RealX App.dc.html. The banner is inline markup at line 482.",
+   "fix": "Replace it with 'design:sell (line 482)' or with design-analysis section 2 item 32."
+  },
+  {
+   "severity": "low",
+   "issue": "The preview probe allows zero POST/PUT/PATCH/DELETE requests from the page. A52's shell may legitimately POST for session refresh, sign-out or error reporting, which would make the 50/50 criterion flaky.",
+   "fix": "Scope the probe to the SDK operations marked mutating in openapi.json, or allow-list A52's auth endpoints."
+  },
+  {
+   "severity": "low",
+   "issue": "The node's gate list leaves out G14. The product map puts G14 on ADM-21 and J07 step 7, and the spec exercises it (surveillance case, under_review refusals). G13 and G20 are also exercised without being listed.",
+   "fix": "Add G14 (and G13 and G20) to A92's gates in final-graph.json and to Requirements covered, each with a done-when line."
+  }
+ ]
+}

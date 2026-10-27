@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Graph dependencies do not cover interfaces the spec and its own pass criteria rely on. The transitive closure of A72's deps (A53, A28, A29, A15, A51) excludes A104 (MCP server: the Parity pass criterion and the staff-agent challenge call every row 'through the SDK and the MCP server'), A35 (document library: mandatory evidence pickers for forced transfer, estate, deploy test report, waiver court order), A48 (halt cause and reopening criteria in the G10 header), A42 (the Block-wallet deny-list route and the AML need-to-know rule), A06 (the seed the challenges and state screenshots use), A101 (anomaly event asserted for P9_TOKEN_CREDENTIAL), A98 (trustee chain card) and A44 (unmask route). The scheduler orders by remaining path, not milestone, so A72 can be scheduled before these exist and the MCP/evidence tests would be stubbed or skipped.",
+   "fix": "Add A104, A35, A48, A42 and A06 as direct deps in final-graph.json (and A101, A98, A44 or state that those tests drive fixtures until they land). Add A42 to the Specify frozen inputs, since the Block-wallet route is requested from it."
+  },
+  {
+   "severity": "medium",
+   "issue": "Waiver rule contradicts A28 and the J09 claim. A72 hides the waiver only for a lost-wallet recovery on the smart-wallet path and otherwise draws the 'Waiver needs CCO + CEO with a court order on file' state. A28 says a lost_wallet recovery cannot be waived at all, and its hidden challenge expects a refusal. Yet A72's J09 'Requirements covered' claims the failure path 'court order -> waiver by CCO + CEO' has a drawn state. The builder cannot satisfy both, and the product map's J09 does allow the waiver.",
+   "fix": "Pick one rule and write it the same way in A28 and A72. Either the waiver control is absent for every lost_wallet request (then J09's third failure path becomes a recorded product-map deviation and a counsel question), or A28 allows a court-order waiver on lost_wallet. Add a challenge row for the lost-wallet token-fallback case."
+  },
+  {
+   "severity": "medium",
+   "issue": "J09 step 6 (freeze the old wallet) is wired to the wrong control. A72 says TOKO freezes the old wallet on ADM-14, but its freeze kind takes only wallet, units and reason, with no link to the TR/RCV case. A28 (line 83) says it submits the old-wallet freeze op itself, under the recovery request's approval chain, and blocks 'timelock' until that freeze is confirmed. A freeze drafted by hand from the form would be a second, unlinked op that never moves SM-13 to old_wallet_frozen, but a Playwright step could still pass on it.",
+   "fix": "State that the old-wallet freeze for a recovery or estate case is the A28-created op. It shows in ADM-14's pending and signing lists tagged with the TR id, and TOKO acts only on that op. The generic freeze form must show A28's refusal or warning for a wallet with an open SM-13 case. The J09 Playwright step asserts the desk item moves to old_wallet_frozen under the same approval chain."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G10 paused override has no control. The banner says forced transfers, recoveries and unlocks 'need an approved override', and challenge 5 expects them to be 'blocked unless an approved override is referenced'. But no screen action requests A28's token.paused_override (CCO -> LEGL, 4E, legal basis mandatory), no form field references one, and the parity table has no row for it. That half of G10 cannot be driven or tested through the screens.",
+   "fix": "Add a 'Request paused override' action on ADM-14 for paused tokens (CCO, a PrivilegedActionFlow draft of A28's token.paused_override with legal basis mandatory). Add an override-reference picker to the forced transfer, recovery and unlock drafts, a parity row (agent draft: yes; decision: never), and a challenge step that accepts the op once the override is approved."
+  },
+  {
+   "severity": "medium",
+   "issue": "The AML need-to-know rules contradict each other. OP-7729's API detail_line '0x2c..7f · AML-118' is shown to every role as mono text ('Other roles see the id'), but the Block-wallet section says 'Nothing about the reason is visible to SUPP or IRCM'. The challenge then fails the node on 'any case field in the DOM or network responses of a non-MLRO/CCO session' while it also allows the case id and forbids a palette search on it. Showing an AML case id to SUPP reveals that the freeze is AML-related (the tipping-off risk).",
+   "fix": "Require A28 to redact detail_line per role on the server (add this to the read-contract follow-ups). Non-MLRO/CCO roles get a generic 'compliance hold' with no case id, and the challenge asserts that the case id is absent from the DOM and the network for SUPP, IRCM, CFO and TOKO."
+  },
+  {
+   "severity": "medium",
+   "issue": "M09 and SM-06 coverage claims reach beyond the controls the spec defines. 'Done' for M09 lists configure, and SM-06 needs deployed -> configured (registry, modules, agents) and active -> migrating. Neither kind is in the new-action form's list (mint, burn, freeze/unfreeze, lock_up/unlock, rule_change, upgrade, plus unpause and deploy), so configure is unreachable from ADM-14, and the product map's J12 step does it there.",
+   "fix": "Add configure (and migrate, if A28's catalogue has it) to the ADM-14 kind list with its fields, policy row and parity row, or record them as driven by another node and remove them from the M09 'Done' claim."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'no quorum, threshold or timelock number in code' pass criterion conflicts with hard-coded copy the spec requires. The sub-line '...a 2-of-3 custody quorum before broadcast' is to be kept verbatim, and it is also wrong for V1 (3-of-5) and V3 ops. The countdown hard-codes 'AEST', which is wrong during daylight time (AEDT from 4 Oct 2026 in NSW and Victoria).",
+   "fix": "Render the quorum in the sub-line from the token payload (the V2 vault's need-of-n), or list the verbatim copy as a recorded deviation and exempt copy strings from the grep explicitly. Format times with Intl for the configured Australian timezone so AEST or AEDT is derived, never literal."
+  },
+  {
+   "severity": "medium",
+   "issue": "Broadcast is gated on state only. 'Broadcast appears only when the op is signed' has no caller-permission condition, unlike Sign (caller_signing.can_sign). Every console role that can read ADM-14, SUPP included, would see an active Broadcast button, and the spec never names which human roles may broadcast.",
+   "fix": "Add caller_broadcast {can_broadcast, reason_code} (or the A28 RBAC row) to the read-contract follow-ups, name the roles allowed to broadcast, and add a challenge where a read-only role sees no Broadcast and a forced call is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "A pass criterion depends on an unlisted upstream change. 'A planted import of custody.approveOp outside signing/ fails lint' needs a rule in A53's eslint.config.js, which A72 only 'proposes' and which is missing from the five read-contract follow-ups. If A53 never adds it, the criterion cannot pass, or it gets faked.",
+   "fix": "Enforce the import boundary with a static Vitest check inside A72's contract-tests/, which the node owns, or add it as follow-up 6 against A53 with an owner and a due point before Specify."
+  },
+  {
+   "severity": "medium",
+   "issue": "The seed contradicts challenge 1. The challenge has signer S1 sign OP-7730, but the prototype seed has OP-7730 at 2 signatures on a 2-of-3 V2 vault, so it is already 'signed' and shows Broadcast, not Sign. The 'corrected seed' never states OP-7730's signature count, so Fable and the builder can each read the fixture differently.",
+   "fix": "State the seeded signatures_have, vault and state for OP-7731, OP-7730 and OP-7729 explicitly (for example OP-7730 at 0 of 3, awaiting_signatures), or move challenge 1 to an op seeded at 0 or 1 signatures."
+  },
+  {
+   "severity": "low",
+   "issue": "The pill table source is ambiguous. A72 re-exports its state maps 'from the SDK where A28 ships them', but A28's SDK pill mapping is 'waiting | broadcast | confirmed | broken', with no separate confirmed-reconciling pill, so a re-export could turn confirmed ops green.",
+   "fix": "Make A72's TokenOperation table authoritative, with confirmed, register_pending and reconciling mapping to the amber 'Confirmed · reconciling', or add a follow-up to A28 to split the SDK's confirmed pill."
+  },
+  {
+   "severity": "low",
+   "issue": "The parity tests only prove the in-mandate successes and the 'never' refusals. G22 limits (allowed trusts, expiry, a revoked token, an out-of-scope kind) are never exercised on these routes, so an over-broad staff token would still pass.",
+   "fix": "Add one out-of-mandate case per 'yes' family (a draft on a trust outside the token's allow-list, and a revoked or expired token) that must be refused with the G22 code and audited."
+  },
+  {
+   "severity": "low",
+   "issue": "The lost-wallet ApprovalsChain example leaves out LEGL's legal_review (J09 step 5, and A29's fallback path) and does not separate the smart-wallet path (KYCA -> CCO, 4E) from the token fallback.",
+   "fix": "Give two example chains: the smart-wallet path SUPP -> KYCA -> CCO -> 48 h -> execute, and the fallback SUPP -> KYCA -> LEGL -> CCO -> CFO + trustee -> old wallet frozen -> TIMELOCK -> custody -> register."
+  },
+  {
+   "severity": "low",
+   "issue": "Graph data and attribution slips. ADM-40 is built here but is missing from the node's 'screens' list in final-graph.json. The legal-basis TextArea is credited to A50 (the investor and sponsor design extension, not a dependency) instead of A05 or A53. The product map's wallet 'risk score' is always shown as 'not in P1'.",
+   "fix": "Add ADM-40 to the screens list. Credit the TextArea to A05's components. Show A42's customer risk rating to MLRO and CCO in the Risk column, or record the omission as DF-A72-03."
+  }
+ ]
+}

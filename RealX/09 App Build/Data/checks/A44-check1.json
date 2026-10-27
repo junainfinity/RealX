@@ -1,0 +1,100 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Unmask is specified twice with conflicting contracts. A30 (upstream, already written) owns POST /v1/investors/{id}/unmask in investors/, with reason codes CASE_REVIEW/COMPLAINT/..., grants bound to the session, audit code investor.pii.unmasked, and 'SUPP and IRCM never unmask'. A44 section 8 puts the handler in investor360/, with a different reason-code list, grants bound to the viewer, event pii.unmasked, and SUPP allowed to unmask contact fields. Two modules would register the same route, and A68 already records the disagreement.",
+   "fix": "Make A30 the owner, since it is upstream. A44 consumes an exported validateUnmaskGrant from A30's index.ts for X-Unmask-Grant on Investor 360 tab reads. Delete A44's handler, its reason-code list and 'SUPP may unmask contact fields', or reopen A30 if the founder wants that. Use one audit code and one binding in both notes, and drop unmask_grant from A44's schema request."
+  },
+  {
+   "severity": "high",
+   "issue": "closeChecks and the estate path cannot be built in the graph's direction. A30 (a dependency, built first) cannot import A44's closeChecks for its close route. The blocker list needs A37 orders and A40 distributions, which are not ancestors. The estate effector sets a 'restriction = estate' that no module reads, A12 has no subscription to investor.estate.recorded, and the same spec says neither module writes investor state. A deceased investor's account keeps trading and withdrawing, and an account can close while holding units.",
+   "fix": "Reopen A30 so it exports a CloseBlockerProvider registry (or move the close route into A44). A44, A37 and A40 register their blockers, with pass criteria in each spec or a later integration node. The estate effector calls A30's internal whitelisted -> suspended transition (reason estate), reusing canTransact and A12's token revocation. Remove the separate restriction field, and add a challenge that an order, a withdrawal and a token call are refused after an estate record."
+  },
+  {
+   "severity": "high",
+   "issue": "Eight of thirteen Investor 360 tabs and the classification chip depend on other nodes registering an Investor360Contributor, but no other spec mentions that interface. The owner mapping is also wrong: A18 is an ancestor and cannot implement A44's interface; A34 is properties, not orders; A38 is not payouts; A40 is not documents; A47 is not named. A44 passes on fixture contributors, and ADM-09 ships in P1 with tabs stuck on 'not yet available', which breaks the M06 purpose.",
+   "fix": "Have A44 implement real contributors from ancestors: A18 holdings and register match, A16 wallet and payouts, A19 holder caps, A28 freezes. For A29, A37, A40, A41, A35, A32 and A47, either add A44 as their dependency with a 'registers the <tab> contributor, passes the A44 contract test' pass criterion, or add an integration node before A68. Correct owner_node, and add a criterion that no P1 tab returns available:false at A68 or A88."
+  },
+  {
+   "severity": "high",
+   "issue": "The support write-set probe (exactly ticket, ticket_message, complaint conversion only, unmask_grant) cannot pass on a correct build. Conversion also writes complaint_event, audit_event, outbox_event, idempotency_key, A13 clock and alert rows and gate_evaluation. SUPP may also acknowledge (a complaint write beyond conversion), and under A30's contract SUPP cannot unmask at all.",
+   "fix": "Redefine the probe as (1) an allow-list of domain tables: ticket, ticket_message, complaint (convert and acknowledge only), complaint_event; (2) named infrastructure tables every write touches; (3) an explicit deny-list asserted at zero writes: ledger, register, token, holding, order, distribution, investor, approval_decision, legal_hold. Update section 1, section 8 and the pass criteria."
+  },
+  {
+   "severity": "high",
+   "issue": "The AFCA-prominence challenge contradicts section 4. A complaint received on 21 Sep and 'never answered' is acknowledgement-overdue from 26 Sep, so section 4's rule makes afca_prominent true, yet the challenge requires false on 20 Oct. The challenge also gives no receipt time for its '17:30 on 21 October'.",
+   "fix": "Rewrite the challenge: received 21 Sep 2026 at 17:30 AEST, acknowledged on time, no final response; prominent false on 20 Oct and true from 21 Oct 17:30 AEDT. Add a vector where a never-acknowledged complaint is prominent from 26 Sep 17:30 AEST. Keep the 20-day re-run."
+  },
+  {
+   "severity": "high",
+   "issue": "received_at is ambiguous. 'The first such flag sets dissatisfied_at' reads as the time the flag is set, so a SUPP classification on 7 Oct would stamp 7 Oct. The 'clock that starts late' challenge (investor writes 'unacceptable' without ticking the box) requires 2 Oct 17:30. The regulated clock start is therefore undetermined.",
+   "fix": "Specify dissatisfied_at = created_at of the earliest message flagged dissatisfied, whether the investor flagged it or SUPP classified it later. Store the classifier, time and reason separately. Say in the challenge that SUPP classifies the 2 Oct message on 7 Oct, and add a vector where classification happens after the acknowledgement deadline."
+  },
+  {
+   "severity": "high",
+   "issue": "No node pays approved redress. A39's spec never mentions redress, complaint.redress.approved or the redress-settled callback, and A44 passes on a fixture treasury, so in the integrated system an approved redress is never paid. AFCA-outcome redress 'follows the redress path', but that path returns 409 outside investigating, while AFCA redress happens in escalated_external.",
+   "fix": "Add a redress effector to A39's spec and pass criteria (consume complaint.redress.approved, pay under G02/G14, call redress-settled with the A16 journal id), and add a dependency or an A49/A79 check. Define an A14 action, complaint.afca_redress.implement (4E, or 6E above the threshold), allowed in escalated_external. Require root_cause_code on the redress proposal."
+  },
+  {
+   "severity": "medium",
+   "issue": "The reopen window (30 days) exceeds the quiet period (14 days) after which the complaint closes and refuses every write, so investor reopens on days 15-30 are impossible. AFCA accepts complaints generally up to two years after the IDR response, but after the auto-accept and close there is no path to escalated_external and /afca is refused.",
+   "fix": "Add a validated invariant quiet_period >= reopen_window. Add extensions resolved -> escalated_external and closed -> escalated_external (or let AFCA recording through as a permitted write on closed complaints, like a legal hold). Make 'silence equals acceptance after 30 days' a counsel question."
+  },
+  {
+   "severity": "medium",
+   "issue": "The RG 271 IDR delay notification is missing (reasons for the delay, the right to go to AFCA, AFCA's contact details, sent before the response deadline), and the final response is not required to carry the AFCA right, contact details and time limit.",
+   "fix": "Add POST /v1/complaints/{id}/delay-notice (CMPH maker; an agent may draft), the event complaint.delay_notified, a G18 status delay_notified and a warning before the deadline. Require the afca_contact block and a set_with_counsel time-limit wording row in every final-response and delay-notice payload, and add a challenge that a response without them is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "packages/domain/src/support/g18.ts is outside A44's owned_paths, and no node owns that folder (A02 owns only the root files and named subfolders). Standing criterion 3 ('only owned paths changed') fails at the gate.",
+   "fix": "Add <workspace>\\app\\packages\\domain\\src\\support\\ to A44's owned_paths in final-graph.json and in the note, and note the exclusion in A02."
+  },
+  {
+   "severity": "medium",
+   "issue": "The schema additions are requested as off-graph loop 'A04.2', an id A35 also claims in the same milestone, so the scheduler cannot order it. A04 already offers a module-schema registry for tables a node wholly owns.",
+   "fix": "Register the wholly-owned tables (afca_contact, complaint_event, complaint_category, root_cause_code, ticket_message) through A04's module-schema registry from A44's owned path. Use a unique loop id only for columns on A04's ticket and complaint tables, and put any such loop on the graph."
+  },
+  {
+   "severity": "medium",
+   "issue": "The seed rows (C-1042/C-1037/C-1011 with tickets, the ADM-09 investor, the AML-case investor, per-role principals with tokens) must be in 'the standard seed', but A06 owns packages/db/seed and its spec contains no complaints, so A44 would have to edit a path it does not own.",
+   "fix": "Put A44's fixtures under its owned path and load them through an A06 seed-extension hook (add one to A06 as a follow-up if it does not exist). Change the pass criteria to 'the standard seed plus the A44 fixture pack'."
+  },
+  {
+   "severity": "medium",
+   "issue": "Identifiers do not match upstream contracts: scopes support:read/write and cells 'M06:investor360:view_support' versus A03's scopeId === actionId form ('ACC.token.create'); SCOPE_PENDING_COUNSEL versus A03's SCOPE_COUNSEL_PENDING; gate.refused required for RBAC refusals, which A11 answers with 403 FORBIDDEN; tenant_consents attributed to A30 when it is in A11.",
+   "fix": "Rename to A03 action ids (ACC.complaint.lodge, M23.ticket.convert, M06.investor360.view_support, ...), use SCOPE_COUNSEL_PENDING, require A11's refusal audit event for RBAC refusals and gate.refused only for G22, and attribute tenant_consents to A11."
+  },
+  {
+   "severity": "medium",
+   "issue": "Dependencies are missing: the pass criteria require MCP catalogue presence, but A104 is not an ancestor; the TP-LIC path uses A98's PARTNER principal, also not an ancestor; help articles and the complaints policy are attributed to A40 (distributions) instead of A35.",
+   "fix": "Add A104 to the deps (AM1, so milestone order is fine) or move the MCP check to A100. Add a TP-LIC re-test to A98's pass criteria. Replace A40 with A35 for help and the complaints policy."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 4-8 agent-hour estimate is too low for two modules, about 45 routes, SM-12 plus extensions, a ticket machine, two jobs, the redress and estate effectors, AFCA and DDO endpoints, the masking walk, close checks, contributors and three screen contract tests. A30, comparable in scope, is 8-12.",
+   "fix": "Split into A44a (support, complaints, SM-12, G18, AFCA, DDO) and A44b (Investor 360, masking, estate, close checks), or raise the estimate to 10-14 in the graph and the note."
+  },
+  {
+   "severity": "low",
+   "issue": "The masking rules are restated inconsistently: 'names to initials' and 'state and postcode' versus 'Alex N.' and A04/A30's mask() (first name plus surname initial, suburb and state).",
+   "fix": "Delete A44's list and defer to A04's mask() codec snapshot in the masking walk."
+  },
+  {
+   "severity": "low",
+   "issue": "The design reference to an 'adCmd operations queue row \"complaints\"' does not exist in RealX App.dc.html; the complaints queue exists only in the product-map ADM-01 components. The other references (footer line 517, design-ext ACC-04/ADM-09/ADM-27) are fine.",
+   "fix": "Cite the product-map ADM-01 component and design-ext for the tile instead of adCmd."
+  },
+  {
+   "severity": "low",
+   "issue": "'Forbidden cases equal states x triggers minus the table' is ill-defined, and 'no latency hint' has no threshold.",
+   "fix": "Use 9x9 ordered pairs minus the 11 transitions and any accepted extensions (70 with none accepted), each with every actor. Set a measurable timing bound (for example, median difference under 20 ms over 200 paired calls) or drop timing."
+  },
+  {
+   "severity": "low",
+   "issue": "LEGL (records estates on ADM-09) and CMPH (investigates complaints and unmasks with complaint_investigation) have no Investor 360 slice.",
+   "fix": "Add legal and complaints slices with their fields and tabs, or state that these roles act through the API without the 360 view."
+  }
+ ]
+}

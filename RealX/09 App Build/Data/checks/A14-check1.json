@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Expiry rule blocks legitimate execution. The spec refuses any decision, ratification or transition with APR_EXPIRED once expires_at (submitted_at + 72 h) has passed, whatever the state. A 72 h-timelocked upgrade or owner change (or a 48 h forced transfer approved after 24 h) elapses after expires_at, so queued -> queued_for_custody is refused and the op can never run. Late registry acks likewise block confirmed -> reconciled -> closed. This also contradicts A15, whose attestation expires at executable_at + policy grace for timelocked ops.",
+   "fix": "Limit the TTL to the pre-execution window (submitted, prechecked, and approved awaiting custody acceptance). For timelocked rows add an execution deadline = timelock_until + grace, a data column matched to A15's attestation expiry. Never apply APR_EXPIRED to event-driven internal transitions after custody accepts the op. Add oracle cases: a 72 h-timelock upgrade approved at 71 h executes; a registry ack at 80 h still closes."
+  },
+  {
+   "severity": "high",
+   "issue": "Auto-revert on a ratification lapse contradicts the product map and sibling nodes. The spec auto-executes an AUTO revert by SVCA, and its challenge expects an 'AUTO unpause request'. Sources that disagree: product map (Unpause token is 6E+Q SECO + CFO; 'V3 can only restrict; unpausing goes through V2'); A28 (a lapse opens an unpause under the normal 6E+Q row and the token stays paused); A48 (timers 'never lift anything by themselves'); A42 (AML restriction is irreversible). The reversible flag is not specified for any seed row, so a sanctions freeze could be auto-unfrozen after 2 h.",
+   "fix": "List the reversible flag for every SGL+R seed row. Sanctions freeze, AML restriction, suspension, inflow freeze, kill switches, halts and token pause are not auto-reverted. A lapse gives the Sev2 alert plus escalation; for a pause it also opens a 6E+Q unpause draft. Keep the AUTO revert only for rows the founder explicitly marks reversible, and record this as a founder/counsel question. Rewrite the ratification challenge to match."
+  },
+  {
+   "severity": "high",
+   "issue": "Alert code mismatch. A13 fixes `approval.unratified` as the code A14 emits for a lapsed SGL+R and says emitters use 'these strings and nothing else'. A14 uses `approval.ratification_missed` in its brief, challenge and pass criteria.",
+   "fix": "Use `approval.unratified` in A14 (and correct A28), or amend A13 in the same revision. Add a seed test that every alert code A14 emits exists in A13's alert_type table."
+  },
+  {
+   "severity": "high",
+   "issue": "The WebAuthn decision challenge is the raw payload_sha256, with no server nonce, approval id or purpose. Requests with identical payloads (a resubmission after expiry or rejection) share a hash, so a captured assertion can approve the new request. The 'assertion from another request' challenge cannot be met as specified. This contradicts A11's fresh-assertion primitive (sha256(server_nonce||payload_sha256||purpose), single use). Bulk-decide has the same flaw.",
+   "fix": "Make the challenge A11's fresh assertion with purpose approval_decide over sha256(nonce||approval_id||payload_sha256||verdict), single-use and short-lived, and store its id on the decision row. For bulk, bind the sorted (approval_id, hash) list plus a nonce. Add an oracle case: two byte-identical payloads, where the first request's assertion is refused on the second."
+  },
+  {
+   "severity": "high",
+   "issue": "Rewiring A12's interim flows means editing another node's owned path. A14 says it replaces A12's interim two-step for sponsor and staff token creation and rewires the agents.traffic kill switch to SGL+R, but that code lives in modules/agent-access/ (owned by A12). A14 owns only modules/approvals/. The builder must either break the owned-path rule or leave the interim path live.",
+   "fix": "Amend A12 to ship an ApprovalPort (token issue/activate and kill-switch toggle call a registered provider, defaulting to the interim two-step). A14 registers its implementation from its own path, and A14's gate asserts the interim path is unreachable. Otherwise, move the rewiring to a node allowed to touch both paths."
+  },
+  {
+   "severity": "high",
+   "issue": "G01-G21 precheck wiring has no owner. A14 says A19 registers hooks; A19 says A14 calls POST /v1/rules/evaluate. The graph has no edge between them, and A19 even creates A14 requests without depending on A14. Both nodes can pass while privileged actions are never checked against G01-G21 on the server.",
+   "fix": "Add A14 as a dependency of A19 (both are AM1; no cycle). A19 registers its gate hooks through registerPrecheck, and A19's pass criteria check that every policy action code has its hooks registered. A14's gate tests the registry with a fake fail/warn hook."
+  },
+  {
+   "severity": "high",
+   "issue": "The SM-00 gaps are deferred to the Specify step, and the fallback is broken. If extension (c) is declined, checker Reject (an ADM-30 action) has no legal transition from prechecked, and requests awaiting checkers never expire. A03 (upstream, oracle) pins its extensions list to exactly (a) and (b), and spells (a) with non-SM-00 states (approved-for-execution, vetoed), which breaks A14's '14 plus queued' state count. Checker cancel before execution (architecture brief §6.2 step 10) is unmapped.",
+   "fix": "Resolve now. Amend A03's spec to add extension (c): prechecked->rejected on checker reject, prechecked->expired, queued_for_custody->expired, queued->expired. Spell (a) with SM-00 states (queued->queued_for_custody, queued->cancelled). State exact state and transition counts in A14's pass criteria, and decide on checker cancel."
+  },
+  {
+   "severity": "medium",
+   "issue": "Downstream nodes are used as if they exist at A14's gate: A43 (maker notified; sensitive-action notice), A101 (the challenge expects A101 to receive the anomaly event), A104 (a pass criterion on the MCP catalogue), and stubs that A15, A18/A20 and A21 'replace' inside A14's owned path. None of these are dependencies.",
+   "fix": "Emit outbox events (approval.rejected, approval.agent_submitted, approval.agent_decision_refused) and test that they are emitted. Expose registration ports (registerCustodyPort, registerReconGuard, registerPerimeterGuard) that dependents call from their own paths. Tag the decide, ratify, veto, bulk and act routes with the OpenAPI marker that A104/A100 read (x-realx-requires-human / agent_never_checker), and assert the marker instead of the MCP catalogue."
+  },
+  {
+   "severity": "medium",
+   "issue": "The schema contradicts itself. credential_kind is 'webauthn_hardware only' by check constraint, yet AUTO needs 'auto' for SVCA. The ratification challenge relies on ratify_by in the immutable act decision row, but the decision schema has no such column. One approval id per custody op is claimed, but no unique constraint is specified.",
+   "fix": "Use CHECK ((webauthn_hardware AND assertion NOT NULL) OR (auto AND decider=SVCA AND policy_code=AUTO)). Add ratify_by to the act decision row. Add UNIQUE(approval_id) and a consumed flag on custody_ops, with an oracle case for a second op."
+  },
+  {
+   "severity": "medium",
+   "issue": "Policy selectors (amount_gte, variance_bps_gte) cannot express product-map conditional checkers: +CCO for a mint not from a locked allocation file, +trustee on forced transfer and register adjustment, +X-RE on the retail track, and PART/SECO when a tenant has a single owner. The 'A$50k second RealX approval' withdrawal tier has no policy code, and 'over A$50,000' in the design differs from '>= A$50k' in the spec. The A$1M boundary is ambiguous.",
+   "fix": "Add an applies_when predicate vocabulary as data. List the exact seed rows for distribution and withdrawal tiers (<= A$25k allow-listed AUTO; > A$25k 4E TRSY->CFO; > A$50k with a stated code), with boundary oracle cases at the exact cent."
+  },
+  {
+   "severity": "medium",
+   "issue": "Timelocks disagree across nodes: owner changes are 72 h in A14 but 48 h in A15's P10. The seed-agreement test only compares A14 with A13.",
+   "fix": "Fix one value per action code in A14's seed, and extend the seed test to A14 = A13 sla_policy = A15 P10 table."
+  },
+  {
+   "severity": "medium",
+   "issue": "SGL+R edge cases are undefined. (a) The spec does not say what happens when an agent token submits a protective action: the act needs a hardware assertion, and no refusal code or draft behaviour is given. (b) There is no path for system-triggered protective acts (product map 'Halt / resume resale: MKTO (auto on trigger)'; a recon break halts resale), since only AUTO permits credential_kind 'auto'.",
+   "fix": "(a) A token may only create an SGL+R draft; submit or act by a token is refused with APR_CHECKER_MUST_BE_HUMAN. (b) Add an SVCA-actor SGL+R variant (trigger id recorded, human ratification within 2 h), or state that A48 handles system halts outside A14. Add oracle cases for both."
+  },
+  {
+   "severity": "low",
+   "issue": "The journey mapping is wrong. J20 steps 1-2 and 6 are ADM-01, ADM-02 and ADM-31 reviews, not decide or ratify. Missing: J06 step 2 (SP-OWN approves), J21 ratifications, J22 step 5 (sponsor token creation).",
+   "fix": "Replace the J20 reference with J06 step 2, the J21 ratification steps and J22 step 5."
+  },
+  {
+   "severity": "low",
+   "issue": "The SoD matrix says '51-role list plus AGNT, SVCA', but the 52-role list already includes AGNT, SVCA and AGT-U.",
+   "fix": "Say 'all 52 roles (incl. AGNT, SVCA, AGT-U) plus one token per prefix'."
+  },
+  {
+   "severity": "low",
+   "issue": "Wikilinks with colons (A29, A39, A51, A66, A93, A101) do not resolve, because the note filenames use hyphens. This comes from the generator and affects the whole plan.",
+   "fix": "Make the generator replace ':' with '-' in link targets (or use [[file|title]] aliases), then re-render the notes."
+  }
+ ]
+}

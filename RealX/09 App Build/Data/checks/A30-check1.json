@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Joint accounts have no eligibility rule. The spec never says when a joint investor may reach approved or whitelisted, or how the second holder's KYC case attaches (KYC_CASE_OPEN is per investor, yet a joint account needs two person cases). The requirements catalogue says 'Joint accounts: both verified' and the design ONB-02 copy says 'Both are verified'. The challenge 'a joint account with one holder approved' has no expected outcome, so a build that whitelists after one holder would pass.",
+   "fix": "Add a joint invariant parallel to G03: a joint investor is approved or whitelisted only when both joint_holder members have an approved person case. Enforce it in the service and in the trigger (extend it to joint_holder rows). Make cases per person. Define invitation expiry, a decline, and a second holder who fails KYC. Add a pass criterion and a fast-check property for it."
+  },
+  {
+   "severity": "high",
+   "issue": "The investor data model blocks multi-account cases. investor_type sits on the per-principal investor row, and a second POST /v1/investors returns INVESTOR_EXISTS, so a person investing in their own name cannot also open an SMSF, company or joint account. This contradicts the design ONB-02 copy 'You can add more accounts later' and the 'one KYC, many sponsors' model. It is also unclear whether entity trustees and directors get their own investor rows.",
+   "fix": "Split person from account: one investor (person) per principal with one reusable person KYC case. Make account_type a column of account, and add POST /v1/accounts (requiresHuman) for extra accounts. Hang the entity case and the beneficial_owner rows off the entity account. State which row holds whitelisted, refresh_due, suspended and offboarded, and which id isWhitelisted takes. Update the fixtures and A12's signatory lookup."
+  },
+  {
+   "severity": "high",
+   "issue": "G06 foreign-person capture cannot be computed as specified. The default rule 'non-resident and not a citizen' needs citizenship, but POST /v1/investors takes only residency country, the 18+ declaration, consent and type. The ONB-01 design field is tax residency, which is not FATA 'ordinarily resident'. For entities, FATA status depends on foreign ownership (a substantial interest: 20% by one foreign person or 40% in aggregate), which is only known after KYB, yet the flag is computed at creation and never recomputed.",
+   "fix": "Capture citizenship and visa status plus 'ordinarily resident' separately from tax residency, with the derivation rule set_with_counsel. For entities, set foreign_person 'pending' at creation and recompute it at KYB submit from the owner data (default 20% single, 40% aggregate, counsel-owned), emitting investor.residency.changed when it flips. Add test vectors: citizen abroad, permanent resident, temporary visa holder, SMSF with one 20% foreign member."
+  },
+  {
+   "severity": "high",
+   "issue": "An owner added later can bypass G03, and refresh_due eligibility is undefined. Adding a person to an approved entity only drops it to refresh_due, the pass criteria imply isWhitelisted is false only for 'refresh_due past grace', and the on-chain identity is untouched, so an entity with an unverified new owner keeps buying. A03's canTransact is true only in whitelisted, which would instead block every investor for the whole 30-day periodic grace. The two readings conflict.",
+   "fix": "State one rule: isWhitelisted(refresh_due) is true only for a periodic or profile_change refresh inside grace. For owner_added, set entityStatus=owners_pending, which A19's G03 hook refuses at once, and emit an event so A31 suspends the entity's claim until the owner is verified. Align A03's canTransact through an agreed upstream change. Add a challenge: an order and an on-chain transfer by an entity with a just-added unverified owner are both refused."
+  },
+  {
+   "severity": "high",
+   "issue": "Reinstatement has no preconditions. POST /v1/investors/{id}/reinstate (MLRO then CCO, 4E) takes suspended -> whitelisted whatever the reason. An investor frozen for a confirmed DFAT match, or suspended because a refresh lapsed (kyc_valid_until passed), can be put back to whitelisted without a sanctions resolution or a new approved refresh case. That gets around G01 and G02.",
+   "fix": "Record suspension_reason. Refuse reinstate with KYC_REINSTATE_BLOCKED while a DFAT hit is true_match (unless counsel records a delisting or a permit reference), while an A42 case is open, or while kyc_valid_until has passed with no approved refresh case. Add this to the decision matrix and the fast-check property."
+  },
+  {
+   "severity": "high",
+   "issue": "The investor-facing restriction mapping is undefined, which risks tipping-off. /investors/me returns restriction 'none | under_review'. A pre-whitelist sanctions true match sets restricted, while an ordinary referral stays none, and the spec never says what the investor sees for restricted. Mapping it to under_review breaks the byte-equal tipping-off criterion. The frozen case also stays in manual_review, with its 24 h clock and in the KYCA queue, and none of that handling is specified.",
+   "fix": "Remove restriction from investor-facing responses (or fix it as 'none'), and derive investor status only from the ordinary referral mapping. For a restricted case: move it to an MLRO need-to-know view out of the KYCA queue, meet or cancel the queue clock with no breach alert, and keep expected_by identical to a pending referral. Add the queue and alert checks to the tipping-off challenge."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec edits A03-owned files and contradicts A03's oracle. The risk-points, reason codes, cadence rows, the SM-01 abandoned-case extension and new A14 action codes (kyc.case.approve_override, approve_edd, clear_hit, confirm_match, reopen, investor.suspend, reinstate, residency.change) are to be written into packages/domain, 'applied by A03's owner'. No such actor exists, and A03 (AM0) passes first. A03's oracle asserts that extensions.ts holds exactly two entries and treats anything else as a spec defect, so A30's 'agreed packages/domain diff' breaks A03's published hidden tests and owned-path discipline.",
+   "fix": "Settle spec points (a) and (b) now and move this data (the SM-01 extension, reason codes, risk and cadence rows, the A14 action codes and policy rows) into A03's frozen spec before A03 is built, or have A30 register tunables inside its own folder through an A03-exposed registry. Change the pass criterion to 'only the owned path and the migration registered through A04 changed'."
+  },
+  {
+   "severity": "medium",
+   "issue": "SM-01 gaps remain beyond spec points (a) and (b). POST /investors/{id}/close moves to offboarded, but SM-01 allows only suspended -> offboarded. edd_review has no path to rfi_pending, although EDD is where SOURCE_OF_FUNDS is asked. A sanctions true match while the investor is in refresh_due has no transition to suspended.",
+   "fix": "Add to spec point (b): approved/whitelisted/refresh_due -> offboarded (account closed), or a defined route through suspended; edd_review -> rfi_pending (MLRO asks, resuming in edd_review); refresh_due -> suspended (AML restriction). Give each an expected result in the transition oracle."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ONB-10 status contract contradicts the design and the challenge. The status rows are identity, entity, tax, wholesale, wallet and bank, but design line 822 shows 'Sanctions and PEP (G02) · No matches · Clear' and 'Residency (G06) · Australian resident · Pass', and the design-fidelity challenge requires identity, sanctions and residency rows. A sanctions row shown while a hit is open would also tip the investor off.",
+   "fix": "Define the rows exactly. Either add sanctions and residency rows (sanctions appears only once identity is done and then reads Clear) or fold both in as detail codes of the identity row. Reconcile with the product-map list in one mapping table, and align the challenge and the A56 contract test."
+  },
+  {
+   "severity": "medium",
+   "issue": "The token scope model and delegability are underspecified. 'Every route carries x-realx-scope in M06 or M07', but those are staff module cells, and investor tokens use investor-screen cells (ONB, ACC), so an investor agent could not read its own status. The delegability of the KYB routes (/kyb/entities, /people, /submit) is not stated. HG-LEGAL says the entity signatory declaration is refused to agents until counsel answers, but /submit is not in the §7 requiresHuman list, while the pass criterion requires every delegable route to succeed under a token.",
+   "fix": "List every route with its exact A03 cell id (investor routes under investor-screen actions, staff routes under M06 and M07) and its delegable.ts value. Mark /kyb/entities/{id}/submit as 'counsel' (refused until answered), and state whether /kyb/entities and /people are delegable."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some challenges and pass criteria are not measurable or contradict the spec. (1) 'p95 latency within noise' has no threshold or sample size. (2) Challenge 1 expects a CCO hit disposition to open a 4E request, though §4 makes KYCA the only clear_hit maker. It also expects one refusal to carry both APR_MAKER_IS_CHECKER and APR_CHECKER_MUST_BE_HUMAN, but a response carries one code. (3) G03 challenge (iii) expects a reopen 'through refresh_due' for an entity that was never whitelisted.",
+   "fix": "(1) Require no investor-facing branch on restriction (checked by grep), and p95 within 10 ms over at least 1,000 requests each. (2) Expect FORBIDDEN for the CCO, and APR_CHECKER_MUST_BE_HUMAN for the agent checker. (3) Expect an ownership change after submission to be refused, or to return the entity to re-submit, with the entity still not whitelisted."
+  },
+  {
+   "severity": "medium",
+   "issue": "Beneficial-owner coverage misses control-based owners. AML/CTF CDD requires identifying people with 25% or more ownership or control. For a discretionary trust or widely held company with no 25% owner, nothing forces a controlling person (appointor, settlor, senior managing official) to be listed and verified.",
+   "fix": "Add a set_with_counsel rule: when no owner reaches 2,500 bp, at least one 'controller' must be listed and verified before submit, otherwise KYB_CONTROLLER_REQUIRED. Add it to the G03 pass criterion and to the HG-LEGAL questions."
+  },
+  {
+   "severity": "medium",
+   "issue": "Contracts the spec relies on are not provided by other nodes. A37 is said to call grantConsent, but A37's spec never does, so the sponsor kyc-status endpoint would always 404. The rfi_30d and refresh_grace_30d clock policies are attributed to A13, which seeds only an 'identity check 24 h' row. The A35 consent stub and the A43 QA-task stub have no node that later replaces them.",
+   "fix": "Add the grantConsent call to A37, or have A30 create consent from A37's order event. Have A30 register its clock policy rows through A13's interface, or use openClock with dueAt. Name the node, with a pass criterion, that swaps each stub for the real interface, or add A35 and A43 as dependencies."
+  },
+  {
+   "severity": "low",
+   "issue": "There are small reference and consistency errors. The spec cites 'KYC rows of ACC-01 (A63)', but ACC-01 is built by A59. The non-resident rule is attributed to D01, but it is the ONB-01 product-map state. No audit event covers the provider_checks state that POST /kyc/cases says it writes. It is unclear whether a decision plus its transition writes one event or two, which the event-count criterion depends on. The spec does not say that 6E needs three distinct humans when the maker is an MLRO.",
+   "fix": "Change A63 to A59 and cite ONB-01 instead of D01. Add a checks_started event, or state the exact count rule. State that 6E needs three distinct humans, and that with a single MLRO who is maker, the CCO and CEO are the checkers."
+  },
+  {
+   "severity": "low",
+   "issue": "Graph metadata. Wikilinks use titles containing ':' and '/', while the files use '-', so the links do not resolve in Obsidian. oracle is false even though the node owns the G01 and G03 eligibility gates and lists Critical escalations, and the graph flag is what drives the orchestrator. The 8-12 h estimate is thin for this scope.",
+   "fix": "Regenerate the links from the file names, or sanitise them in the generator. Consider oracle: true. Raise the estimate to about 12-18 h, or split the KYB and joint work into a sibling node."
+  }
+ ]
+}

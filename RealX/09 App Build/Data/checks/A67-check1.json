@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The whole backend this page needs (loop 'A11.1': about 15 routes, the quarterly scheduler job, the quorum-floor rule, access-review decide/apply and sign-off, break-glass review and reviewer set, unlock and re-enrol effectors, SoD exceptions, view-as grant list, summary, new error codes) is not a node in final-graph.json. It has no estimate, no gate and no oracle, and the A11 spec never mentions it. A11 sits at AM1, but this loop needs A14 (which depends on A11), A12 events, A46's scheduler (AM3), A13's calendar and A03 policy and delegable rows. The security logic behind ADM-37 is unscheduled and has no hidden tests.",
+   "fix": "Add a graph node (for example 'IAM admin API for ADM-37', lane Platform, AM4-AM6) with deps A11, A12, A14, A13, A46, A03, A04, oracle: yes (Fable hidden tests for quorum floor, self-exclusion of reviewers, remove -> revoke plus token cells, unlock and re-enrol policies, break-glass reviewer set), its own estimate and an owned sub-folder of modules/auth agreed with A11. Make A67 depend on it and list it in A11's Unlocks."
+  },
+  {
+   "severity": "high",
+   "issue": "A compromised privileged account cannot be contained. Pack page 25.1 lists 'suspend' as a row action, but the spec has no suspend. IAM_QUORUM_FLOOR can refuse the only protective revoke. Re-enrol names only CCO as checker, so a compromised CCO is excluded as the person under re-enrolment and nobody is left to check. The pack's rule that protective actions are single-person SGL+R is not applied.",
+   "fix": "Add 'Suspend staff account' as a protective SGL+R action (SECO or CCO acts at once: all sessions, tokens and elevation revoked, account locked; ratification within the A03 SGL+R window). Let it bypass the quorum floor with reason SUSPECTED_COMPROMISE, raise a Sev1 alert and put up the break-glass hint. Make re-enrol checkers 'CCO or a second SECO or CEO, never the subject'. Add a Challenge: contain a compromised CCO at the quorum floor."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec says A11.1 uses 'the existing A04 tables', but A04 has no sod_exception table, no view_as_tenant_grant table, no access-review item or decision table, no break-glass review, board-notice or drill fields, no drafted_by_agent column and no re-enrolment invitation. The build would stall or change the schema outside its owner.",
+   "fix": "Name an A04 schema follow-up loop listing these tables and columns, with RLS for the need-to-know break_glass_session rows, as a prerequisite of the new IAM admin API node."
+  },
+  {
+   "severity": "medium",
+   "issue": "Graph deps do not cover interfaces the spec uses: A06 (the personas, plus new seed rows the spec says 'A06's owner' adds: dormant staff member, pending grant, open campaign, drill break-glass), A46 (the quarterly job), A66 (approving grants in the inbox and the ADM-31 deep links the J20 criterion relies on) and A104 (the Challenge drives agent tokens through the MCP server; a pass criterion checks the MCP catalogue). None of these is in A67's transitive closure.",
+   "fix": "Add A06 (with a named A06 seed loop), A66 and A104 to A67's deps, and A46 to the new IAM admin API node. Or drop the MCP and inbox parts from A67's pass criteria and leave them to A100 and A78."
+  },
+  {
+   "severity": "medium",
+   "issue": "Revoking a role does not reach custody or the chain. The pack action catalogue says 'Revoke role -> Remove signer/agent (M08/M09)'. The spec's dry-run and effects list only sessions, token cells and checker re-resolution. A15 and A25 change signer sets only by 6E+Q, so a revoked TOKO or signer could stay in the custody signer set.",
+   "fix": "In the revoke dry-run and effect, list the person's signer and on-chain role memberships. Open the signer-set change request through A15/A25, exclude the principal from signing at once, and show 'signer removal pending APR-...'. Add a Challenge: revoke TOKO, then attempt a custody signature."
+  },
+  {
+   "severity": "medium",
+   "issue": "The break-glass reviewer set proposed in §6 ('CEO or CCO, never the requester or either activator') is empty in a normal case: CCO and CEO activate, and the requester is ENGO or SECO. The uninvolved SECO is excluded by the proposal, yet Specify point (c) covers only the case where all three holders took part.",
+   "fix": "Propose as the reviewer set any of CCO, SECO or CEO who was neither requester nor activator. Fall back to the named independent reviewer (board delegate or TP-AUD) only when that set is empty. Add the CCO+CEO-activated case to the Challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "SoD code precedence is undefined, so the challenge expectations contradict each other. Lena (SUPER) granting herself TRSY breaks both rule 3 (hard conflict) and rule 9 (self-grant), and is expected as SOD_HARD_CONFLICT. Her agent drafting CFO for her breaks rules 3 and 9 too, and is expected as SOD_SELF_GRANT. The IAM_QUORUM_FLOOR wording ('fewer than two holders of CCO, SECO or CEO') does not say whether it counts per role or distinct sealed-credential holders, so the 'revokes two of the three' outcome cannot be derived.",
+   "fix": "Fix the precedence in the IAM admin API spec (for example self-grant first), or return every violated rule as an array that the page lists. Align both challenges. Define the floor precisely (for example at least 2 distinct principals holding any of CCO, SECO or CEO, plus at least the checker minimum for each live A14 policy row), and give the expected result of each of the two sequential revokes."
+  },
+  {
+   "severity": "medium",
+   "issue": "Who may decide access-review items and sign off a campaign is never stated: no role set and no A03 matrix cell. The spec says only 'reviewer' and 'another SECO or the CCO'. Hidden tests and the gate-enforcement 100% matrix check cannot be derived.",
+   "fix": "State the reviewer and sign-off role set and its A03 cells (proposed: SECO decides and signs off; CCO decides SECO's own items), how the campaign reviewer is assigned, and what happens if SECO is the only reviewer and has own items."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several D04 rules the page depends on are 'proposed' but are not in the A11.1 list or the Specify settle points. They are: the agent role revoke returning 428 CONFIRMATION_REQUIRED and confirmed by hardware key; agent-drafted access-review decisions (drafted_by_agent) confirmed through A12's confirmation route; and sign-off, break-glass review, unlock and re-enrol approval marked requiresHuman. These need A03 delegable.ts rows and an A12 staff confirmation path with a hardware-attested assertion, and no page is named to render staff confirmations.",
+   "fix": "Add Specify point (d) listing each action's delegability (agent-maker, agent-confirm, human-only) as an A03 delegable.ts diff. Require A12 staff confirmations to take a hardware-attested fresh assertion. Name the surface that renders them (A77 or this page) and add it to the parity test."
+  },
+  {
+   "severity": "medium",
+   "issue": "Nothing produces the break-glass board notice. A11 does not send it and the spec's A11.1 list only reads a 'board-notice state', yet the Challenge expects 'sent' from activation onward. The pack says to notify the board chair, and X-AUD after the session.",
+   "fix": "Add to the IAM admin API scope: on iam.breakglass.activated, send a notice through A43 to the board chair (recipient from settings), plus a post-session notice to TP-AUD, and record notice state and time. Make the notice wording an HG-LEGAL item, as already listed."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag is 'no', yet the Oracle rule says Fable writes hidden tests first. The gauntlet runs the Oracle step only for core nodes, so an orchestrator keyed on the flag may skip it. The D04 brief also asks for oracles where authority is involved, and role grants, break-glass and access reviews are authority.",
+   "fix": "Set oracle: yes for the new IAM admin API node, which holds the authority logic. For A67, either set oracle: yes in the graph and frontmatter, or reword as 'hidden challenge fixtures (non-oracle)' and make sure App Gauntlet §2 defines that step for oracle: no nodes."
+  },
+  {
+   "severity": "low",
+   "issue": "The 5-8 h estimate looks low for five tabs, five privileged flows plus revoke, a campaign workflow, an action manifest and parity test, and two-width state screenshots. A66 is 10-14 h.",
+   "fix": "Raise to 8-12 agent-hours, and estimate the backend node separately."
+  },
+  {
+   "severity": "low",
+   "issue": "Smaller gaps. Pack 25.1 'Users by type (staff/external/service/agent)' and the catalogue row 'Just-in-time elevation (iam.jit.granted, 4E time-boxed)' are not mapped. No job is named for role auto-expiry. The SoD exception maker role is unstated (a SECO maker against a CCO+SECO checker pair needs a second SECO). The PRN-H- search prefix is not among A53's id families. The Oracle rule paragraph deviates from the template for oracle: no nodes.",
+   "fix": "State that a time-boxed grant is the JIT elevation, or record it as out of scope. Name the owner of the expiry job and its event. Name the SoD exception maker. Ask A53 to add the PRN- id family. Align the Oracle paragraph with the conventions."
+  }
+ ]
+}

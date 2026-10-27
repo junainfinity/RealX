@@ -1,0 +1,90 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The owned-path check (scripts\\check-owned-paths.ts) is defined as `git diff --name-only <last node commit>`. That command never lists untracked files, and the builder makes no commit, so every new file a builder creates outside its owned paths is invisible. Standing pass criterion 3 would pass a wrong build at every later node.",
+   "fix": "Define the changed set as the union of `git diff --name-only <base>` and `git ls-files --others --exclude-standard` (or `git status --porcelain --untracked-files=all -z`), including deletions and renames. Add a fault patch: a new untracked file outside the owned paths must be reported."
+  },
+  {
+   "severity": "high",
+   "issue": "Evidence files have no owner and contradict the repository rules. A00 writes app/evidence/A00.json, A01 writes evidence\\A01.json, and every node writes evidence/<node>.json and .qa.md. But A01's pass criterion says git ls-files contains nothing outside A01's owned paths plus docs\\charter\\, the first commit is the charter plus A01's files only, and the owned-path check tolerates only root package.json, .gitignore and the lockfile. Every node's own evidence would be flagged, and 'git status clean after verify --json <path>' depends on where the file is written.",
+   "fix": "Declare app\\evidence\\ a shared folder where a node may add or change only evidence/<its id>.json and .qa.md. The owned-path check tolerates exactly those files. Include evidence/A00.json and A01.json in the first commit and in the ls-files criterion. Require evidence\\A01.json to validate against A00's evidence-manifest.schema.json. Specify where verify --json writes."
+  },
+  {
+   "severity": "high",
+   "issue": "The secrets scanner flags any 64-hex string as a private key across all tracked files. A00's docs\\charter\\design-baseline.json already holds five SHA-256 hex digests, every evidence manifest has artifactHashes and hiddenCasesHash, secrets-allowlist.json itself stores SHA-256 values, and later fixtures will hold transaction hashes. The first verify fails on A00's files, and allow-listing string by string cannot scale, so the builder will quietly narrow the pattern.",
+   "fix": "Make detection context-aware: flag 64-hex only under key-like names (privateKey, pk, secret, PRIVATE_KEY, signer) or in .env-shaped lines. Exempt fields named sha256, hash, digest, integrity, txHash, artifactHashes and hiddenCasesHash, plus the allowlist file. Add a pass criterion: verify is green on A00's charter and evidence with zero hash allowlist entries."
+  },
+  {
+   "severity": "high",
+   "issue": "The hygiene rule on 'gauntlet' and 'hidden' contradicts itself. eslint.config.js is required to block `../../gauntlet`, and verify and check scripts must contain the patterns they search for, yet the pass criterion demands zero hits for `gauntlet` and `hidden` outside one README sentence. The bare word `hidden` (overflow: hidden, aria-hidden) would also break verify step 12 for A05 and every UI node.",
+   "fix": "Replace the word grep with path patterns (`gauntlet[\\\\/]`, `hidden[\\\\/]A\\d+`, `<workspace>\\\\gauntlet`, status.json copies). Add an explicit exemption list: the README sentence, eslint.config.js, and the hygiene and secrets scripts plus their fixtures. Restate the pass criterion as zero path-pattern matches outside those exemptions."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec does not define how the owned-path check, the repo-wide verify and the per-node commit behave when up to three nodes build in parallel in the single working tree <workspace>\\app. A sibling's in-flight files would show as out-of-path changes, and a sibling's half-built code can turn this node's verify red. The result is failures blamed on the wrong node, or pressure to weaken checks.",
+   "fix": "Freeze the concurrency model here, since A01 owns the commit policy. Either (a) use one git worktree and branch node/<id> per node, merged after the gate, or (b) have check-owned-paths exclude other in-flight nodes' owned paths and run gate verify on a clean worktree of main plus this node's diff. Add a challenge that runs two throwaway nodes concurrently."
+  },
+  {
+   "severity": "medium",
+   "issue": "The clean-clone criterion conflicts with verify step 1. Git for Windows sets a system-level core.autocrlf=true, and a fresh clone lacks the repo-local `autocrlf false`, so `npm ci && npm run verify` fails at step 1. The pre-commit hook (core.hooksPath) is likewise not installed in a clone, and the integration pass never runs `npm run hooks`.",
+   "fix": "Add an idempotent root `prepare` script that sets repo-local core.autocrlf false and core.hooksPath scripts/git-hooks. Alternatively rely on .gitattributes eol=lf plus the `git ls-files --eol` check and drop the autocrlf check. Add a pass criterion that the hooks path is set after npm ci in a fresh clone."
+  },
+  {
+   "severity": "medium",
+   "issue": "The D04 hook cannot work as written. The scanner loads secrets-patterns.json only at a workspace root, but A12 owns only services\\api\\src\\modules\\agent-access\\ and packages\\domain\\src\\agent-authority\\. Neither is a workspace root (they belong to A09 and A02), so A12 cannot add its token prefixes. Meanwhile A00 has already frozen the prefixes rx_live_, rx_sbx_ and rx_test_ in docs\\charter\\agent-access.json.",
+   "fix": "Have the scanner read the token prefixes from docs\\charter\\agent-access.json from the first commit, and accept secrets-patterns.json anywhere inside a node's owned path. Add a fault patch: an rx_live_ string in a snapshot is caught before A12 exists."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'False green verify' challenge requires verify to catch a file-level /* eslint-disable */, a workspace \"test\": \"echo ok\" script and passWithNoTests: true, but the Build brief specifies none of these detections. The builder would fail the Challenge on behaviour the spec never asked for.",
+   "fix": "Add to the brief: reportUnusedDisableDirectives 'error', plus a rule forbidding blanket or file-level disables and any disable of module-boundaries, no-float-money, no-floating-promises or no-explicit-any. Add a step-4 config check that rejects passWithNoTests in any workspace vitest config and any `test` script that does not invoke vitest. Name these as fault patches."
+  },
+  {
+   "severity": "medium",
+   "issue": "no-float-money bans float literals in arithmetic in every workspace except packages/domain. That covers UI layout maths, design tokens, charts and animation. With eslint-disable banned, UI nodes would face lint failures they cannot legitimately fix, which invites weakening the rule.",
+   "fix": "Limit the float-literal and Number() operand bans to expressions with a money- or unit-named operand (*cents, *amount, *price, *units, *bps), a domain money type, or a value flowing from parseFloat or toFixed. Add an allowed-case fixture such as `width * 1.5` in apps/."
+  },
+  {
+   "severity": "medium",
+   "issue": "The Vitest set-up is inconsistent. scripts\\vitest.workspace.ts is a workspace file (a defineWorkspace array) but is passed with --config, which expects a config object. Workspace files are deprecated since Vitest 3.2 in favour of test.projects and were removed in Vitest 4.",
+   "fix": "Specify scripts\\vitest.config.ts with defineConfig({ test: { projects: [...] } }), run via `vitest run --config scripts/vitest.config.ts`."
+  },
+  {
+   "severity": "medium",
+   "issue": "Verify step 10 runs the charter checker by the absolute path <workspace>\\app\\docs\\charter\\check_charter.py. In the clean-clone challenge it checks the original repo, not the clone. The checker also reads the vault's app-graph.json by absolute path, which contradicts 'the repo does not read the vault', and the dependency is undeclared.",
+   "fix": "Run the checker repo-relative from the repo root. Pass the vault graph path explicitly (environment variable or argument) with a documented default. Fail loudly if it is missing. Add a clean-clone test that deletes a charter file and expects step 10 to fail."
+  },
+  {
+   "severity": "medium",
+   "issue": "The gitignore registration's protected list (evidence/, docs/, package-lock.json, scripts/) is too narrow. A workspace could register apps/, **/*.test.ts or another node's folder to hide files from git and the owned-path check, or a `!.env` negation to un-ignore secrets.",
+   "fix": "Accept only lines that resolve inside the registering workspace's own folder, and reject lines starting with `!`, containing `..`, or matching tracked files elsewhere. Add these cases to the back-door challenge and the pass criteria."
+  },
+  {
+   "severity": "low",
+   "issue": "The design-untouched check covers only dc.html and support.js, while A00's docs\\charter\\design-baseline.json records four files plus a folder digest. The spec does not name that file.",
+   "fix": "Read design-baseline.json by name and verify every recorded file plus the folder digest on raw bytes. Fail on files added to or removed from the design folder."
+  },
+  {
+   "severity": "low",
+   "issue": "The post-install script rule (packages with install scripts must be named in toolchain.json) exists only in the README; nothing enforces it.",
+   "fix": "Add a verify check that every package-lock entry with hasInstallScript: true is listed in toolchain.json with a reason, plus a fault patch for it."
+  },
+  {
+   "severity": "low",
+   "issue": "The lockfile tolerance in the owned-path check ('every new entry is an exact pin') is meaningless, because lockfile entries are always exact. It also does not tie lockfile changes to the node's own package.json.",
+   "fix": "Tolerate a package-lock.json diff only when npm ls --all is clean and every changed dependency traces to a package.json inside the node's owned paths."
+  },
+  {
+   "severity": "low",
+   "issue": "Cross-reference errors. The agent-parity suite is cited as A82, but in the graph it is A100 (A82 is the end-to-end agent run). A01 also claims standing criterion 4 in full, but it implements only the secrets half, not 'no real vendor calls'.",
+   "fix": "Change A82 to A100. State that the no-real-vendor-calls half is enforced by A08 (sandbox adapters and the RUN_MODE guard)."
+  },
+  {
+   "severity": "low",
+   "issue": "The pre-install majors (Next 15, TypeScript 5.9, ESLint 9, Vitest 3, pg-boss 10) may be a major behind by September 2026. The spec does not say whether they are fixed or floors, which makes the escalation rule ambiguous.",
+   "fix": "State for each package whether the major is fixed (with a reason) or a floor, and record upstream support status in toolchain.json."
+  }
+ ]
+}

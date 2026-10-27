@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The per-user-type kill-switch tier is missing. The product-map ADM-35 component is 'Kill switch: suspend agent access for one user type or everyone', and A101 section 6 defines a type tier (agent_guard.type_tier.engage, SGL+R; release agent_guard.tier.release 4E; refusal order platform > type > tenant > user). A77 speaks only of four tiers (token, user, tenant, platform) in the guard tab, banner, challenges and pass criteria, and its Requirements section misquotes the product map as 'one user, one tenant or everyone'. A build with no way to pause all investor (or all staff) agents would pass.",
+   "fix": "Add the type tier to section 7 (PrivilegedActionFlow with agent_guard.type_tier.engage, SGL+R ratify variant, 4E release with KS_ACTOR_CANNOT_RELEASE), to the KillSwitchBanner condition (show the widest tier), to the M27/G22 done text (quote the product map exactly), to the kill-switch challenge (type=investor pauses investor tokens only, refused 423 AGENTS_PAUSED tier: type) and to the pass criteria. List the undrawn type-tier control as a DF finding for HG-REVIEW."
+  },
+  {
+   "severity": "high",
+   "issue": "A staff token can be widened to write scopes without the hardware key and the second person. A12 requires a hardware-attested assertion and a SECO checker only at creation; widening needs only the owner's fresh passkey assertion (A12 lines 42, 61). A77's 'Change limits' and its D04 done line ('widen') never say what widening a staff token requires. A staff member can get a read-only token approved and then widen it to write cells alone, which defeats the product-map row 'Create my token with write scopes: key plus a second person' (G13). No challenge or pass criterion catches this.",
+   "fix": "Add to A12.1: widening a staff token, or adding any write cell, needs a hardware-attested mandate_widen assertion (ATTESTATION_REQUIRED for a software key), and the new mandate version stays pending_approval under the 4E SECO-not-requester approval while the old version stays in force. Render the pending version with its APR- id in section 3. Add a challenge: a read-only token is approved, then widened with a software key and then a hardware key; the write cell stays refused until a different SECO approves. Add 'staff widen' to the gate-enforcement pass criterion."
+  },
+  {
+   "severity": "high",
+   "issue": "The platform agent policy has no owning API node. The product-map action 'Change platform agent policy (Policy v+1, SECO -> CCO)' and the M26 component for per-user-type scopes, limits, expiry and rate limits appear only in A77's A12.1 wish list. No A12, A14 or A03 spec defines agent.platform_policy.change, its policy row, or where the policy is enforced. A77 even allows a read-only fallback 'listed as a contract gap', so a build that cannot change the policy passes, contradicting its own Requirements and pass criteria. It is also unspecified whether A12 enforces the ceilings at issue, widen and call time, and what happens to live tokens above a tightened ceiling.",
+   "fix": "Remove the fallback. Make A12.1 carrying the policy table, the GET and propose routes, the A03/A14 row agent.platform_policy.change (4E, SECO maker, CCO checker, human-only decision) and enforcement a Specify precondition, escalated if unmet. Enforcement: POLICY_CEILING_EXCEEDED at issue and widen, and effective caps of min(mandate, policy) on every call. State the tightening rule for existing tokens (clamp at once and notify the owner). Add a challenge in which an approved lower cap clamps an existing investor token on its next call."
+  },
+  {
+   "severity": "high",
+   "issue": "'Revoke any token' by staff has no API contract. The product-map row is 'SECO or SUPP, immediate; the owner is notified'. A77 section 4 relies on a dry-run of consequences from A12, a reason-code catalogue, revoke_reason on rows and an owner notice. A12's revoke is an owner (or approver-role) action with no dry-run and no staff reason codes, and none of this is in A77's A12.1 list. The builder either blocks or invents client-side consequences, and the 'dry-run consequences must match' challenge has nothing to compare against.",
+   "fix": "Add to A12.1: a staff revoke on tokens/{id}/revoke for callers holding the M26 revoke cell (SECO, SUPP). It takes reason_code from an A03 catalogue (422 without it) and supports ?dry_run=true, returning open orders, confirmations, webhooks and the wallet session key. The token carries revoke_reason and revoked_by_role, and the agent.token.revoked event carries source=staff so A101 sends the owner notice. Cite these routes in section 4 and in the Specify frozen inputs."
+  },
+  {
+   "severity": "medium",
+   "issue": "Dependencies miss interfaces the pass criteria use. A69 (the 'ADM-34 and ADM-35 report the same state' check and the ADM-33 part of M27 done), A66 (the approvals inbox with the same APR- id) and A98 (partner principals and rx_ptr_ rows) are neither direct nor transitive dependencies. A66 and A69 are AM7 peers that may not exist when A77 is gated.",
+   "fix": "Add A66, A69 and A98 as deps, or restate the checks at API level (the GET /v1/kill-switches state equals ADM-35's render; the A14 request id is the same) and move the UI-to-UI equality checks to A78. Use partner fixtures if A98 is not added."
+  },
+  {
+   "severity": "medium",
+   "issue": "The partner token rule contradicts A12. A77 promises that every console partner gets two-person, hardware-backed token issue, while A12 creates PARTNER tokens on the partner's fresh assertion alone. Partner console sign-in is also not established: A53 is a staff hardware-key flow and the A105 partner portal is in the web app.",
+   "fix": "Record a Specify point: either partner write tokens follow the product-map 'second person' row via A12.1, or A77 states A12's rule verbatim. Name the node that gives partners console sign-in, or scope the mine tab to staff and route partners to A105/SPN-16."
+  },
+  {
+   "severity": "medium",
+   "issue": "Specify point (b) and the hedges ('as A101 allows', 'if A101 says so') remain, although A101 froze them. Staff user and tenant tiers are SGL+R. A token hold is immediate with a reason (SECO or SUPP). Clearing is SECO-only with a hardware-attested anomaly_clear assertion and A101's reason catalogue, and is refused with GUARD_HOLD_PLACER_CANNOT_CLEAR or self_subject. Release is agent_guard.tier.release under 4E. The user and tenant engage action codes are never named. Hedged rules cannot be turned into hidden tests.",
+   "fix": "Replace point (b) and the hedges with A101's frozen rules, name every tier's engage and release action code and its actors, and add these cases to the gate-enforcement pass criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ratification-lapse expectation conflicts with A48 and A101. A77 expects the banner to turn red and 'escalate to CEO' at 11:15 (2 h). A48's ladder raises Sev2 approval.unratified (owner CCO) at 2 h and makes CEO the owner only at 4 h. A correct build would fail the hidden test, or the builder would hard-code an escalation.",
+   "fix": "Render the escalation state and owner from the API (A48 ratification_state and the A13 alert owner). Change the challenge to: red 'Not ratified' with the switch still engaged at 11:15, and CEO as owner at the time A48 freezes."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'Agents asked to decide' view and the agent-as-checker challenge expect AGNT_NOT_ALLOWED refusals in the G22 evaluation log. A11 refuses requiresHuman routes before scope evaluation, and A12 writes gate_evaluation rows only from evaluateG22, so those refusals may never appear in oversight/evaluations.",
+   "fix": "Require A12.1's evaluations endpoint to include pre-evaluation refusals (AGNT_NOT_ALLOWED, self_subject, APR_CHECKER_MUST_BE_HUMAN) as refused rows with their reason codes, and add a contract test."
+  },
+  {
+   "severity": "medium",
+   "issue": "No approve surface for pending staff tokens is specified. J20 done and the self-issue challenge need a SECO to approve or decline in the page, but section 4's row actions are only Revoke, Hold, Clear hold and Inspect, and section 3 shows only the requester's view.",
+   "fix": "Specify a pending-staff-token queue or detail that shows scopes, limits, mandate hash and requester, with Approve and Decline through HardwareKeyConfirm (A14 decide on the APR- id), the not-eligible state, and a link to the same request in A66."
+  },
+  {
+   "severity": "medium",
+   "issue": "The sandbox challenge is ill-formed. It expects the API to refuse, with TOKEN_WRONG_ENVIRONMENT, a revoke of a live token made 'while in the sandbox view'. The view is client state, a staff session revoking a live token is legitimate, and TOKEN_WRONG_ENVIRONMENT is for sandbox tokens on live routes. The test invites a client-side check.",
+   "fix": "Rewrite it: an rx_sb_ bearer on a live revoke route is refused TOKEN_WRONG_ENVIRONMENT, and a sandbox revoke changes no live row or count. If an environment guard is wanted, add an explicit expected_environment precondition to the A12.1 route."
+  },
+  {
+   "severity": "low",
+   "issue": "The product-map component that service-account keys live on ADM-32 appears only in the Requirements text. No page element renders it.",
+   "fix": "Add a grey note linking to ADM-32 (A76) in section 4 or 8, and include it in state coverage."
+  },
+  {
+   "severity": "low",
+   "issue": "The G21 done text requires PHASE_NOT_ENABLED in the scope picker, but section 3 lists only four picker states.",
+   "fix": "Add phase_not_enabled as a fifth picker state from A12's listing, covered by the enum tone test."
+  },
+  {
+   "severity": "low",
+   "issue": "Hiding notice bodies only for subjects under review is a differential signal to non-AML viewers.",
+   "fix": "Hide notice bodies uniformly on ADM-35, or let the API decide uniformly, and include the notice log in the tipping-off diff."
+  },
+  {
+   "severity": "low",
+   "issue": "A12.1's approvals_by_agents makes A12 read A14's tables although A14 depends on A12 (an inverted dependency), and A12.1 is not a scheduled graph item.",
+   "fix": "Serve approvals_by_agents from A14 or A10, and have the orchestrator record A12.1 as an explicit follow-up loop with A12's oracle re-run before A101."
+  },
+  {
+   "severity": "low",
+   "issue": "The 5-8 agent-hour estimate matches A67's despite seven tabs, the create flow, five kill-switch tiers, the policy flow and the parity manifest.",
+   "fix": "Raise the estimate to about 8-12 agent-hours, or split the guard, limits and catalogue tabs into a follow-up node."
+  }
+ ]
+}

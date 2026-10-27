@@ -1,0 +1,90 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Design-fidelity challenge and seed contradict the V2 2-of-3 quorum and the prototype. The adToken prototype shows OP-7730 and OP-7729 at have=2 with the button already 'Broadcast' (n>=2), so the 2-of-3 quorum is met. The spec's challenge instead demands OP-7730 yield signatures_have=2, signatures_need=3, state=signing, and says the third approval flips it to signed. That contradicts §5 (signed at 2 of 3). A correct build fails the challenge, and a build that wrongly requires 3 of 3 passes it. 'need=3' also confuses the meter's segment count (quorum_n) with the quorum (quorum_m).",
+   "fix": "Expose signatures_have, signatures_required (quorum_m=2) and signers_total (quorum_n=3). Seed OP-7730 and OP-7729 as V2 ops at 2 of 3 in state signed (awaiting Broadcast) and OP-7731 at 1 of 3. Map the Broadcast button to POST /ops/:id/sign or a named /broadcast route, shown when have >= required. Rewrite the challenge to match."
+  },
+  {
+   "severity": "high",
+   "issue": "The timelock has three conflicting owners. A14 queues timelocked ApprovalRequests and creates custody_ops only after the timelock elapses, and runs its own veto. A15's P10 starts a second CustodyOp 'queued' window with its own vetoOp. A25's RealXOwnerMultisig adds a third on-chain delay for V1. As written, a forced transfer waits 96 h. The A15 challenge ('approved by 2 of 3 at hour 1 of the 48 h window') cannot happen, because under A14 the op does not exist until hour 48. The two veto paths can also disagree.",
+   "fix": "Name one clock owner per vault. For V2, A14's 'queued' is the only window and veto. P10 only refuses sign while now < executable_at, recomputed from A14's audit-anchored action.queued event, and refuses ops that skipped 'queued'. For V1, CustodyOp mirrors the A25 multisig executableAt. Drop A15's vetoOp or make it delegate to A14. Align the A14 and A15 wording and rewrite the Timelock challenge."
+  },
+  {
+   "severity": "high",
+   "issue": "P1, P3, P4 and V4 read data that no dependency provides: holder register units (A18, not an ancestor), the locked allocation file (A37/A38, AM3), verified-identity destinations (A30/A31, AM3) and KYC case state for V4 (A30, AM3). The adapter package is also meant to 're-read' A14's approval state directly, which breaks the module boundary. The builder must invent these sources, tests can pass against hard-coded fakes, and the AM1 end-to-end mint and V4 runs have nothing real behind them.",
+   "fix": "Define provider ports in interface.ts: ApprovalReader, RegisterReader, AllocationReader, IdentityRegistryReader and KycCaseReader. Ship sandbox fixture providers with one conformance case each, and fail closed when a provider is missing. Name A18, A38 and A30/A31 as the nodes that register the real providers, each re-running A15's conformance suite. Optionally add A18 as a dependency (AM1, no cycle). Word the end-to-end criteria as 'with fixture providers'."
+  },
+  {
+   "severity": "high",
+   "issue": "The G22 refusal side effects point to interfaces this node cannot reach. The P9 token-credential refusal is to be 'recorded as a G22 GateEvaluation and sent to A101'. The Security challenge requires that token and MCP attempts 'reach A101 as anomaly events'. A101 is in AM3 and cannot be a dependency. GateEvaluation is owned by A19, which is not an ancestor of A15. So the check cannot be tested at the A15 gate and can only be met with an unchecked stub.",
+   "fix": "Emit A12's outbox event agent.action.refused (codes G22 and P9_TOKEN_CREDENTIAL, token prefix, on_behalf_of) and record the decision through A12's G22 evaluator, or add A19 as a dependency (AM1). Assert on the outbox and audit events in the challenge and pass criteria, and move 'reaches A101' to A101 or A82."
+  },
+  {
+   "severity": "high",
+   "issue": "The final-burn owner quorum is missing. J08 step 10 ('4E+Q; owner quorum for final burns') and J21 step 6 both burn a trust's tokens, but the spec puts burn only on V2 (2-of-3) and forbids any value-moving function on V1, while still claiming both journey steps are done. A build that lets V2 alone do a final burn passes every listed test.",
+   "fix": "Add a policy row for final burns: a burn that takes supply to zero, or carries a dissolution flag, needs the V2 quorum plus a recorded V1 3-of-5 authorisation (checked through the P1/P9 path), and V1 still never executes the value move. Add a refusal code, a conformance case, a challenge (a V2-only final burn is refused) and a J08/J21 end-to-end run."
+  },
+  {
+   "severity": "medium",
+   "issue": "Urgent SGL+R pause or freeze through V3 (1-of-N) conflicts with P9. The initiating CCO, SECO or MLRO is in the V3 signer set but is excluded as maker, so an urgent pause needs a second person. The spec never says so, and A48 and A103 may assume one person can act.",
+   "fix": "State that under SGL+R the initiator cannot sign V3 and another V3 member must sign. Add a conformance case and a challenge for this. If a one-person emergency action is wanted, record it as a founder or counsel question."
+  },
+  {
+   "severity": "medium",
+   "issue": "The P8 policy-change path is undefined and conflicts with the product map. Executing an off-chain policy change 'through V1' has no target, selector or effector. The product map's gas-sponsorship policy change is ENGO -> CFO, but P8 would force the V7 cap through V1 3-of-5. A14's approval-policy change (row 52, 'mirrored to A15') would be blocked by the trigger. The trigger itself could be bypassed through a session flag, and no challenge tests that.",
+   "fix": "Implement P8 as an A14 effector for custody.policy.change, using V1 3-of-5 hardware-key approvals and, later, the A25 multisig selector. List which fields each path governs: signer, allow-list, quorum, timelock and band under V1; V7 cap under ENGO -> CFO; vault routing mirrored read-only from A14. Add a challenge that a raw SQL update, and a forged session flag, must both fail."
+  },
+  {
+   "severity": "medium",
+   "issue": "The V2 signer slots are not named, so the seed test cannot assert V2 'exactly', yet the challenges assume the CFO is a V2 signer. TP-SIGN (the custody signing provider in ADM-14 and J09 step 8) is not mapped, and the check constraint allows only staff signers.",
+   "fix": "Name the three V2 slots (as a default marked founder-choice) and the concrete N for V3. Map TP-SIGN to the production vendor signer behind the swap point."
+  },
+  {
+   "severity": "medium",
+   "issue": "P3 requires the mint cap to equal the locked allocation file total, but the product map allows mints that are not from a file (CFO + CCO; A28 adds CEO). A correct non-file mint would be refused with P3_CAP_MISMATCH.",
+   "fix": "Take the cap from the allocation file when the approval references one; otherwise use the approved payload's unit total under the stricter policy row. Add conformance cases for both paths."
+  },
+  {
+   "severity": "medium",
+   "issue": "The binding rule is vague and the attestation format is not pinned to A25. P1 says payload_sha256 'derives' calldata_sha256 without defining how, and the op stores sha256 while the attestation uses keccak dataHash. The EIP-712 domain name, version and per-vault verifyingContract (A25 uses 'RealXAgentGateway', '1', and separate V2 and V3 gateways) are not fixed here, although A15 generates the shared vectors. A25 consumes A15's vectors but does not depend on A15 in the graph.",
+   "fix": "Define calldata_sha256 = sha256(calldata) and dataHash = keccak256(calldata), both recomputed by P1 from the canonical payload. Pin the domain {RealXAgentGateway, 1, chainId, per-vault gateway address}. Add A15 as a dependency of A25."
+  },
+  {
+   "severity": "medium",
+   "issue": "V7 paymaster behaviour is underspecified: what V7 signs, whether P1 applies to automatic sponsorship, how runway is computed and from what source before A27 exists, and how V7 relates to A29's paymaster signer key.",
+   "fix": "Define automatic sponsorship within daily_cap under an AUTO standing approval, and top-ups under the product-map policy. Define runway = balance / trailing average spend, read through a PaymasterBalance port with a sandbox fixture. State that A29's signer is the V7 hot key from this adapter."
+  },
+  {
+   "severity": "medium",
+   "issue": "The P6 business-hours window applies to 'value-moving functions', but that set is never listed: it is unclear whether a V2 freeze, V4 identity ops, V7 sponsorship or V1 upgrades are covered. 'AEST/AEDT' is also ambiguous across Australian states.",
+   "fix": "List the P6-scoped selectors for each vault, explicitly exempt V3, V4 and V7, and use Australia/Sydney with a holiday data table."
+  },
+  {
+   "severity": "medium",
+   "issue": "The signed and bundle timing is inconsistent. §3 consumes the approval id at 'signed', together with the bundle. §5 reaches signed on the quorum-meeting approval, while a later 'sign' call assembles the bundle and consumes the id. Replay tests pass or fail depending on which reading the builder takes.",
+   "fix": "Pick one atomic point where the bundle is built, (approvalId, nonce) is consumed and the op moves to signed. Make §3, §5, the routes and the challenges agree."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 8-12 agent-hour estimate is low for the scope: 17 verbs, 10 rules at 100% branch coverage, 12 routes, a conformance suite, EIP-712 vectors, 10k fast-check sequences and 5 end-to-end flows. The comparable A14 is 10-14 hours.",
+   "fix": "Raise to about 12-18 agent-hours, or split into an adapter/policy node and an API/lifecycle node."
+  },
+  {
+   "severity": "low",
+   "issue": "Wikilinks to A72, A96 and A51 use colon titles ('Console:', 'P3:', 'V5/V6', 'Design extension B:'), but the files are named with '-' and have no aliases, so the links do not resolve.",
+   "fix": "Link by filename with a display alias, or add the titles as aliases; fix this in the generator plan-wide."
+  },
+  {
+   "severity": "low",
+   "issue": "Small role and vocabulary gaps: TP-RE can veto but is missing from the route RBAC list; AGT-U is not named in the P9 exclusions; 'P3 payouts' collides with policy rule P3; the product map's ADM-13 says 'V1-V9' and the spec does not reconcile this with V1-V7.",
+   "fix": "Add TP-RE (veto and read) and AGT-U. Write 'phase-P3'. Add one line saying V8 is not needed and V9 is undefined."
+  },
+  {
+   "severity": "low",
+   "issue": "The effect of an agent's maker cancel is not specified: the spec does not say whether it cancels the parent ApprovalRequest or which G22 scope allows it.",
+   "fix": "Make op cancel call A14's cancel on the parent request, and name the staff scope the G22 evaluator checks."
+  }
+ ]
+}

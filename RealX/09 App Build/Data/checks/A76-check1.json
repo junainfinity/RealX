@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The spec says buttons come 'only from allowed_actions[]' on every A45 and A46 response the page uses (calendar, filings, grants, exports, metrics, jobs, dead letters, integrations). Neither A45 nor A46 defines that field; a grep finds none in A45, A46, A14, A09 or A53. The spec requests allowed_actions[] only from loop A33.1, while peers A66 (via A13.1) and A75 (via an A42 loop) request it by name. The builder must either decide buttons in the client from roles, which the spec forbids and its grep checks cannot catch, or stall at Build.",
+   "fix": "Add a loop A45.1, and extend A46.1, so that every A45 and A46 list and detail response the page uses returns per-row allowed_actions[] for the caller in the current state. List it in Specify's frozen inputs next to A33.1 and A46.1. Add a Challenge probe: a persona whose A03 cell lacks an action sees no button, and a direct SDK call returns the same refusal."
+  },
+  {
+   "severity": "high",
+   "issue": "The 'one flag, two sources' contract test is built to fail. A45 computes flag=watch from its own proposed rule-pack row (two late distributions in 6 months). A33 opens sponsor_watchlist rows by job (late distributions, or retained stake below the minimum) and by hand (PART or CCO). The Challenge 'The flag with two parents' opens a watchlist row by hand for Yarra Bend and expects A45's flag to agree. Nothing in A45 reads A33's watchlist, so the test fails by construction and, under the escalation rules, stops AM7 as a spec defect found after the fact.",
+   "fix": "Fix this now in the specs, not at Build. Amend A45 so that flag = watch is read from A33's open sponsor_watchlist rows, and suspended from A33's tenant status, instead of from A45's own rule. Delete the duplicate rule-pack row from A45. Keep A76's contract test as a regression check. Record the change in A45, A33 and A33.1."
+  },
+  {
+   "severity": "high",
+   "issue": "The criteria for stripping sandbox controls from the bundle cannot be tested. A08 allows RUN_MODE only as local or test ('no other value exists in this build'), and A76 shows the Sandbox tab and Acknowledge (test) in both, so every bundle this build can produce legitimately contains them. The Challenge builds with RUN_MODE=ci, which A08's config schema rejects, so 'absent' could be met by a build that simply fails to start. The pass criterion 'a non-local build contains no sandbox route' has no real non-local build to check. Separately, A45 mounts POST /v1/_test/reporting/acknowledge only in RUN_MODE=local, so the Acknowledge (test) button A76 renders in test mode calls a route that returns 404.",
+   "fix": "Define a build-time switch that exists in this build, for example CONSOLE_SANDBOX_UI=off or a release bundle target, and use it only for the bundle-inspection test. Require that build to succeed and the console to start with it, then assert that the sandbox folder, route and Acknowledge control are absent. Align the run modes: render Acknowledge (test) only when GET /v1/meta reports RUN_MODE=local (A45's rule), or amend A45 to mount the route in local and test."
+  },
+  {
+   "severity": "high",
+   "issue": "The dependencies do not cover the interfaces that the Challenge and Done criteria use. A66 is needed for the approvals inbox ('the v3 request appears in A66's inbox for SECO', and SECO's approval in J20). A77 is needed for the D04 Done criterion ('appears in the person's activity on ADM-35') and for the webhook token links. Both are AM7 siblings with no edge to A76, so they may be built after it: the gate can fail for scheduling reasons or be met with a fake. A06 (the seeded personas and scenario rows), A104 (Fable drives every action 'through the SDK and the MCP server'; the mcp-server connector row), A99 (sponsor sandboxes) and A101 (sensitive-action notices) are not in A76's transitive dependencies either.",
+   "fix": "Add A66 and A77 as dependencies of A76. This creates no cycle, because neither depends on A76. Alternatively, rewrite those checks against the API (GET /v1/approvals and A12's activity endpoint) and move the UI assertions to A78. Add A06 and A104 as dependencies (both are in earlier milestones), and add A99 and A101 if their surfaces stay in scope. Regenerate the graph."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec depends on follow-up loops on AM3 nodes that will already have passed: A33.1 (routes for performance, watchlist and revenue share), A46.1 (human_gates[]) and the A45 changes above. It also relies on a new delegability rule: when an agent closes a watchlist entry or discards a non-money dead letter, the API returns 428 CONFIRMATION_REQUIRED. None of A33, A46, A12 or A03 implements that rule. None of this is on the graph or in any estimate. Nothing is built yet, so reopening passed nodes in AM7 can be avoided.",
+   "fix": "Fold the A33.1, A46.1 and A45 additions into the A33, A46 and A45 specs now: their route lists, allowed_actions and human_gates[]. For Specify point (a), name the data change: rows in A03's delegable.ts that mark sponsor.watchlist.close and jobs.dead_letter.discard (money=false) as agent-confirm, enforced by A12's 428 path. If these stay as loops, give them graph nodes or hours."
+  },
+  {
+   "severity": "medium",
+   "issue": "Delegability is not specified for several page actions, so Fable cannot write expected outcomes and a builder could pick any answer. They are: Mark complete on an obligation (arguably a compliance attestation), Withdraw filing, Resume job, Disable job (which opens its 4E request), Download lodgement pack, and Revoke of a grant by an agent of a role other than SECO or CCO. The manifest's delegability column is copied from A51's design screens.json, which has no authority over G22.",
+   "fix": "Add a delegability table to section 9 that covers every button in actions.ts (agent-maker, agent-confirm or human-only), sourced from A03's delegable.ts. Add a counsel question wherever the act may be a personal legal declaration (completing an obligation, withdrawing a filing). Make Fable's parity test compare the manifest with A03's data, not with screens.json."
+  },
+  {
+   "severity": "medium",
+   "issue": "Disable job is described as 4E for every row and runs through PrivilegedActionFlow, but no approval action code is named here or in A46. usePrivilegedAction(action_code) needs one. The code is also missing from the ten approval codes listed in Specify and from the agent maker list in section 9.",
+   "fix": "Name the code in both A46 and this note, for example jobs.schedule.disable (4E, ENGO to SECO). Add it to Specify's policy rows, to section 9's maker list and to the G13 challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "Two Done claims have no behaviour or test behind them. First, the spec says ADM-32 shows 'the sponsor and operator sandboxes', but section 8 describes only the operator sandbox panels; the per-user and per-tenant sandbox partitions belong to A99, which is not a dependency. Second, 'Indexer lag above 5 min: Sev3' is claimed to show as the indexer row degraded with A27's alert linked, but no challenge, fixture or pass criterion covers it.",
+   "fix": "Either add a read-only 'Sponsor sandboxes' list (tenant, partition state, last use) from A99's API with A99 as a dependency, or drop the claim and point to the node that owns it. Add a planted indexer-lag fixture (lag above 5 minutes under the injectable clock) to the challenges and pass criteria, expecting the degraded pill and a linked Sev3 alert."
+  },
+  {
+   "severity": "medium",
+   "issue": "SMR clocks are treated only as business-day clocks ('the A13 clock with business days remaining'; 'SMR at 3 business days'). A terrorism-financing SMR is due within 24 hours, as the product map's J14 step states. An hour-based clock shown as business days would mislead the MLRO, and no fixture tests this case.",
+   "fix": "Render whichever clock unit the API returns (hours or business days). Add a terrorism-financing SMR fixture with a 24-hour clock to the sealed-filing and filing challenges, expecting an hours countdown and a red overdue state at 24 hours."
+  },
+  {
+   "severity": "medium",
+   "issue": "The estimate of 6-10 agent-hours is the lowest of the AM7 nodes that build three screens (A68, A70, A71 and A74 are 8-12). Yet this is the largest AM7 spec: 530 lines, 13 tabs, bundle stripping, two contract tests, and parity sweeps for every persona and every persona's agent.",
+   "fix": "Raise the estimate to 10-14 in the graph data and in the note. Add hours for the upstream loops if they stay as loops."
+  },
+  {
+   "severity": "low",
+   "issue": "In the product map, ADM-26's action 'Publish public KPIs and track record' carries G17 ('Claims reviewed'), and one challenge cites G17. G17 is not in the node's gates or in Requirements covered.",
+   "fix": "Add G17 to the node's gates with its concrete behaviour: the publish precheck refuses forbidden labels and management-only keys, and MET_FORBIDDEN_LABEL is rendered. Otherwise, state which node owns G17 for ADM-26."
+  },
+  {
+   "severity": "low",
+   "issue": "ADM-29's purpose in the product map lists complaints as a performance signal, and A45 and A33 return complaints and incidents, but the table and row detail leave them out. Requirements covered says 'Onboard partner' links to ADM-03, but section 7's action list has only 'Open sponsor'.",
+   "fix": "Add complaints_open and incidents to the row detail, showing 'source missing' when the provider is absent. Add an 'Onboard partner' link to ADM-03 for PART in section 7."
+  },
+  {
+   "severity": "low",
+   "issue": "The test rules contradict each other in three places. First, the escalation rule makes 'any path where the page shows live or a closed human gate' Critical, while the hostile fixture requires the page to render live because the API said so. Second, several challenges say a persona 'clicks' Submit or grants access to an investor, but the page hides buttons that are not in allowed_actions and the grantee picker lists partners only. Third, the expected result when an agent approves accepts 'APR_CHECKER_MUST_BE_HUMAN or AGNT_NOT_ALLOWED', although A12 also has G22_AGENT_NEVER_CHECKER, which section 10 does not list.",
+   "fix": "Limit the Critical rule to the real seed and API. Phrase each refusal as 'no button on the page, and a direct SDK call returns <code>'. Name one expected code per refusal from A14 or A12, and add A12's G22 codes (G22_AGENT_NEVER_CHECKER, AGENTS_PAUSED, RATE_LIMITED) to section 10."
+  },
+  {
+   "severity": "low",
+   "issue": "Three cross-reference problems. The Webhooks tab says 'The URL column shows the host only', but its column list (ID / Owner / Token / Event families / State / Last delivery / Consecutive failures) has no URL column. A08 names A69 as the owner of the console's ADM-32 sandbox panel, which A76 actually owns. A76 says ADM-35 (A77) owns ADM-32's API-key and write-tool rows, but A104's spec point (a) decides whether write tools are enabled.",
+   "fix": "Add a 'Receiver host' column. Correct A08's reference so it names A76. For the API-key and write-tool rows, cite A104's spec point (a) together with A77."
+  }
+ ]
+}

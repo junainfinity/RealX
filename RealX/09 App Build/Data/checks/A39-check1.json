@@ -1,0 +1,90 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "Escrow release is owned twice. A38 F4 already owns the escrow.release 6E approval (FINA -> CFO + CCO) and its A14 effector, posts the journal through A37 postEscrowRelease, and emits settlement.escrow_released so that A39 does only the bank-side transfer to the trustee. A39 instead defines POST /v1/treasury/escrow/{offeringId}/release, creates its own 6E escrow.release request and posts A16 escrow.release itself. Two nodes would register effectors for the same action code and post the same journal, so either the escrow is released twice or one of A38/A39 fails its gate. A39 also depends on neither A38 nor A37, yet it reads offering state from them.",
+   "fix": "Realign A39 with A38. A39 creates no escrow.release approval and posts no escrow.release journal. It consumes settlement.escrow_released {offering_id, vehicle_id, amount_cents, approval_id}: add A38 as a dependency, or use a fake with a contract test and prove the real wiring in A49. On the event it runs G02 on the trustee beneficiary and checks R10, then pays through A17 createPayout(purpose escrow_settlement) to the vehicle's KYB-verified account under the same approval id, exactly once per event. Record this in an escrow_settlement row. Remove the ESC_* preconditions that A38 already owns. Restate oracle invariant 2 and challenge 2 as: one bank settlement per event, for exactly the event amount, to the verified trustee account, never while R10 is unclean. Name the node that supplies Vehicle.bank_account_ref (A33 or A34) and add it as a dependency. Correct the consumer column in A16's catalogue. Keep GET /v1/treasury/escrow/{id} in A39."
+  },
+  {
+   "severity": "high",
+   "issue": "The destination can be swapped after the checks and the payout still goes out. destination_bank_ref points at the mutable nominated-account row, and release re-runs checks only when they are older than 60 minutes. Challenge 1, where the row is edited between checks and release, therefore passes to the new BSB whenever the edit is less than 60 minutes old. The spec also never defines the 'allow-listed destination' (the AUTO condition) or the canonical request hash that the step-up and approvals sign over, so invariant 1 cannot be tested precisely.",
+   "fix": "At request time, store a destination fingerprint: sha256 of BSB, account, name and nominated-account version. List every field of the canonical hash (investor, amount, WDR id, fingerprint) that the passkey, the mandate signature and the A14 approval (AUTO included) bind to. At release, always compare the current nominated-account version with the snapshot, whatever the age of the checks. On any change, hold as destination_changed and require a new approval. Pay only to the snapshot. Define 'allow-listed', for example: passed bank_in_name and unchanged for treasury.destination.cooling_hours. Add an oracle case where the account is edited 1 minute after the checks."
+  },
+  {
+   "severity": "high",
+   "issue": "The agent's above-band behaviour contradicts A12 and the product map. A12 section 4 says that above the caps, or when no signing key is registered, a confirmable action (and it names the withdrawal request) returns 428 CONFIRMATION_REQUIRED for the human's passkey. Product map ACC-05 says 'Anything above the token's limit waits for their passkey'. A39, its challenge 3 and oracle invariant 3 instead require 403 G22_LIMIT_EXCEEDED with nothing written. The hidden oracle would fail a build that correctly follows A12.",
+   "fix": "Reconcile with A12. Above a mandate cap, return 428 CONFIRMATION_REQUIRED with a confirmation_id, reserve nothing and write no row. When the human confirms with a passkey, the request re-executes through the same policy and gates. Keep 403 G22_LIMIT_EXCEEDED only where A12 defines a hard refusal. Rewrite oracle invariant 3, the G22 'done' line and challenge 3 to match. Add a case where the human confirms an over-band request and it then goes through 4E."
+  },
+  {
+   "severity": "high",
+   "issue": "The approval model for large withdrawals is undefined and uses a policy code that does not exist. A14's policy_code enum is 4E, 4E+Q, 6E, 6E+Q, SGL+R and AUTO, so 4E_SECOND_APPROVAL cannot be stored. The spec never gives the checker sets for 4E or for the second approval at A$50k and above. It describes two incompatible flows: in one, the request is auto-created with maker 'System threshold' and a single human decides; in the other, TRSY 'release' is the maker's submit. The product map (TRSY -> CFO) and J15 step 2 (TRSY releases) point to two humans. Invariant 1 ('policy code matches the amount') is untestable as written.",
+   "fix": "Specify the withdrawal.release rows as A14 approval_policies data with exact checker_role_sets. For example: AUTO when amount <= auto_max; 4E TRSY -> CFO in between; at >= second_approval either 6E TRSY -> CFO+CCO or a named second checker set. Make 4E_SECOND_APPROVAL only a display label. Choose one maker flow, either a System maker plus a separate TRSY submit or a request created only when TRSY submits. State whether a service-principal maker meets G13. Fix the boundary wording: the design says 'over A$50,000' but the rule is inclusive at A$50,000.00, so either make the rule exclusive or render 'A$50,000 or more'."
+  },
+  {
+   "severity": "high",
+   "issue": "G14 relies on an interface A42 does not provide and fails open. A39 calls aml.patternCheck (no_alerts|alert_open|restricted) and listens for aml.restriction.lifted. A42 exposes neither: it exposes restrictionStatus(investorId) -> none|payouts_held|full, registered with A19 as the G14 evaluator, and emits aml.case.restriction_lifted. A39 ships a stub that returns no_alerts 'until A42 lands', A42 is not a dependency, and no node replaces the stub. As written, every withdrawal passes G14 by default.",
+   "fix": "Evaluate G14 through A19's registered evaluator (A19 is already a dependency) using A42's vocabulary: payouts_held or full becomes held aml_restricted, and an open alert becomes held aml_alert_open. If no evaluator is registered, hold with aml_check_unavailable instead of passing. Add A42 as a dependency (same milestone, no cycle), or name a follow-up loop plus an A49 criterion that proves the real evaluator holds a withdrawal. Use A42's event name for re-entry into checking. Add an oracle case with no evaluator registered."
+  },
+  {
+   "severity": "high",
+   "issue": "The reconciliation interfaces are used without a dependency and do not match A20. A39 consumes A20 events, calls assertClear(null,'payout') and assertClear(vehicleId,'escrow_release'), and relies on R10 results per client-money account. A20 is not a dependency, direct or transitive. Its assertClear(vehicleId, action) has no null or platform form. Its nightly runs are per vehicle, plus a platform run for R18 only, so nothing produces the per-account R10 results that ClientMoneyReconStatus and assertBankLedgerClear() need. The platform halt belongs to A48.",
+   "fix": "Add A20 as a dependency. Pin the exact run and event shape that yields {account_ref, statement_id, bank_closing_cents, ledger_total_cents, delta_cents} per client-money account; if A20 has no platform-scoped R10 run, request it as loop A20.1. Replace assertClear(null,'payout') with the real platform-halt check (A48 or A19 G10) and add that node as a dependency. Add a contract test against A20's exported types."
+  },
+  {
+   "severity": "high",
+   "issue": "The G02 re-screen uses the A22 sanctions adapter (screenPerson, and the oracle runs against A22's sandbox list), but A22 is not a dependency, direct or transitive.",
+   "fix": "Add A22 to A39's deps (it is AM1). Name the exact A22 function and the screening_result_ref shape that A17 createPayout requires."
+  },
+  {
+   "severity": "high",
+   "issue": "The node promises R10 at Δ 0 as a precondition for allocation and distribution approval, and says 'A37 calls it before allocation, A40 before distribution approval'. Neither A37 nor A40 depends on A39 or mentions assertBankLedgerClear: A37 uses its own ORD_ESCROW_DELTA_NONZERO check 'when the provider is wired', and A40 uses A20 preflight. As planned, no node enforces this precondition.",
+   "fix": "Have A39 register assertBankLedgerClear as a provider in a hook that A37 and A40 already call, for example A20 preflight or A19 registerHaltSource('client_money_r10'), or open named follow-up loops A37.x and A40.x with tests. Add an A39 pass criterion that the provider is registered and refuses when a delta is planted. Add an A49 step where a planted one-cent R10 delta blocks both allocation lock and distribution approval."
+  },
+  {
+   "severity": "high",
+   "issue": "The refund-payout path conflicts with A38. A38 R3 credits refunds to the investor's wallet and owns the per-line 5-business-day refund.pay clock. It emits settlement.refund.return_to_bank for A39 only when the flag is on (default off, a counsel question), and it gives A39 the hold-and-remind job for bad bank details. A39 instead pays every refund-batch line to the bank under the batch approval id and opens its own treasury.refund.due clock. A16's ledger rejects that approval binding, because the approval's object_ref must equal the journal's external_ref.",
+   "fix": "Replace POST /refund-batches/{id}/pay with a consumer of settlement.refund.return_to_bank, active only when the flag is on. Each event becomes a system-initiated withdrawal from investor_cash with its own approval (AUTO or 4E) and the three checks. Drop the duplicate clock or rename it as a bank-leg clock. Specify hold-and-remind for a missing or mismatched account. Test both flag states."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ADM-18 KPIs cannot be reproduced as written. The design's A$18,420,316.44 is the sum of the 3 client-money rows, yet the tile says '4 accounts'. A16 and A74 count client-money accounts only, so the pass criterion demanding '(4 accounts)' forces operating into the count or fails. 'Payouts queued' is also defined three times (A16, A17, A39). A39's definition (withdrawals + refunds + escrow releases + transfers) contradicts the design sub-line 'Withdrawals + distributions' and would not give A$96,214.30.",
+   "fix": "Define account_count as the number of client-money accounts. Record '4 accounts' as a design discrepancy for A51/A87, or seed a zero-balance fourth client-money account and say so. Make A39 the single KPI source, composing A16 and A17. Define payouts queued as approved or paying withdrawals plus approved distribution payables due, with no escrow settlements. Align the seed expectation."
+  },
+  {
+   "severity": "medium",
+   "issue": "The SM-WDR transition table is incomplete, yet the pass criteria require every allowed and every forbidden pair to be tested. The brief uses transitions it never lists: approved->held, awaiting_approval->held, held->rejected, and failed/returned as terminal or retry. The key ledger.withdrawal.reservation_ttl_hours does not exist in A16, and nothing requires the reservation TTL to be at least the 72 h approval TTL, so a reservation could expire while the request awaits approval.",
+   "fix": "Give an explicit from/to/actor/trigger table for all states and register exactly that table with A03. Define treasury.withdrawal.reservation_ttl_hours in A39's config with a validation that it is at least the approval TTL plus the release window, or have approval extend the reservation. Add an oracle case where approval lands at 71 h 59 m."
+  },
+  {
+   "severity": "medium",
+   "issue": "The agent rules contradict each other. The G22 bullet says agents can never approve, release, hold, reject or authorise. The RBAC bullet says staff tokens may act as maker on hold, re-check, return, transfer, fee sweep and refund pay. Refund pay submits payouts, and reject by TRSY is not classified either way.",
+   "fix": "Publish one matrix: route, human roles, whether investor/sponsor/staff tokens are allowed, and the refusal code. Recommended: staff tokens may draft hold, re-check, return, transfer and sweep requests; they may never reject, release, pay refunds or authorise (G22_AGENT_NEVER_CHECKER or AGNT_NOT_ALLOWED). Mark each route in A03 delegable.ts and add A100 parity rows."
+  },
+  {
+   "severity": "medium",
+   "issue": "The owned paths are incomplete. The four worker jobs have no owned folder: other nodes own services/worker/src/jobs/<name>/ and A09 owns the worker root. The swap note is written into SWAP-POINTS.md, which A08 generates. The spec never says where the migrations live (A04 owns packages/db/migrations). A74 already needs an A39.1 loop for the escrow list endpoint.",
+   "fix": "Add <workspace>\\app\\services\\worker\\src\\jobs\\treasury\\ to owned_paths in both the graph and the note. Put the schema and migration in the module folder, as A20 does, or request them from A04. Record the dual-authorisation swap note in A17's adapter manifest or in the evidence, not in SWAP-POINTS.md. Add GET /v1/treasury/escrow?state= to A39 now."
+  },
+  {
+   "severity": "medium",
+   "issue": "SM-05 coverage is not testable. SM-05 (Order) is owned by A37 and driven by A38, A39 has no SM-05 transition, and the 'escrow legs closed by this node' claim becomes wrong once escrow ownership is realigned with A38.",
+   "fix": "Restate the SM-05 contribution as a testable invariant, for example: every settled order's offering has a settled or tracked escrow_settlement bank leg, and every refunded order with return_to_bank on has exactly one payout. Otherwise, drop SM-05 from A39's data and map it to A37 and A38."
+  },
+  {
+   "severity": "medium",
+   "issue": "The timing of transfers and payouts around the 00:00 statement cut is undefined. bank.internal_transfer posts only on settled, and withdrawal.pay posts at submit, so items that straddle the cut create per-account differences between bank and ledger. With a zero-tolerance Sev1 R10, that halts payouts. The runway 'float' (bank closing less reserved and payable) is also incoherent when R10 is clean.",
+   "fix": "Define which ledger accounts (payout_clearing, in-transit) map to each bank account for R10, and treat items in flight at the cut as reconciling lines rather than deltas, coordinated with A20's R10 text. Give a worked float definition with an example. Add a challenge with a transfer submitted at 23:59:50 and settled at 00:00:10."
+  },
+  {
+   "severity": "low",
+   "issue": "The design and fact details are inaccurate. The design's Withdraw button is an outlined ink button labelled 'Withdraw funds', not green #1F5E4B. The schedule times are written as 'AEST' where the rest of the plan uses Australia/Sydney civil time (AEDT in summer). The freshness challenge asserts ADM-01's rendered sub-line, which A66 owns.",
+   "fix": "Correct the design reference. Write every time as Australia/Sydney civil time from the injectable clock. Make the challenge assert the API field that ADM-01 reads."
+  },
+  {
+   "severity": "low",
+   "issue": "Template and hygiene problems. Seven wikilinks do not resolve because the filenames use '-' where the titles use ':' or '/' (A17, A19, A50, A51, A74, A96). The withdrawal body carries idempotency_key, but A09 requires an Idempotency-Key header on every mutation.",
+   "fix": "Link to the actual filenames or use [[file|title]] aliases in the generator. Take the idempotency key from the A09 header and remove it from the body schema."
+  }
+ ]
+}

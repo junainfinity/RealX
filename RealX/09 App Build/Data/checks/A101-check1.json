@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The dependencies leave out interfaces that the spec uses in its build, oracle and challenges. None of these is a direct or transitive dependency in final-graph.json: A29 (revokeSessionKey is called inside the hold transaction, and the wallet side-door challenge needs it), A37 (intake and the 'Places an order' notice consume orders.placed, and the threshold-race challenge checks that no order, escrow or mandate_usage rows exist), A46 (catalogue rows for five jobs, the webhook-eligibility test, skipped_paused), A98 (SP-VAL and SP-PM tenant members, rx_ptr_ partner tokens and the partner owner type in the tier matrix), A104 (the MCP session in the self-clear challenge, and the MCP catalogue must leave out requiresHuman routes) and A06 (Alex Morgan, HCO, NLC and the AML-subject persona). Fable cannot run these challenges at A101's gate, and the builder would have to stub the interfaces.",
+   "fix": "Add A29, A37, A46, A98, A104 and A06 to A101's deps in final-graph.json and to the 'Depends on' line. This creates no cycle, because only A60, A77 and A82 depend on A101. All six are in AM0 to AM3, so AM3 stays valid."
+  },
+  {
+   "severity": "high",
+   "issue": "The user-type tier (Specify point (d)) needs interface changes that are not on the A12.1 request list, so the spec's own escalation rule fires on day one. A12 defines KillSwitchProvider as state(scope: platform | tenant | user, id), and AGENTS_PAUSED names only the platform, tenant and user tiers. A48 also says A101 implements only tenant and user. A13 seeds agent.kill_switch_fired only as Sev1 platform-wide and Sev2 tenant or user. A101 registers a type(id) provider and returns tier: type anyway.",
+   "fix": "Add these to the A12.1 request list: widen the KillSwitchProvider scope union and the AGENTS_PAUSED tier enum to platform | type | tenant | user. Add a requested A13 row for the Sev2 type variant of agent.kill_switch_fired. Note the A48 text correction and include these hashes in the Specify freeze list. If Specify (d) is declined, say explicitly that the type provider, its routes, its matrix rows and its A14 codes are removed."
+  },
+  {
+   "severity": "high",
+   "issue": "No node implements the ACC-05 product-map state 'Account frozen or under AML review: every token is suspended'. A12 has no such rule. A60 and A77 both expect the API to return every token of the seeded AML-review investor as suspended ('Paused while we review your account'). A101 §3 says the opposite: an AML restriction 'triggers nothing in this node'. A60's and A77's hidden tests will fail against a build that follows A101.",
+   "fix": "Decide who owns this. One option: add an A101 provider 'account_review'. It reads a need-to-know-free flag (from A30 or A42: the investor's restriction is not 'none', or the wallet is frozen), refuses with AGENTS_PAUSED tier:user and reason account_review, sends no notice, and gets an oracle case. The other option: record a Specify point that moves the rule into A12.1. Either way, remove the 'triggers nothing' sentence and reconcile it with A60 §6 and A77's tipping-off rule."
+  },
+  {
+   "severity": "high",
+   "issue": "The inline hook sits where it cannot see most of the calls its rules count, and it does not say what commits. afterEvaluate runs 'after G22 and before the business handler commits'. But refusal_streak counts every G22 refusal, every gate refusal and every 401. authority_probe counts APR_CHECKER_MUST_BE_HUMAN, requiresHuman and self_subject refusals, which are raised before scope evaluation (before G22) or inside the handler (G01 to G21). A 401 TOKEN_INVALID has no token to attribute it to. If a refused request's transaction rolls back, the counter updates and the hold written 'in the same transaction' are lost. Invariant 1 could then pass for G22 refusals and fail for gate refusals.",
+   "fix": "Request two slots in A12.1. (1) preHandler(ctx, g22Result, tx), for calls that are otherwise allowed; it runs burst, new_country and dormant_owner and may refuse with 423 before the handler runs. (2) onOutcome(ctx, outcome, refusalTx), which runs inside the committed refusal transaction A12 already uses for its activity, gate-evaluation and audit rows. It covers every refusal, including pre-scope requiresHuman refusals and gate refusals from the handler. State that TOKEN_INVALID is not counted, and that TOKEN_REVOKED and TOKEN_EXPIRED never raise a hold. Add an oracle case: 10 handler gate refusals in a row, then an otherwise-allowed call, which must get 423 AGENT_HELD."
+  },
+  {
+   "severity": "high",
+   "issue": "Wallet session keys are revoked only when a token is held. The user, tenant and type tiers in §6, and A48's platform tier, never call A29's revokeSessionKey. Yet Specify point (f) says a hold or a tier revokes them, and itself explains that a direct UserOp through a third-party bundler on testnet gets around an off-chain-only block. A build that follows §6 leaves every paused investor's session keys live on chain. The wallet side-door challenge tests only a hold.",
+   "fix": "In §6, engaging the user or type tier revokes the session key of every covered mandate through A29: the off-chain row in the engage transaction, then the on-chain revokes in a worker batch with a completion check. The fan-out on A48's kill_switch.engaged does the same for the platform tier. State that a release does not restore keys: the person registers new ones with a passkey. Extend the wallet side-door challenge and oracle invariant 2 to the user, type and platform tiers."
+  },
+  {
+   "severity": "high",
+   "issue": "The AML origin of an anomaly leaks to staff who do not have M20 access. An anomaly from A42's signal has source = signal, and A42 is the only external signal source. Any staff member with V on M26 can call replay and get 'signal <event id> present', and that event id resolves to aml.agent_burst in the outbox. The spec also never says how the evidence window is built for a signal anomaly, so its detail will differ from an ordinary burst. This contradicts the spec's own rule that no column or response names AML, and challenge 4's byte-equality for SUPP.",
+   "fix": "Put source and signal_ref under the MLRO and CCO RLS policy, and leave them out of every response and outbox event that is not need-to-know. For a signal anomaly, compute the evidence window from the token's own activity, in the same shape as an inline burst. Limit replay of signal anomalies to MLRO and CCO; everyone else gets the ordinary-burst shape. Add an oracle case that compares the SECO and SUPP views of detail, list and replay for the two personas, byte for byte after id substitution."
+  },
+  {
+   "severity": "high",
+   "issue": "Oracle invariant 3 and the notice-completeness pass criterion require 'zero agent.* payloads on the webhook receiver'. That contradicts A46, which offers an agent.* webhook family to staff and agent.confirmation.* to anyone, and A12, which says A46 delivers its agent.* events to webhooks. A correct build would fail the hidden test. A46's flag is also called webhook_safe, not webhook_eligible, and A46's staff agent.* family would include agent.guard.* unless it is excluded.",
+   "fix": "Redefine the invariant: zero A43 notification bodies of the ten agent notice types and zero agent.guard.* events reach the webhook receiver, the MCP stream, the agent's response bodies or any address in a request. Ask A46 to exclude agent.guard.* from the staff agent.* family explicitly, using its own term (webhook_safe = false)."
+  },
+  {
+   "severity": "medium",
+   "issue": "The hold transaction calls A29's revokeSessionKey, and A29 submits the on-chain revoke through the bundler before the request returns. That puts external I/O inside the database transaction, which cannot fit the hook's p95 5 ms budget. The budget also does not say whether it covers the path where a rule fires.",
+   "fix": "The hold transaction revokes the session_key row off-chain, which fails closed at once. The on-chain revoke is sent from the outbox after commit, with retry and a recorded tx hash. Apply the 5 ms budget to the path where no rule fires, and set a separate bound, excluding chain time, for the firing path."
+  },
+  {
+   "severity": "medium",
+   "issue": "Replay determinism is under-specified. Inline decisions use bucketed counters, but the pure rule is described as a sliding window over activity rows selected by id range. Under concurrency, ids are not in commit order, so the range can include rows the inline decision did not count. The spec also does not say that baseline rows are insert-only and kept, or how long activity rows are kept, so replaying older anomalies can fail.",
+   "fix": "Store on each anomaly the list of activity ids the counter actually counted, plus its hash. Define the rule's window with the same bucket semantics the counter uses. Make agent_baseline insert-only, keyed by (token_id, hour), and keep its rows at least as long as the anomalies that reference them. State how long A12 must keep activity rows for replay."
+  },
+  {
+   "severity": "medium",
+   "issue": "There is a feedback loop with A42. A101's burst rule emits agent.guard.burst_detected, and A42's agent_order_burst scenario may then emit aml.agent_burst for the same window. If the person has already cleared the first hold, the signal creates a second hold and a second notice for the same burst. An ordinary burst never does that, so it is both a tell and a duplicate notice.",
+   "fix": "Deduplicate a signal against any anomaly on the same token, open or cleared, whose evidence window overlaps the signal's window within a set period (for example 24 hours). Merge it and record signal_ref, with no new hold and no new notice. Add an oracle case for a signal that arrives after the person cleared the hold."
+  },
+  {
+   "severity": "low",
+   "issue": "An estimate of 6 to 10 agent-hours looks low for this oracle node. It has seven rules, five worker jobs, three tier providers, a 10,000-sequence replay property, a 5,000-tuple tier matrix and a two-process stop-latency run of 50 each. Narrower peers are A12 at 8 to 12, A42 at 8 to 12 and A14 at 10 to 14.",
+   "fix": "Raise the estimate to 10 to 14 in the note and in final-graph.json."
+  },
+  {
+   "severity": "low",
+   "issue": "The design references credit A50 with more than A50 draws. A50 draws only the five-row notice CheckList (two rows locked) and the pause button and banner. The amber 'Held because ...' anomaly card comes from A60. The table column 'Row (A50 label)' also lists rows A50 does not draw: three more locked rows (token created or widened, anomaly hold, kill switch), plus 'reaches its daily cap' and 'daily summary'.",
+   "fix": "Credit the anomaly card to A60 §6 and rename the column to 'Row label'. Raise a design finding to A50 for the undrawn rows, as the spec already does with A51 for the type tier."
+  },
+  {
+   "severity": "low",
+   "issue": "dormant_owner says reads continue, but its action is hold. The first write therefore suspends the token, and every later read is refused with 423.",
+   "fix": "State that reads continue only until a write trips the rule, or define a write-only hold for this rule."
+  }
+ ]
+}

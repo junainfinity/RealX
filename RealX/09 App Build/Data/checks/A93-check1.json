@@ -1,0 +1,115 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The P1 reduced mode (section 8, M17 'at launch': off-platform notice and result records, ADM-23 P1 records tab, reads by A58 and the document vault) is built inside an AM9 P2 node, so it does not exist at the P1 launch (A89, AM8). The requirements catalogue D10 says 'P2 (reduced notices P1)' and data_admin M17 says 'At launch, a reduced version records notices and results'. A58 (AM5) is named as a reader but cannot depend on A93 and its spec never mentions governance records.",
+   "fix": "Move section 8 (governance_record, records routes, governance.record.publish 4E, ADM-23 P1 records tab, A58 read) into a P1 node before A88/A89 (e.g. a small AM6/AM7 node or into A70/A75 plus A64), and leave A93 with the P2 path only. Alternatively, record a founder decision in Decisions.md that P1 launches without the reduced mode and remove the 'M17 at launch' claim."
+  },
+  {
+   "severity": "high",
+   "issue": "Agent ballots rely on a votes.cast row flagged \"counsel\" in A03's delegable.ts, but A03 section 7 lists only ONB-06, ONB-07, SPN-06 and ONB-05 as counsel; votes.cast appears only in A50. A93 'proposes the diff' to A03 (AM0, frozen), yet its own escalation trigger treats any delegable.ts change as an upstream spec defect. If the row is never added, A03's default makes the cell delegable, A12 issues governance-scoped tokens without SCOPE_PENDING_COUNSEL, and agents cast votes before counsel answers.",
+   "fix": "Reopen A03 (and A12's counsel list) now so votes.cast = \"counsel\" is in A03's frozen data before AM9, with a decision id. In A93, add a fail-closed guard in ballots/ that refuses any agent-cast ballot with G22_SCOPE_NON_DELEGABLE unless the delegable row is exactly true. Add a hidden test that omits the row and still expects refusal."
+  },
+  {
+   "severity": "high",
+   "issue": "The statutory notice period is checked only at filing (voting_opens_at >= now + notice_min_days). Notice is actually given at publish, after the CCO's decision, which can be days later. Holders can therefore get less than 21 days' notice (s252J for registered schemes), and the build still passes every listed test.",
+   "fix": "Re-run the notice-period check in A14's precheck and again in the publish effector, on the injectable clock, measured from publish time, refusing with GOV_NOTICE_PERIOD_TOO_SHORT. Apply the same check to extend. Add a challenge vector: filed at day 22, CCO approves 2 days later, expect refusal."
+  },
+  {
+   "severity": "high",
+   "issue": "No interested-party voting exclusion. Corporations Act s253E bars the RE and its associates from voting their interests on a resolution in which they have an interest other than as a member (e.g. RE replacement, a related-party sale; sponsor co-investment may be an associate). The tally counts every snapshot holder, so a legally wrong result could be certified and no test would catch it.",
+   "fix": "Add a counsel-marked ruleset row interested_party_rule (seed: exclude RE and associates per s253E) and resolve excluded_holders[] at filing from A33 entity and associate data. Mark those holders vote_excluded in the snapshot and refuse or zero-weight their ballots (e.g. GOV_HOLDER_EXCLUDED). Handle the denominators as counsel decides, add tally vectors and log the HG-LEGAL question."
+  },
+  {
+   "severity": "high",
+   "issue": "The live tally leaks a tipping-off signal. A restricted holder's ballot is quarantined and removed from the aggregate 'without a marker' while live_tally_visible is seeded true, so a large restricted holder can see that For did not move after they voted. The tipping-off challenge explicitly allows 'the aggregate differs by the held weight', so a leaking build passes (AML/CTF Act s123).",
+   "fix": "While a ballot is quarantined, holder- and sponsor-visible aggregates should include its weight on a display-only basis (decisions still exclude it until disposal), or live tally updates should be batched and delayed. Seed live_tally_visible=false pending counsel. The challenge should require the holder-visible tally and monitor to be identical for the restricted and the ordinary holder."
+  },
+  {
+   "severity": "high",
+   "issue": "The certifier path cannot be built as specified. 'Scrutineer' is not a principal kind in A98 (grep finds it only in A93 and A94), and scrutineer_principal_id is not a column. The TP-RE's decision surface is undefined: ADM-23 actions go through A53's hardware-key staff console, but the TP-RE is a partner principal whose inbox is A105 PTR-07, which A93 neither references nor depends on. J08 step 6 cannot run on screen, and when origin=trustee has no scrutineer, the checker set is empty.",
+   "fix": "Define the scrutineer as an A98 partner kind or engagement (upstream diff). Add a scrutineer_principal_id column and set it at appointment in the publish payload. Name A105 PTR-07 as the TP-RE and scrutineer decision surface, with a checker view of result_sha256, the tally and the snapshot hash. Add A98 and A105 as deps, and refuse publish with a named code when the certifier set is empty."
+  },
+  {
+   "severity": "high",
+   "issue": "SPN-13 actions have no API contract and break parity. (1) 'Issue notice' must end with 'Sent to RealX for approval · APR-...', but filing creates no A14 request and publish is LEGL-maker only, so no sponsor route yields an APR id. (2) 'Certify result with trustee' is hidden for the whole proposer identity set, which includes the filing SP-OWN in the seeded J08 scenario, so no sponsor user ever sees it. The API meanwhile lets that SP-OWN be certify maker, so UI, API and MCP disagree and the A100 parity rows cannot be green.",
+   "fix": "Specify an issue-notice operation for SP-OWN/SP-IR that yields an APR id: either the governance.notice.publish request with LEGL as maker and CCO as checker, or a sponsor-side request that lands in LEGL's queue. Give it a scope and a parity row. Align certify visibility with the API: the proposer may submit the maker side but never check, or the API refuses proposer makers too. Add both cases to the parity matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "proposer_identity_set is defined by principal (the proposer, their agents and tenant co-drafters). The challenge, however, expects GOV_PROPOSER_CANNOT_CERTIFY for 'the same person logged in as a TP-RE fixture that shares their person_id', which that definition does not include. The builder and the hidden test disagree.",
+   "fix": "Define proposer_identity_set by person_id: every principal and agent token that resolves to a person who proposed, edited or filed. This matches A11's SoD rule that an agent counts as its human."
+  },
+  {
+   "severity": "medium",
+   "issue": "Dependencies miss interfaces the spec uses: A43 (notices, claims lint and blocked-phrase row, tasks), A98 (TP-RE), A101 (agent-vote notice), A104 (MCP), A100 (parity rows), A06 (BAY01 fixtures), A38 (first issue date), A105 (partner inbox). Cross-owned data diffs have no owner scheduled to apply them in AM9: A03 SM-10 and delegable, A14 policy rows for 8 new action codes, the A43 blocked list, the A48 criterion and A100 rows. This contradicts 'only owned paths changed' and the escalation rule.",
+   "fix": "Add A43, A98, A101, A104, A100, A06, A38 and A105 to the deps in final-graph.json and in the note. List each upstream data diff with its owning node, applied as a spec amendment of that node before A93's Specify stage."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec contradicts A48's contract. A48 seeds the meeting criterion only as 'the vote closes and the result is certified', so after failed/quorum_failed -> cooldown the halt can never lift (HALT_CRITERIA_NOT_MET) and resale stays frozen. Also, 'executing -> executed' waits for A48's winddown.completed, an event A48 does not define (it emits winddown.* steps and vehicle.wound_down).",
+   "fix": "Amend A48 so the meeting criterion is met on governance.result.certified or governance.cooldown.started. Use A48's real completion event (e.g. vehicle.wound_down), and add a test that lifts the halt after a quorum miss."
+  },
+  {
+   "severity": "medium",
+   "issue": "J08 step 1 (data_flows and the requirements catalogue) says filing a sale proposal moves the property to exit_proposed. A93 drives operating -> exit_proposed only at execute, so J08 is not reproduced as specified.",
+   "fix": "When a sale-kind proposal is filed, call A48's P2 propose path (operating -> exit_proposed, with the proposal id as evidence) and revert it on withdraw or cooldown. Alternatively, record the deviation as a founder decision and update J08."
+  },
+  {
+   "severity": "medium",
+   "issue": "Scheme-wide resolutions and poll weighting are not modelled. In P2 the umbrella is one registered scheme with sub-funds. RE replacement and umbrella constitution amendments are votes of all members across sub-funds, and on a poll members vote by the dollar value of their interests (s253C, valued under s253F), not by units. The spec supports only single-vehicle, unit-weighted votes.",
+   "fix": "Add a proposal scope of sub_fund or scheme, with a multi-vehicle snapshot. Add a counsel-marked row weight_basis (units or dollar_value) with a value source: the A34/A40 unit price at the record date, in integer cents. Add mixed-value tally vectors and an HG-LEGAL question."
+  },
+  {
+   "severity": "medium",
+   "issue": "No members' meeting is modelled, although the node and ADM-23 are about meetings. Registered-scheme resolutions are passed at a members' meeting (s252 series; virtual or hybrid only if the constitution allows; minutes within one month under s253K; a chair; member questions). The spec has only a ballot window, so neither the 'Meetings calendar' component nor legal validity is covered.",
+   "fix": "Add a governance_meeting record: format, access link, chair, poll close = closes_at, minutes through A35 with a one-month A13 clock, and a question register. Alternatively, put the meeting procedure behind an explicit HG-LEGAL question and a data flag. Show the meeting on the ADM-23 calendar and on GOV-02."
+  },
+  {
+   "severity": "medium",
+   "issue": "The snapshot source is ambiguous. A18 writes an internal 00:00 version and a registry 02:10 version each day, plus certified versions. A93 asks only for a version 'whose as_of is the close of the record date', while A40 requires a certified version. A builder could weight votes from the internal mirror rather than the legal record.",
+   "fix": "Name the version: source = registry or certified, as_of 00:00 Australia/Sydney on record_date + 1, matching A40's rule. Add a test that an internal-only version never locks a vote snapshot."
+  },
+  {
+   "severity": "medium",
+   "issue": "The joint-account cosign has no route or UX. There is no endpoint, scope, notification or GOV-02 state for the second holder, so pending_cosign -> counted and GOV_COSIGN_OTHER_HOLDER cannot be built or tested consistently.",
+   "fix": "Add POST /v1/governance/ballots/{id}/cosign: a passkey assertion or the co-holder's own mandate over payload_sha256. Add an A43 notice to the co-holder, a GOV-02 'co-holder signature needed' state with a button, a parity row, and exact cosign_lapse semantics at closes_at."
+  },
+  {
+   "severity": "medium",
+   "issue": "The product-map state 'Failed liquidity vote: the deed's fallback applies' (on both SPN-13 and ADM-23) is stored only as fallback_text. Neither screen lists a failed/cooldown or quorum-not-met state, so the fidelity checks cannot cover it.",
+   "fix": "Add a 'failed · cooldown until <date> · deed fallback: <fallback_text> (proposed)' state and a quorum-not-met state to SPN-13 and ADM-23 in section 7, the screen contracts and the pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 10-14 h estimate is not credible for this scope: an API module with 5 jobs and 8 maker-checker actions, signature and cosign handling, quarantine, the P1 mode, and 4 screens. Siblings A91 (module only, 12-14 h) and A92 (4 screens, 10-14 h) each take the whole cap on their own.",
+   "fix": "Split the node into A93a (module and jobs, 12-14 h) and A93b (GOV-01, GOV-02, SPN-13 and ADM-23 screens, 8-12 h). Move the P1 records out, and update the edges in final-graph.json."
+  },
+  {
+   "severity": "low",
+   "issue": "The graph has oracle=false, yet the node moves voting authority over a trust's legal outcome and already plans a full hidden set. The conventions reserve the Oracle rule paragraph for oracle: yes nodes.",
+   "fix": "Set oracle: yes in final-graph.json and the frontmatter, and use the standard oracle-rule sentence, keeping the listed hidden suites."
+  },
+  {
+   "severity": "low",
+   "issue": "The SPN-13 page folder apps/web/app/(sponsor)/s/[tenant]/meetings/ is claimed as owned only in prose. It is missing from owned_paths in final-graph.json, so the collision check cannot see it.",
+   "fix": "Add the folder to A93's owned_paths in final-graph.json."
+  },
+  {
+   "severity": "low",
+   "issue": "halt_starts_at is editable (the 'halt schedule' on SPN-13) but never validated. If it falls after voting_opens_at, voting stays blocked on GOV_HALT_NOT_CONFIRMED with a repeating Sev2.",
+   "fix": "At filing, require halt_starts_at <= voting_opens_at, refuse otherwise with a new code GOV_HALT_WINDOW_INVALID, and test it."
+  },
+  {
+   "severity": "low",
+   "issue": "D04 surfaces are incomplete here. Only the ballot route requires Idempotency-Key, and no governance webhook events exist, so an investor's agent must poll to learn of new notices or opened votes.",
+   "fix": "Require Idempotency-Key on every mutating governance route. Register holder-scoped webhooks (governance.notice.published, governance.meeting.opened, governance.result.final) through A46 with ids-only payloads, and add them to the parity rows."
+  },
+  {
+   "severity": "low",
+   "issue": "The intro says A40's canonicaliser and waterfall are 'both reached through A48', but section 1 imports the canonicaliser from A40 directly.",
+   "fix": "State that the snapshot canonicaliser comes directly from A40's index.ts and only the exit waterfall goes through A48."
+  }
+ ]
+}

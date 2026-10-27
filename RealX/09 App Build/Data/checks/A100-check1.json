@@ -1,0 +1,90 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The spec conflicts with its own dependency A104 on MCP handling of human-only operations. A104 (frozen, AM1) EXCLUDES every requires_human, non_delegable_scope, pending_counsel and agent_never_checker operation from catalogue.json and lists it in excluded.json. Its gate asserts that zero such operations appear as tools. A100 still treats this as open question (a) and proposes 'every operation has a tool'. It fails parity:matrix when 'a row has no operationId or MCP tool' or when 'every mapped operationId' lacks exactly one tool. It requires human_only and counsel rows to be refused 'on REST and MCP' with the specific code, and its checker challenge expects TOKEN_INVALID from an MCP stdio call. None of these can be met against the real A104 catalogue, so the builder must either fail or fake the MCP column for every human-only row.",
+   "fix": "Remove open point (a) and adopt A104's frozen reading. For human_only, counsel and never-checker rows the MCP column is 'n/a (excluded: <reason>)'. It passes only when: (1) the operation is in A104's excluded.json with the reason that matches the row's derived class; (2) no catalogue tool maps to it; (3) calling the would-be tool name over stdio and HTTP returns MCP's unknown-tool error with zero business effect. Reword the static criterion to 'zero rows lack an MCP tool except presentation, exempt and A104-excluded rows'. Rewrite the checker-by-the-back-door challenge accordingly. Also add A104's 'awaiting enablement' state (opt-in reading) to the column vocabulary."
+  },
+  {
+   "severity": "high",
+   "issue": "Missing dependencies. The dependency closure of A100 (A61, A65, A78, A12, A104, A99 and their ancestors) does not include A59 (POR-05 withdraw, POR-06, ACC-01 to ACC-04) or A55 (PUB-02, PUB-07, PUB-08, PUB-09 and the calculator route handler named in A100's lint allow-list). J15 'Withdraw cash' is one of this node's journeys, and POR-05 'withdraw' is a named prototype handler and a named challenge (MCP withdrawal one cent over the cap). A61 itself records POR-05 as 'pending A59'. A100 can therefore start and gate before those screens exist.",
+   "fix": "Add A59 and A55 to A100's deps in final-graph.json and in the note's Depends on line. Both are AM5, so the milestone order holds. Alternatively add them to A61's deps, since A61 is the AM5 exit. Also state how the A55 calculator row gets its API and MCP columns, because it is a Next.js route handler that is not in openapi.json or the MCP catalogue."
+  },
+  {
+   "severity": "high",
+   "issue": "The done criterion for P2 and P3 cannot be met at this node's gate. 'Every P2 and P3 action is phase_flagged with identical refusals' on all three paths needs operations and screens that A90 to A97 build later, in AM9 and AM10. INV-05 is owned by A92 (AM9). The P1 INV-05 preview has no owning node: A58 says 'owned by the buy and sell node', A57 covers only INV-01 to INV-03, and A61 excludes it. Yet the placeSell to INV-05 phase_flagged mapping and the 'Phase flags and counsel rows do not leak' challenge both require it. Product-map P2 and P3 tuples without an operation would also trip 'a row has no operationId'.",
+   "fix": "Add a 'later' row status for P2 and P3 product-map tuples with no built surface. Name the owning later node (A90 to A97), require no operation for it, and make each of those nodes' gates re-run parity:run for its own rows. Limit the phase_flagged check at A100's gate to P2/P3 actions that already have a P1 route or operation behind a phase flag, and name the owner of each. Either assign the INV-05 P1 preview to A57 or A58 as an ancestor, or replace the INV-05 challenge with an existing P1 flagged action (for example a stablecoin payout destination, which A88 refuses with PHASE_NOT_ENABLED)."
+  },
+  {
+   "severity": "high",
+   "issue": "No later node can change the checked-in matrix. The 'verify regenerates the matrix' mechanism makes any later node that adds or changes a UI action rewrite docs/parity/matrix.json, which is A100-owned. That covers A89 in AM8 (ADM-01, ADM-32), A90 to A97 in AM9 and AM10, and fix loops on earlier UI nodes. A01's owned-path check tolerates diffs outside a node's paths only in the root package.json, .gitignore and package-lock.json, and A01 requires that verify write nothing tracked. So every later UI node must either fail verify or break the owned-path criterion.",
+   "fix": "Define a sanctioned route for regeneration. Option 1: docs/parity/matrix.json and summary.json become generated shared artefacts that any node may rewrite only through 'npm run parity:matrix -- --write', and A01's owned-path check tolerates the diff when a fresh regeneration reproduces it byte for byte (the same pattern as scripts:sync). Option 2: verify fails only on unmapped actions or rows without an operation or tool, never on a newly added, fully mapped row, and per-node row fragments live in each node's own path. State the chosen rule here and in App Gauntlet §4."
+  },
+  {
+   "severity": "high",
+   "issue": "The UI crawl relies on a data-action test id that no upstream node produces. §4 drives every manifest action 'through its data-action test id', and a missing id is ACTION_UNLOCATABLE against the owning node. No UI node (A52 to A78, A105) and not A05 defines a data-action attribute. Their manifests (actions.ts, parity.ts, parity.json) carry the operation id, scope and delegable flag, but no selector. At the gate the ui column would be red for nearly every row, producing dozens of fix items on already-gated nodes, or the builder would locate actions by ad-hoc means that Fable cannot check against the spec.",
+   "fix": "Pick one locator contract and put it upstream. Either (a) add to A05, A52 and A53 a shared Action or Button wrapper that emits data-action=<operationId>:<screen>:<actionKey> when bound to an SDK call, with every manifest entry carrying that key; or (b) have the crawler locate actions by ARIA role and accessible name taken from a required manifest label field. Freeze the contract in this spec and add the selector field to the normalised row shape."
+  },
+  {
+   "severity": "high",
+   "issue": "The twin isolation cannot be built as specified. Each twin 'starts on a fresh Postgres database cloned from a template snapshot', but the running AM7 stack's API and worker hold pools against one configured database. No node provides a hook to repoint or drain the API onto a per-twin database, and adding one would edit services/api outside A100's owned paths. With 8 shards against one local Hardhat node, evm_snapshot and evm_revert are global, so shards would revert each other's chain state. A17's bank sandbox exposes trigger controls but no reset. The builder would have to invent cross-node hooks or fake isolation.",
+   "fix": "Specify the isolation topology inside e2e/parity. Give each shard its own compose override (API, worker, MCP HTTP, Postgres, Hardhat) started from A23's images. Reset between twins by stopping that shard's API and worker, running DROP DATABASE and CREATE DATABASE ... TEMPLATE, and restarting, or name an existing test-mode pool-reset hook in A09. Give each shard its own Hardhat node. Reset adapters through Postgres state, or name the A08 SandboxControl reset operation. Add the dependency or follow-up loop for any hook that is needed."
+  },
+  {
+   "severity": "high",
+   "issue": "Parity by difference cannot catch a wrong delegability value. Agent classes are derived only from A03 delegable.ts and A11 requiresHuman. If A03 wrongly marks an approve, ratify, custody-sign or register-issue operation as delegable or maker, the person and the agent both succeed. The twins match, and the §6 checker attempts are never generated because the row is not human_only. The suite would then pass an agent approving, which is the core D04 and G13 prohibition. Fable's 60-action sample is not a guarantee.",
+   "fix": "Add class-independent invariants to the pass criteria. (1) Across every run, zero rows in A14's decision, ratification and veto tables and zero A15 custody signatures have an AGNT principal or a token_id, checked by a direct DB query after each shard. (2) Every operation that writes those tables (found from A14 and A15 route metadata, not delegable.ts), and every product-map action labelled Approve, Reject-as-checker, Ratify, Veto, Countersign, Sign or Broadcast, must derive to human_only. Otherwise parity:matrix fails with CLASS_CONFLICT against A03."
+  },
+  {
+   "severity": "medium",
+   "issue": "The frozen manifest glob list does not match the upstream nodes. The spec says A58, A59, A60 'and every later UI node, A62 to A78 and A105' use features/*/parity.json. In fact A63, A67, A71, A74, A75, A76 and A77 use actions.ts, A66, A69, A70, A72 and A73 use parity.ts, A65 writes app/evidence/A65.actions.json, and A101 publishes actions.agent-guard.ts. As frozen, these would raise false MANIFEST_MISSING findings or be silently skipped.",
+   "fix": "Replace the prose list with an exact per-node table (node, path, format), or a union glob covering apps/*/src/{shell,features/*}/{actions.ts,actions.manifest.ts,parity.ts,parity.json,parity-manifest.json} plus the app/evidence exceptions. Freeze the normaliser mapping for each format, and add a test that every UI node in app-graph.json resolves to at least one manifest."
+  },
+  {
+   "severity": "medium",
+   "issue": "Vocabularies that the spec says are frozen are never listed. Specify freezes the exemption and presentation vocabularies, and the allow.json and exemption reason codes must come 'from a fixed vocabulary'. The presentation class allows only 'a fixed list of interaction kinds'. None of these lists appear in the note, so the builder and Fable would each invent their own, and a lax code is how a real divergence gets hidden. Product-map pseudo-actions such as '(on approval)' and 'Opens the sell screen' also have no stated mapping.",
+   "fix": "Enumerate each vocabulary in the note. Exemption reasons, for example: BROWSER_GENERATED, NAVIGATION, SYSTEM_REACTION, EXTERNAL_LINK, PRESIGNED_LINK_FROM_READ, SDK_PACKAGE. Presentation kinds: tab, local sort, local filter, open drawer, copy, expand. Say which product-map tuple shapes map to which, and forbid any free or catch-all code."
+  },
+  {
+   "severity": "medium",
+   "issue": "Class expectations contradict each other. (1) lNext (SPN-06 listing submit) is set to maker, while open point (b) proposes the SPN-06 sponsor declaration at submission is counsel, without saying whether it is a separate action. (2) J04's done text hand-sets 'trustee issue' (ADM-17, TP-RE) as maker, while §6 treats A105's trustee countersign as a G13 human-only act. (3) J04's staff list omits step 7 (ADM-08, CAPM closes the offer). These hand-set expectations also contradict 'derived from data and never hand-set'.",
+   "fix": "Split SPN-06 into a declaration row (counsel until CQ-01 is answered) and a submit row (maker), with the submit gated on the person's declaration. Rewrite the journey done criteria as 'each step's row carries the class derived from A03, and Fable's expected-class table confirms it'. List the J04 classes consistently: ADM-17 trustee issue follows A03, which is expected to be human_only for TP-RE, and add ADM-08."
+  },
+  {
+   "severity": "medium",
+   "issue": "The D04 segregation-of-duties rule is not tested end to end. D04 says segregation of duties counts an agent as its human. §6 tries the maker's agent, another checker's agent and a sibling agent against checker acts, but never tries the human owner deciding a request that their own agent made as maker, where a staff member drafts through an agent and then approves in person. Comparing maker identity sets does not prove the decision is refused.",
+   "fix": "For every maker row with an approval policy, add a variant: the agent creates the request, then its human (who holds a checker role) tries to decide it with a valid hardware-key assertion. It must be refused with APR_MAKER_IS_CHECKER and leave no decision row. Add this to the Human-only pass criteria and to the G13 done criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some agent-side effects are allowed but never required. The allowed-difference list lets A101 sensitive-action notices and agent.* outbox events exist only on the agent side, but nothing requires them. D04 and ACC-05 require a push notice to the person for withdrawal, vote and investment by an agent, so a build that sends none still passes. The 'agent <prefix> on behalf of <person>' Actor cell in ADM-31 and refusals in the ACC-05 and SPN-16 activity lists are stated in prose but not in the pass criteria.",
+   "fix": "Split the list into allowed-and-required and allowed-optional differences. Required on every agent twin: one G22 evaluation and one api_token_activity row. Required on rows A101 flags as sensitive: exactly one owner notice. Add pass criteria that read the activity through the ACC-05, SPN-16 and ADM-31 read operations, check the actor rendering and check that refusals are listed."
+  },
+  {
+   "severity": "medium",
+   "issue": "The runtime budget and rate limits are not realistic. Every row runs under every principal type it lists, times 3 twins, a sandbox replay and about 12 refusal variants on 2 channels, each on a fresh cloned database, plus 50 repetitions per kill-switch tier. That is tens of thousands of isolated runs, which will not fit 'under 60 minutes with 8 shards' on Docker Desktop for Windows, three times over. Per-token rate limits will also fire during bulk runs and be recorded as NONDETERMINISTIC.",
+   "fix": "Define the run matrix explicitly. Use one representative principal per class for every row, and the full principal cross-product only for money, maker, human_only and counsel rows. Run the refusal variants once per operation family, plus exhaustively for money rows. Set the budget from a measured pilot, or split it into parity:run (Challenge) and parity:full (A88, nightly). Mint a fresh token per twin, and add one explicit rate-limit parity case."
+  },
+  {
+   "severity": "low",
+   "issue": "The lint rule is registered by reopening A01 in AM8. The sdk-only-io rule needs an A01.x follow-up loop to edit the root eslint.config.js long after A01 gated. It also lands retroactively on 25 or more gated UI nodes, and A52's middleware and server-side SDK forwarding may need allow-list entries that the three-entry list does not have.",
+   "fix": "Run the rule from e2e/parity through the ESLint Node API with its own flat config, registered as a verify step through scripts:sync, so no A01 reopen is needed. Dry-run it over apps/web and apps/console at the start of the build, and turn each hit into a vocabulary allow-list entry or a fix item on the owning node."
+  },
+  {
+   "severity": "low",
+   "issue": "The G12 standing-consent assertion is hard-coded, but A00 records whether an agent may acknowledge disclosures under standing consent as counsel question CQ-02 (default allowed). If counsel answers no, the expected class should flip by data, as CQ-01 does.",
+   "fix": "Derive the G12 agent-acknowledgement expectation from A00's CQ-02 flag, and add a challenge that flips CQ-02 on a scratch copy and checks that the class and result change with no code change."
+  },
+  {
+   "severity": "low",
+   "issue": "On-chain session keys are not covered. D04 says investor agents act on-chain only through delegated session keys, never the owner key, but the refusal variants cover mandate caps only. Once P2 on-chain rows go live (List for sale, Cast vote), no variant covers a session-key violation or proves the owner key is never used.",
+   "fix": "Add session-key refusal variants for rows with the on-chain flag set: wrong contract, wrong function, over the unit cap, expired key, revoked key. Assert the agent twin signs with the session key from A12's session_key_policy. Mark these 'later' until the owning P2 node lands."
+  },
+  {
+   "severity": "low",
+   "issue": "Two challenge assumptions are not stated. The kill-switch challenge asserts behaviour 'on both API processes', but the AM7 compose stack is not specified as running two API replicas. The ADM-35 expected-class list also omits 'Suspend all agent access' (SGL+R protective), which A14 refuses to tokens.",
+   "fix": "State that A100's shard override starts two API replicas for the kill-switch and revoke cases, and add 'Suspend all agent access' (human_only, the SGL+R actor must be human) to the ADM-35 expected classes."
+  }
+ ]
+}

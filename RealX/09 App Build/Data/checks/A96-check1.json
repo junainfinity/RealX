@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The stablecoin_transfer transition table (5) is missing transitions the spec itself requires: cleared -> held (the travel-rule race challenge expects a cleared transfer to move back to held when the VASP requests missing data); requested -> held and cleared -> held (the destination_cooling, rail_suspended and flag_off hold reasons, and the G21 rule that an auto-revert stops unsubmitted transfers within one tick); custody_submitted -> failed/held and signed -> failed (A15 refuses at signing, and the G14 rule says a restriction placed after clearance refuses at signing); reconciled -> returned (a counterparty return after the daily R9 run). There are also no states for inbound transfers (direction 'in', purposes vault_fund and return). The pass criterion that the count of forbidden pairs equals the count derived from the table then fails for a correct build, or the table rejects legal events.",
+   "fix": "Rewrite the table as an explicit list of pairs: add requested|cleared -> held, custody_submitted -> failed, custody_submitted -> held (signing-time refusal before any signature), signed -> failed, reconciled -> returned, plus an inbound sub-table (observed -> matched -> confirmed -> reconciled, observed -> quarantined). Map each hold_reason to the states it can come from. Make the forbidden-pair count test derive from this list."
+  },
+  {
+   "severity": "high",
+   "issue": "Ledger and chain timing conflict. The payout journal is posted in the same transaction as the custody submit (5), so the ledger stablecoin_mirror falls before the coins leave on-chain. R9 requires on-chain balance - quarantined = ledger mirror x scale, exactly, at the cut block, and the pass criterion requires the sum of ledger stablecoin payouts to equal the sum of confirmed vault Transfers at every step. Both fail by design whenever a transfer is custody_submitted, signed or broadcast. So a correct build reports a zero-tolerance break that halts the rail, or the builder quietly adds an in-flight term that the hidden tests do not expect.",
+   "fix": "Post the submit journal to a stablecoin_in_transit (clearing) account, and move it to the external side only on the indexer's confirmation. Or add to R9 an explicit in-flight term: on-chain balance - quarantined = (mirror + sum of in-flight outbound not yet confirmed at the cut block) x scale. Restate the property as sum of ledger payouts = sum of confirmed Transfers + sum of in-flight, and add an R9 vector with in-flight transfers at the cut block."
+  },
+  {
+   "severity": "high",
+   "issue": "V5 and V6 signing policy cannot run under A15's rules. (a) The V6 signer set is TRSY, CFO and CCO, 2-of-3. Every V6 op except AUTO is a 4E with TRSY maker and CFO checker, and A15's P9 and A14's excluded_signers[] remove the maker and the checkers from the signer set. Only CCO remains, so 2-of-3 is unreachable for redeem, rebalance and above-AUTO withdrawals, and A39's A$50k 4E_SECOND_APPROVAL removes CCO too. (b) V5 AUTO signing by the SVCA breaks A15's check constraint on custody_accounts.signers[], which refuses any SVCA except the V4 service account. (c) The per-approval cap needs A15's P3 supply guard extended to transfers. Neither (b) nor (c) is among the A15.1 loops. (d) The fill-vaults 6E+Q names only the SECO maker. With two 6E checkers drawn from V1 members, fewer than three V1 signers stay eligible.",
+   "fix": "At spec point (a), set a V6 signer set of at least quorum plus the largest excluded-signer count (for example 2-of-5: TRSY, CFO, CCO, CEO, SECO), and add a test that every V6 action code leaves at least 2 eligible signers. Add to A15.1: allow the SVCA as sole AUTO signer on V5 and V6 (check constraint), and extend P3's cap counter to transfer ops. Name the 6E+Q checker roles for fill-vaults so that at least 3 V1 signers remain eligible, and assert it in a test."
+  },
+  {
+   "severity": "high",
+   "issue": "Signing-time re-checks are not specified. The spec's own Critical is any coin leaving V5 or V6 while the flag is off, and G14 says a restriction after clearance refuses at submit and at signing. Yet the only A15.1 hook is a DestinationClearanceProvider at P4 that refuses unregistered destinations. A V5 op already custody_submitted when A21 auto-reverts the flag, or when A42 restricts the investor, is signed AUTO by the SVCA with no G21, G14, KYT-age or destination-hash re-check. The flag-lapse challenge only covers lines not yet submitted and lines already signed.",
+   "fix": "Define the provider contract in A15.1 as clearDestination(op) -> {ok, code}. At signing it re-asserts isEnabled('payouts.stablecoin') plus evaluateG21, A42 restrictionStatus, A20 assertClear/R9, the destination state and cooling, the KYT age, and equality of the cleared destination hash stored on the transfer. Add hidden tests that flip the flag, and separately restrict the investor, while an op is custody_submitted: expect a refusal and transfer -> held or failed with the journal reversed."
+  },
+  {
+   "severity": "high",
+   "issue": "Coins stranded in V5, and the AUD fallback has no funding. V5's allow-list is only distribution-line transfers under AUTO (the spec says there is no other function), and V5 has no human signers. When a stablecoin line fails or is held past 72 h, it falls to A40's manual_payout AUD credit. But the AUD backing that line was already converted to coins in V5 by stablecoin.vault.fund, and V5 can neither redeem nor sweep to V6. The fallback therefore creates a shortfall in the Distributions client-money account. Leftover coins sit in V5 permanently, and so does any unsolicited inbound to V5, which (6) says can only be returned by V6 2-of-3 signing. Separately, the SM-08 rule that funded requires the V5 mirror to cover the run's stablecoin total uses a mirror shared by all runs and tenants, so two concurrent runs can both count the same coins.",
+   "fix": "Add V5 functions under human quorum: redeem to the issuer and sweep to V6 (4E TRSY -> CFO), and return of a quarantined inbound. Specify the fallback money sequence: the unpaid coins are redeemed or swept and the AUD manual payout is funded from that redeem (or from float, with a recorded repayment), with ledger journals. Add a per-run earmark (a stablecoin_payable sub-account keyed by run id) that SM-08's funded guard checks and that must be zero at reconciling -> closed. Add vectors to the R8/R9 and SM-08 tests."
+  },
+  {
+   "severity": "high",
+   "issue": "The oracle flag is wrong for a money and authority node. The graph and frontmatter say oracle: no, but this node signs value out of custody vaults (V5 AUTO, V6 quorum), moves client money through the ledger and gates AML and travel-rule releases. The comparable money nodes A15, A39, A40 and A42 are all oracle: true, and the D04 brief asks for oracles where money or authority is involved. The spec then requires hidden tests anyway, so the graph data and the spec disagree, and a runner keyed on the flag may skip the Oracle step that the pass criteria depend on.",
+   "fix": "Set oracle: true in the graph data (final-graph.json / app-graph.json) and in the frontmatter, and replace the Oracle rule paragraph with the standard oracle wording (Fable writes hidden oracle tests to gauntlet\\hidden\\A96 before the build; the builder never reads them; published after the gate), keeping the listed oracle scope."
+  },
+  {
+   "severity": "high",
+   "issue": "G15 does not define who the originator and beneficiary are for each payout purpose and investor type. (5) lists only natural-person IVMS101 fields. For a distribution line the originator is the trust or trustee (a legal person), not the investor. For SMSF, company and trust investors the beneficiary is a legal person needing legal-person fields (legal name, registration number or ABN/ACN, address). A builder following this spec would send the investor as originator of sponsor distributions, and hidden tests derived from it would pass that wrong message.",
+   "fix": "Add a table: purpose (distribution_line, withdrawal, return, inbound return) x investor type (individual, joint, SMSF/company/trust) -> originator party, beneficiary party, and the IVMS101 natural-person or legal-person field set. Include RealX as ordering institution and the trustee or RE as originator for distributions (counsel to confirm), with required_fields as policy rows per party type. Add G15 decision-table rows for legal-person data missing."
+  },
+  {
+   "severity": "medium",
+   "issue": "Tipping-off gaps in investor reads. GET /v1/me/payout-destinations exposes the destination state (review, blocked), which is the KYT outcome, even though (4) says a blocked destination has no investor-facing reason. The investor transfer-state map covers only KYT, AML and MLRO holds and the no-ack message. The other hold reasons (destination_cooling, rail_suspended, flag_off, travel_rule_missing_data, travel_rule_declined) have no mapped investor state, so a builder may leak a counterparty decline that was AML-driven.",
+   "fix": "Add an investor-safe destination state map (for example pending, verified, unavailable, removed, with review and blocked both showing unavailable and byte-equal bodies). Add a complete map from each of the 9 hold reasons to processing, under_review or a plain message. Extend the tipping-off challenge to destination reads."
+  },
+  {
+   "severity": "medium",
+   "issue": "registered_wallet destinations are created automatically and verified when the flag turns on. That contradicts the rule that every new destination is KYT-screened before it becomes verified, and the cooling period and notice rules, and it leaves the G15 registered_wallet row untested for KYT.",
+   "fix": "Say explicitly that registered_wallet is created in screening, gets a KYT result before verified, and is exempt from cooling (or not). Or state the exemption and its reason, and add tests either way."
+  },
+  {
+   "severity": "medium",
+   "issue": "Joint, SMSF, company and trust investors have no defined behaviour for the non-delegable destination add. The spec does not say whose passkey assertion is needed (one holder, every holder, or any authorised signatory), which verified names count for the vasp_account beneficiary match (entity name or individual names), or who signs a self_hosted ownership proof for an entity. The fixtures list a joint account and an SMSF signatory, but no expected result is given, so Fable cannot test them.",
+   "fix": "Copy the rule A39 and A11 use for changing the nominated bank account on joint and entity accounts (signatory quorum), set the beneficiary-name rule per investor type (entity legal name for SMSF, company and trust; either holder or the joint name for joint accounts, counsel to confirm), and add one test per investor type."
+  },
+  {
+   "severity": "medium",
+   "issue": "The side-door challenge relies on mechanisms the build brief never specifies: an insert-only trigger refusing edits to payout_destination.address, and P4 refusing because the destination hash differs from the cleared one. (4) defines states that change by update, and (5) does not store a cleared destination hash on the transfer.",
+   "fix": "In (4), make kind, chain_id, address and vasp_id immutable after insert (a trigger allowing updates only to state, verified_until and kyt_result_id). In (5), store destination_sha256 on the transfer at clearing and pass it in the custody op, where the A15.1 provider compares it at P4. Add both to the pass criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec contradicts itself on whether an agent may set the payout preference. (4) and (8) say PUT /v1/me/payout-preferences is delegable, and the agent-parity pass criterion expects it to succeed under scope. HG-LEGAL says the cell is 'counsel' in A03's delegable.ts and is refused with SCOPE_PENDING_COUNSEL until counsel answers. The builder and the hidden tests will pick different behaviour.",
+   "fix": "State the seeded value for the build: 'counsel', so agents get SCOPE_PENDING_COUNSEL. Test both branches by flipping the data row, and exclude this route from the parity 'succeeds' set while the cell is 'counsel'."
+  },
+  {
+   "severity": "medium",
+   "issue": "The cross-node loops in (1) are incomplete and unplanned. Changes the spec needs but does not list: an A03 delegable.ts cell and the new scope rows; an A13 clock policy row travel_rule_hold_72h and a QueueSource registration; A20 R8 counting stablecoin journals; an A40 funded guard for V5 coverage and a retry that honours issuerStatus; the A15 SVCA constraint and P3-for-transfers change; and an A39 amendment of its own escalation rule against a destination parameter on the withdrawal route. The loops reopen about 12 already-gated nodes (A08, A15, A16, A20, A22, A27, A39, A40, A50, A51, A59 and more), but none appears in the graph and the 10-14 h estimate excludes them.",
+   "fix": "List every cross-node change in (1) with its owner. Either add an explicit AM10 loop node (for example A96-L) with the owners' re-gates and an estimate, or add the loop hours to A96's estimate (a realistic total is about 18-26 h). Record the reopened nodes in the graph data."
+  },
+  {
+   "severity": "low",
+   "issue": "The travel-rule panel exports screen 'ADM-25', which A75 owns in the graph, and no console route (URL) is given. The graph's design_refs lists only 'design-ext:ADM-13 vaults card', although the page's designKey is design-ext:ADM-25-TR.",
+   "fix": "Give the route (for example /admin/aml/travel-rule under the Risk & records group). Mark the export as a sub-surface (screen 'ADM-25', subsurface 'TR') so the Screen Coverage Matrix does not double-count. Add 'design-ext:ADM-25-TR' to the node's design_refs."
+  },
+  {
+   "severity": "low",
+   "issue": "TestAUDStable.sol lives in packages/adapters/stablecoin/sandbox/contracts, but the Hardhat compile and lint toolchain belongs to the contracts package (A24/A27), and 'A27.1 (only if needed)' leaves it open how the contract is compiled, tested and kept out of Slither/HG-AUDIT scope.",
+   "fix": "Make A27.1 mandatory: A27's deploy path compiles adapter-owned sandbox contracts from a declared path, and the sandbox token is excluded from audit scope and mainnet manifests by a test."
+  }
+ ]
+}

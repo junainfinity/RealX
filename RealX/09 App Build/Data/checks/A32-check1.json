@@ -1,0 +1,100 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "A32 and A31 (an upstream oracle node) both claim parts of the claim lifecycle, and their descriptions conflict. A32 calls a synchronous A31 issueClaim/revokeClaim 'in the same transaction as the transition' and runs its own 05:00 expiry sweep that revokes the claim. A31's frozen spec has no such synchronous verbs. A31 issues the WHOLESALE_AU claim asynchronously when A32 publishes classification.valid on the outbox (V4 AUTO through A15 submitOp). It runs its own 02:00 claims.sweep-expired, which marks claims as expiring at T-30 and emits claim.expiring (at 60 and 30 days) and claim.expired. A31 says A32 owns the SM-02 transition and A31 only supplies the event. A31 also says the adCmd '14 certificates' task is built from its claim.expiring events, while A32 raises the same alert itself. The result is two sweeps, two alert sources, two expiry times (02:00 and 05:00) and an interface A31 does not export. An on-chain operation cannot sit inside a Postgres transaction. So these cannot be built as written: the challenge 'roll back if A31 fails between the two calls' and the pass invariant 'row valid/expiring if and only if an unrevoked claim exists'. That invariant also contradicts A32's own claim_state pending_identity.",
+   "fix": "Rewrite the claim section against A31's actual contract. A32 publishes classification.valid, classification.renewed and classification.revoked on the outbox, with classification_id, basis, valid_until, offer_id and approval_id. A31 issues, replaces and revokes claims. A32 consumes claim.issued, claim.expiring and claim.expired to set claim_state and fire SM-02 transitions. Give the sweep to one owner and record the agreement as a stub contract in both notes; if A31's sweep or alert must change, reopen A31 through a follow-up loop. Replace the if-and-only-if invariant with an eventual one: within one cycle the row and the claim agree, and during the gap claim_state is pending. Replace the rollback challenges with outbox-retry challenges."
+  },
+  {
+   "severity": "high",
+   "issue": "A32 duplicates, and contradicts, the G04 and G05 evaluators and thresholds that A19 already owns (A19 is an ancestor in AM1). A19's rule pack AU-W-2026.1 sets wholesale.certificate_valid_days = 730, expiring_warn_days = 30 and min_offer_investment_cents, uses the basis names certificate and offer_500k, and treats G05 as not_applicable in P1. A32 defines its own evaluateG04 and evaluateG05 and its own classification_policy rows (certificate_valid_years = 2, ticket_min_amount_cents). It also claims that 'A19 reads certificate_valid_days from these rows' and that 'A19 registers it as the G04 evaluator'. That is impossible: A19 is built first and A32 may not edit A19's path. And 730 days is not two calendar years: 12 Mar 2026 to 12 Mar 2028 is 731 days. So the two nodes disagree by one day on exactly the dates the challenges test.",
+   "fix": "Choose one source of truth and write it into the spec. Option (a): A32 only supplies facts to A19's FactProvider, and A19's parameter becomes certificate_valid_years = 2 through an A19 follow-up loop. Option (b): A19 exposes a documented hook and A32 registers its evaluators, while the thresholds live only in A19's rule pack. Remove A32's conflicting policy rows and add a test that spans both nodes and fails if the values differ."
+  },
+  {
+   "severity": "high",
+   "issue": "Three nodes use three different basis names. A32 uses accountant_certificate, ticket_500k, sophisticated_s761GA and professional_s9. A31 uses certificate, sophisticated_s761GA, professional and s708_500k_offer. A19 uses certificate and offer_500k. The classification.valid payload that A31 consumes carries basis, so an A32 built exactly to its spec breaks A31 and A19.",
+   "fix": "Fix one enum in A03 / packages/domain, for example A31's set, which is already frozen upstream. Use it exactly in A32's model, routes, events and tests, and document how it maps to the ONB-06 option cards."
+  },
+  {
+   "severity": "high",
+   "issue": "Whether G04 is right depends on when the sweep runs. evaluateG04 passes on rights(state).buy whenever the state is valid or expiring, and never compares now with valid_until. So an expired certificate still passes G04 between 00:00 Sydney after the valid_until day and the 05:00 sweep, and for days if the sweep is down, a case the spec itself describes. Meanwhile A31's 02:00 sweep may already have revoked the claim on-chain, so orders pass G04 and then fail at mint. A valid row inside the 30-day window is also not warned until the sweep moves it.",
+   "fix": "evaluateG04 must fail with G04_EXPIRED once now is at or after the start of the day after valid_until in Sydney time, whatever the state. It must warn with G04_EXPIRING inside the warning window even while the row is still valid, and fail ticket rows once they are past their validity. Add hidden test cases at 00:00:01, 01:59 and 04:59, and with the sweep disabled for three days."
+  },
+  {
+   "severity": "medium",
+   "issue": "Ticket-path rows and sophisticated/professional rows go through the certificate machinery. Ticket rows expire at offer close plus settlement, yet the generic sweep would send them 'Renew your wholesale certificate' reminders, count them in the certificates alert, and expire them under the certificate_two_years_reached guard, which is the wrong guard. For the sophisticated and professional bases, valid_until is never defined. A31 expects a periodic-review date from A32, and the risk-tier table has low: null. So the claim expiry and the sweep are undefined for these rows.",
+   "fix": "Define valid_until for each basis. Certificate: certificate date plus two calendar years. Ticket: the end of the offer's settlement window, left out of reminders and the alert, with its own named trigger recorded as a spec gap for A03. Sophisticated and professional: the decision date plus a counsel-flagged interval, or the next review date, never null. Add hidden test cases for each basis."
+  },
+  {
+   "severity": "medium",
+   "issue": "The A$500k ticket test checks only the order amount when the order is placed. Allocation can scale an order back (the ADM-12 mock shows 'scaled back'), and an SMSF may split its money across several orders. So an investor who qualified only through the ticket can be allocated A$400k and have tokens minted.",
+   "fix": "Re-run G04 on the allocated amount at allocation and at mint for ticket orders, or forbid scaling a ticket order below A$500k. Put the default for adding up several orders in a counsel-flagged policy row, and add a challenge: an A$600k order scaled to A$400k must fail or be refunded."
+  },
+  {
+   "severity": "medium",
+   "issue": "Revocation gets two approvals, or an approval that A31 will not accept. A32 creates its own classification.revoke 4E request (maker CLSR, KYCA, MLRO or CCO) and describes it as 'a seed addition in A03's policy data', which is A03's owned path. A31 already requires its own 4E 'revoke claim' request (maker MLRO or CCO). This breaks the rule that one approval ID binds both the admin approval and the custody signature.",
+   "fix": "Use one approval. Align the maker and checker sets with A31's row, carry the approval_id in the classification.revoked event, and have A31 bind its CustodyOp to that ID. Request the policy row through A03's follow-up loop, not as a seed inside this module."
+  },
+  {
+   "severity": "medium",
+   "issue": "The graph data marks this node oracle: false, yet the note has Fable write hidden tests first and makes the hidden suite the first pass criterion. The Oracle stage runs only for core nodes, so the orchestrator may skip it and that criterion could never be met. The node also decides who may buy (G04) and includes a maker-checker path (the CCO approval on the ticket path).",
+   "fix": "Set oracle: true in final-graph.json and oracle: yes in the frontmatter, with the standard Oracle rule wording. The alternative is to drop the hidden-suite criteria."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some challenges and pass criteria depend on nodes that are not ancestors of A32: A101 ('receives the anomaly event'), A104 (the MCP catalogue lists no decision tools) and A46 (reminders delivered by webhook). None of them is guaranteed to be built when A32's gate runs, so Fable cannot check them there.",
+   "fix": "Add A104 to deps, or assert on the OpenAPI requiresHuman and MCP-exposure flags instead. Replace the A101 assertion with a check that an agent-refused audit event and outbox event exist. Move the webhook delivery check to A46 or A100."
+  },
+  {
+   "severity": "medium",
+   "issue": "Staff agents are allowed to run the accountant check, but that check writes decision = refer_cco and opens a CCO review. That is a decision row created by a non-human principal, which contradicts the pass criterion 'no decision row for a non-human principal' and the D04 rule that agents only draft.",
+   "fix": "The accountant check should record only accountant_verified plus a routing flag. The CCO referral should either be automatic routing recorded as SVCA with no decision meaning, or a human refer_cco decision with a fresh assertion. Update the decision-safety matrix to match."
+  },
+  {
+   "severity": "medium",
+   "issue": "In P1, A32's G05 returns fail G05_PHASE_OFF for a retail offering. But A03's challenge says G05 must be not_applicable in P1, and A19 defines it that way too. The hidden suites of these nodes will contradict each other.",
+   "fix": "Return not_applicable with reason G05_PHASE_OFF while offers.retail is off, or reconcile A03 and A19 explicitly. State the exact GateResult shape in the spec."
+  },
+  {
+   "severity": "medium",
+   "issue": "The ONB-06 design has three option cards but the model has four bases. The third card ('Sophisticated or professional investor') covers both sophisticated_s761GA and professional_s9, yet POST /v1/classification requires a single basis. The spec does not say how that basis gets chosen.",
+   "fix": "Option 3 either posts a combined pending basis that the CLSR finalises at the decision, or ONB-06 gets a sub-choice drawn in A50. Cover the choice in the contract test that A56 reuses."
+  },
+  {
+   "severity": "medium",
+   "issue": "The product map's 'Wholesale certificate expiring' alert fires 60 and 30 days before expiry, to CLSR and the investor (data_admin.py line 820), and A13 defines T-60 and T-30. A32 raises the CLSR alert only at T-30.",
+   "fix": "Raise the batched Sev4 CLSR alert at both T-60 and T-30 with separate dedup keys, keep the design title for the T-30 batch, and add both to the timer pass criterion."
+  },
+  {
+   "severity": "low",
+   "issue": "The ADM-11 filter enum is queue, expiring_60 and expired, but A68 draws 'Expiring 30 d' and 'All' chips.",
+   "fix": "Add expiring_30 and all to the filter enum and to counts, or record that A68 must drop those chips."
+  },
+  {
+   "severity": "low",
+   "issue": "POST /v1/tmd/responses is listed as requiresHuman, but the spec never defines its body, owner or validation.",
+   "fix": "Specify the route here, or state that A90 owns it and remove it from this node."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec calls the option strings 'verbatim' but quotes them with ASCII apostrophes and as combined 'title - description' strings. The design (line 819) uses typographic apostrophes (U+2019) and separate title and description fields. A builder who copies the spec will fail a byte-exact test against the design.",
+   "fix": "State that the strings are taken byte-exact from design line 819 as title and description pairs, and make the contract test compare against the design file."
+  },
+  {
+   "severity": "low",
+   "issue": "The status line says 'AM3 (Domain services)', but the graph names the milestone 'Business services'.",
+   "fix": "Change it to 'AM3 (Business services)'."
+  },
+  {
+   "severity": "low",
+   "issue": "All four investor classification routes (/v1/classification, /evidence, /renew, /reapply) are requiresHuman, although only the wholesale declaration is the act flagged for counsel. That goes further than D04's non-delegable list and breaks parity: an agent cannot even draft a request or attach evidence.",
+   "fix": "Make the personal declaration its own passkey-signed, requiresHuman step, and let a scoped agent draft the request and attach evidence. The row moves to evidence_submitted only after the human declaration."
+  },
+  {
+   "severity": "low",
+   "issue": "An estimate of 4-8 agent-hours is low for this scope: four sub-agents, about 12 routes, two jobs, two evaluators, the TMD model, A14 effectors and contract and property test suites. For comparison, A30 is 8-12 and A31 is 6-10.",
+   "fix": "Raise the estimate to about 8-12 agent-hours in the graph data and the note."
+  }
+ ]
+}

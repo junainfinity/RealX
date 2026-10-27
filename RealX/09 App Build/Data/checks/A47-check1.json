@@ -1,0 +1,95 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Missing dependency A20 (reconciliation). register_match, halted, the sponsor break banner, last_reconciled_at and every PUB-08 trust row come from A20's /v1/recon/vehicles and /v1/public/recon, but A20 is not in deps or ancestry.",
+   "fix": "Add A20 to A47 deps in final-graph.json and the note's Depends on line (A20 is AM1, deps A18/A16/A19/A13, so there is no cycle)."
+  },
+  {
+   "severity": "high",
+   "issue": "G10 is sourced and tested only from A20 recon halts. A48 owns Halt records (manual, meeting, valuation stale, recon break Sev1, token pause, distress) with published reopening criteria and an end date, and the G10 rule requires time-boxed halts with published reasons. A manual, stale-valuation (seed MRN01) or distress halt would not appear on holdings, the register view or transparency, and no published reason or end date is returned.",
+   "fix": "Source halted from A19's G10 evaluation over A48's Halt records (add A48 as a dep; A48 is AM3 and does not depend on A47), return halt { cause, published_reason, reopening_criteria, ends_at } on holding, register view and transparency rows, and extend the G10 test matrix to every A48 cause including the stale-valuation seed scenario."
+  },
+  {
+   "severity": "high",
+   "issue": "Route collision and contradictory semantics with A40. A40 already registers GET /v1/me/distributions (scope portfolio:read) and /v1/me/distributions/summary?fy=. A47 registers the same path with a different shape. A40 hides held lines by reporting them as paid (tipping-off) and has declared_zero and reduced statuses. A47 returns a distinct 'held' status and no declared_zero or reduced. The monolith cannot register both, and the held status is itself a tipping-off signal.",
+   "fix": "Choose one owner. Either A47 composes from A40's index.ts under a different path, or A40 drops its route and A47 adopts A40's status vocabulary. Apply one tipping-off rule (a held line is indistinguishable from any other line) in both notes and add a route-uniqueness check."
+  },
+  {
+   "severity": "high",
+   "issue": "Documents are duplicated with A35, A37, A40 and A41. A35 owns the deterministic renderer (render(), render_record, document_version store) and GET /v1/me/documents, and names A37 (order confirmations), A40 (distribution advice), A47 (statements) and A41 (AMMA) as its callers. A47 specifies its own renderer, its own portfolio_document table, its own confirmation PDFs and a /v1/me/documents/{confirmationId} alias. A41 separately lists POR-07 statements (me/tax/statements). A35, A37 and A41 are not A47 dependencies.",
+   "fix": "Add A35 and A41 as deps. Render payment advices and annual statements through A35's render() and store them as A35 document versions. Drop the /v1/me/documents alias and the in-module renderer. Link A37's order confirmations by id instead of regenerating them. Name one POR-07 listing owner and state it consistently in A47, A41 and A58."
+  },
+  {
+   "severity": "high",
+   "issue": "The financial-year income basis conflicts across nodes. A47 counts net lines by paid_at in the FY (cash basis), A41 attributes by fy(period_end) of the income period, and A40 computes FY totals in /me/distributions/summary. All three feed POR-01's 'Distributions FY27' tile and POR-07's KPIs, and A41 requires them to be equal. A June-income line paid on 10 July lands in different FYs under the two rules.",
+   "fix": "Name one basis per figure: cash-received FY for the dashboard and tax-year attribution for statements and the AMMA. Label each field distinctly, source the tax-year figure from A41 rather than recomputing it, and add a cross-node identity test on a June-income, July-paid line."
+  },
+  {
+   "severity": "medium",
+   "issue": "Other interfaces the spec uses are not dependencies. A06 supplies the seed that the design-fidelity pass criteria rely on. A21 supplies the CAR/AFSL footer and the resale.board flag behind can_sell. A45 supplies the attested-metrics interface for PUB-08 totals. A44 owns the Investor360 contributor registry.",
+   "fix": "Add A06, A21, A45 and A44 to deps (all at or before AM3, none depends on A47), or define a fixture interface with a named follow-up node for each."
+  },
+  {
+   "severity": "medium",
+   "issue": "Consumers are mis-named and not wired. PUB-08 is rendered by A55 (not A54), and A55 does not depend on A47. POR-05's tile 3 is A59's (not A58's), and A59 does not depend on A47. ADM-09 is rendered by A68 through A44's Investor360Contributor registry, so A47's staff routes /v1/investors/{id}/... have no consumer and duplicate the investor360 tabs.",
+   "fix": "Correct the note, add A47 to A55's and A59's deps, and replace the staff routes with Investor360Contributor registrations under A44's pinned interface (or state which node registers the holdings, transactions and statements tabs)."
+  },
+  {
+   "severity": "medium",
+   "issue": "Owned paths omit the node's worker jobs (portfolio.daily_materialise, portfolio.statements) and the migrations for portfolio_daily and portfolio_document, so the standing criterion 'only owned paths changed' would fail.",
+   "fix": "Add <workspace>\\app\\services\\worker\\src\\jobs\\portfolio\\ and the module's migration location under A04's convention to owned paths, and state that the cron is registered by the module with A09 and that A46 only lists it."
+  },
+  {
+   "severity": "medium",
+   "issue": "Cash shape mismatch. A16's me/wallet returns reserved_cents as an object { orders, withdrawals, holds_present }, but A47 declares cash.reserved_cents as a scalar and says it adds nothing.",
+   "fix": "Pass A16's object through unchanged, or define reserved_cents = orders + withdrawals explicitly with holds_present kept boolean-only."
+  },
+  {
+   "severity": "medium",
+   "issue": "POR-01 alerts miss product-map items: certificate expiring, vote open and the proof-of-property flag. The spec restricts alerts to lock-in ending, register match pending and delayed distributions.",
+   "fix": "Add cert_expiring (A32 classification read), proof_of_property_flag (A34 attestation overdue or flagged) and vote_open (P2 interface, flag off in P1) alert kinds with tests. Add A32 as a dep or a fixture interface."
+  },
+  {
+   "severity": "medium",
+   "issue": "The SPN-08 register view omits the bank leg required by the product map ('register = on-chain supply = bank').",
+   "fix": "Add client_money_result and the overall result from A20's vehicle row to the register-view kpis, and test a bank-only break."
+  },
+  {
+   "severity": "medium",
+   "issue": "Agent-parity gap: POR-03's product-map action 'Download: exports the history' has no API or MCP route.",
+   "fix": "Add GET /v1/me/distributions/export?fy=&format=csv (scope portfolio:read, deterministic, token activity row), or name the node that owns it."
+  },
+  {
+   "severity": "medium",
+   "issue": "TP-RE is given platform-wide access to every sponsor's register view, although A18 limits it to the vehicle's own trustee. This leaks other trusts' holder data.",
+   "fix": "Scope TP-RE and other partner roles to vehicles where they are trustee or RE of record, and add a cross-trustee 404 case to the scoping matrix."
+  },
+  {
+   "severity": "low",
+   "issue": "Undesigned screens point to 'the design-extension node' without naming it.",
+   "fix": "Link [[A50 - Design extension A- investor and sponsor screens not in the prototype]] (POR-02, POR-03, PUB-08, extra POR-04 columns) and [[A51 - Design extension B- operator console screens not in the prototype]] (ADM-09)."
+  },
+  {
+   "severity": "low",
+   "issue": "The 'AEST/AEDT changeover' test for the 1 July job is meaningless: Sydney DST changes on the first Sunday of October and April.",
+   "fix": "Test the daily job on 4 Oct 2026 and 5 Apr 2027, and keep 1 July as the FY boundary test only."
+  },
+  {
+   "severity": "low",
+   "issue": "The 4-8 agent-hour estimate is low for the scope (about 12 routes, three PDF kinds, two jobs, a 10k-case property test and a large role matrix) compared with A40 (10-14) and A41 (8-12).",
+   "fix": "Re-estimate at 8-12, or keep 4-8 only after moving rendering and document storage to A35."
+  },
+  {
+   "severity": "low",
+   "issue": "The PUB-08 totals omit the product map's 'investors' metric, and no identity ties portfolio.monthly_income to the sum of holdings' monthly income or the portfolio series to the distributions series.",
+   "fix": "Add an 'Investors' attested metric, and the identities portfolio.monthly_income_cents = Σ holdings.monthly_income_cents and portfolio.income_series == distributions.series."
+  },
+  {
+   "severity": "low",
+   "issue": "The staff-read unmask path does not say that staff agent tokens cannot unmask (A44 marks unmask requiresHuman).",
+   "fix": "State that unmask is non-delegable and add a staff-token unmask refusal case to the matrix."
+  }
+ ]
+}

@@ -1,0 +1,105 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Schema and data-ownership collision. A04 already creates the `licence` and `feature_flag` tables: feature_flag has a `licence_bound_to` slot, and A04's plant test refuses a flag that is on with no binding, which would also refuse agents.traffic on. A33 owns the sponsor licence rows in that same table (kinds sponsor_afsl, trustee_licence, authorised_rep; states declared, verified, unverified, expired), with its own expiry sweep, its own Sev2 and the seed of the three sponsors. A21 defines a different licence shape (other kinds and states), a `licence_binding_id` column and a migration in its own folder, and it seeds and asserts the three sponsors' licences. A33 is AM3 and not an ancestor, so A21 cannot read A33's rows. A69 already flags this as the unsettled spec point (a). Result: a migration clash or a forked table, and two expiry sweeps with two vocabularies.",
+   "fix": "Say A21 extends A04's `licence` and `feature_flag` tables through a registered migration and list the added columns. Map `licence_binding_id` to A04's `licence_bound_to`. Limit A04's CHECK to kind phase or licence-bound. Use one vocabulary: A21 owns the lifecycle `state`, A33 owns a separate `verification_state` column, and the kind enum is the union of both lists. A21 seeds only platform rows (licensee AFSL, RealX CAR). Move the sponsor design-fact assertions to A33 and A69. A21's expiry sweep covers every row in the shared table; A33's sweep only sets the listing pause, so there is one Sev2."
+  },
+  {
+   "severity": "high",
+   "issue": "There are two G21 implementations. A19 (AM1, a sibling, not a dependency) holds a G21 evaluator ('A33 supplies rows; this node holds the check', reason LICENCE_PERIMETER) and computes the DAF meter as a monitor. A21 defines its own evaluateG21, its own G21_* codes and its own meter, and never mentions A19. Order, mint and go-live paths could get a different G21 verdict from the one ADM-04 and A36 show.",
+   "fix": "Make A21 the single G21 authority. Add A19 as a dependency of A21 (no cycle results). Register evaluateG21 in A19's evaluator registry, or have A19 delegate to it. Map LICENCE_PERIMETER to A21's codes and drop the second meter. Add a test that A19's G21 result equals A21's for the same snapshot."
+  },
+  {
+   "severity": "high",
+   "issue": "The evaluateG21 signature has no amount, client id or viewer. Without them it cannot return G21_CLIENT_CAP_EXCEEDED with client_remaining_cents, cannot refuse a proposed entry that would breach the platform cap, and cannot return G21_VISIBILITY_HIDDEN for a visitor. verified_wholesale mode needs G04 data from A32 (AM3, not an ancestor). Challenges 4 and 7 cannot be met through this interface. Cap inclusivity is also inconsistent: a client may reach exactly A$5,000, but a platform entry that reaches exactly 100 percent 'fails'.",
+   "fix": "Add amountCents?, clientId? and viewer {kind, hasSession, wholesaleActive?} to the input; the caller (A36, A37, A54) supplies the wholesale status. Define both caps as: used + amount <= cap passes; with no amount, the check fails when used >= cap. Cover the new fields in the property test."
+  },
+  {
+   "severity": "high",
+   "issue": "A stale approval can turn a flag on without a binding. The binding is checked only at flag.toggle precheck (submit), and approvals live up to 72 hours. If the binding lapses, or the licence is suspended or expires, before the checker approves, the effector still turns the flag on. The same gap exists for licence.map_flag. This breaks the invariant 'no flag on without a valid binding'.",
+   "fix": "The flag.toggle and licence.map_flag effectors re-check, in the same transaction as the write: binding valid, licence active and not expired, activities still covering the map, and PHASE. On failure they refuse with G21_* codes and write nothing. A binding lapse cancels pending toggle requests that depend on it. Add a challenge: bind, submit, suspend the licence, approve; the flag stays off."
+  },
+  {
+   "severity": "high",
+   "issue": "isEnabled can fail open. A08's static default for offers.wholesale is on, and the DB source is consulted after the static default and before the env override. FLAG_<KEY> overrides are honoured in RUN_MODE=local|test, the only run modes this build has. So a licence-bound or phase flag reads on with no DB row, or through FLAG_OFFERS_RETAIL=on with no binding, which contradicts G21's 'done'.",
+   "fix": "For kind phase or licence-bound, isEnabled returns on only when the DB row is on and a valid binding exists; a missing row means off. The env override may only force off, or is allowed in RUN_MODE=test alone, and evaluateG21 ignores it. Add a pass criterion: with an empty DB and every FLAG_* set on, every licence-bound flag reads off."
+  },
+  {
+   "severity": "high",
+   "issue": "An expired licence can keep its flags on for hours. The move to expired happens only in the daily 06:00 expiry_sweep or on a write, and binding_sweep checks the stored state, not expires_on. So offers.wholesale stays on after a midnight expiry, while challenge 5 expects the lapse 'the same tick'. The expiry instant, time zone and whether the named day is covered are undefined. A suspended licence can never expire, because the table has no suspended -> expired transition.",
+   "fix": "Define the expiry instant, for example 00:00 Australia/Sydney on expires_on; apply the same rule to conditions and CAR effective_to. binding_sweep, isEnabled and evaluateG21 treat clock >= expiry as expired whatever the stored state, and perform the transition. Add suspended -> expired to the table and the exhaustive test."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec contradicts itself on the 80 percent DAF alert. The build brief ('a drop below and a new crossing is a new alert') and the pass criteria ('once per crossing') disagree with challenge 4, which expects exactly one alert after cross, drop and re-cross, and a new alert only after the first is resolved (A13's dedup behaviour). The builder and Fable cannot both be satisfied.",
+   "fix": "Choose one rule and write it in the brief, the challenge and the pass criteria. Suggested, matching A13: a re-cross while the alert is open re-emits under the same dedup key and increments an occurrence count; a crossing after resolution raises a new alert."
+  },
+  {
+   "severity": "high",
+   "issue": "Many A21 action codes have no maker-checker definition. A03 and A14 seed policies only from the product map's three rows, so licence.activate, licence.suspend, reinstate, revoke, perimeter.visibility (platform and tenant) and any CAR codes are unknown to A14. The spec never says who proposes these policy rows. A licence suspension is not among A14's protective codes, yet A21 makes it SGL+R. Reinstate and revoke have no endpoints. POST /car-appointments and /end have no approval code at all, although ending a CAR switches off offers.wholesale platform-wide. This contradicts the node's own G13 'done'.",
+   "fix": "Name every code with its policy: licence.activate, licence.condition_change, licence.reinstate, licence.revoke, car.record and perimeter.visibility as 4E; licence.suspend as SGL+R protective; car.end as SGL+R or 4E (to decide); perimeter.visibility.tenant as 4E SP-OWN -> CCO. Add POST /licences/{id}/reinstate and /revoke. State these rows are data proposed to A03's actions.ts and A14's approval_policies in AM1, as A33 does. Extend the maker-checker pass criterion to every code."
+  },
+  {
+   "severity": "high",
+   "issue": "The kill-switch path has four bypasses. (a) flag.toggle (SUPER -> CCO, 4E) does not refuse kill-switch keys, so agents.traffic or inflow_freeze can be lifted without A48's release criteria. (b) setFlag does not require single-use approval ids, so replaying an old release approval after a new engage restores agent traffic. (c) The accepted state 'acted_pending_ratification' does not exist in A14, which uses state approved plus ratification_state pending. (d) The self_subject check looks at 'the call authenticated with a token', but at effector time that call is the human checker's, so a release drafted by a token passes.",
+   "fix": "flag.toggle refuses kill-switch keys (for example FLAG_KILL_SWITCH_OWNED_BY_A48). setFlag requires an A48 action code, key, scope and state matching the canonical payload, an approval id never used on a flag write before (unique changed_by_approval_id), and exactly the A14 states in which effectors run. Apply self_subject to the approval's maker principal as well as the direct caller. Add each case as a challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "Interface fields that dependents rely on are missing or hard-coded. A48 adds platform.marketplace_suspend and expects /perimeter/public to report marketplace_suspended. A54 expects the public flag states for resale.board and offers.retail. A69 reads the activity-to-flag map from A21, but no endpoint exposes it. A21 hard-codes 'the seven A08 keys' and exactly two kill switches, so A48's new key breaks A21's snapshot tests, which A48 then plans to edit inside A21's owned path.",
+   "fix": "Add marketplace_suspended and the public flag states to /v1/perimeter/public. Add GET /v1/perimeter/activities. Derive every key and kill-switch list from A08's flag table by kind; the snapshot tests read the expected set from A08 data, not a literal seven."
+  },
+  {
+   "severity": "medium",
+   "issue": "Flag scope resolution is unspecified. Flags can be platform, tenant or vehicle scoped, but nothing says how isEnabled combines the scopes (can a tenant 'on' stand while the platform flag is off?), which licence a tenant binding names, or who creates tenant flags at admission (J11 step 5). The pass criterion 'every scope kind ... zero cells disagree' has no rule to test against.",
+   "fix": "Effective state = AND of the platform, tenant and vehicle rows, so narrower scopes only restrict. A tenant or vehicle 'on' requires a valid platform binding plus a binding to that tenant's issuing licence. Name the interface A33's tenant.create effector calls. Jurisdiction is fixed to AU as a data column. Add the scope matrix to the generated test."
+  },
+  {
+   "severity": "medium",
+   "issue": "Caching makes 'within one clock tick' unreachable. The 5-second in-memory isEnabled cache is invalidated only in the process that writes, but auto-revert runs in the worker, so the API's cache stays stale. /perimeter/public is cached for one minute, yet challenge 1 expects car_active false immediately. car_active is defined from the CAR row alone, but the challenge expects it to go false when the licensee's AFSL is suspended.",
+   "fix": "Use cross-process invalidation (LISTEN/NOTIFY, or a version check on every read), or no cache for licence-bound flags. Invalidate the public cache on the same events. Define car_active as: CAR active, licensee licence active and unexpired, and binding valid."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some done and pass criteria depend on nodes that are not ancestors: the MCP tool catalogue needs A104 (AM1, not a dependency), and the 'done' for D04 needs the A100 parity suite (AM8). Neither can be checked at A21's gate.",
+   "fix": "Either add A104 as a dependency, or replace the MCP criterion with 'each operation carries the scope and maker/act annotations A104 consumes'. Move the A100 condition to a regression note that A100 re-runs."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle rule is weaker than in peer non-oracle nodes (A08, A33). Fable does not write tests before the build, so the binding, auto-revert, meter and kill-switch vectors can be shaped by code Fable has already seen. This node decides whether money may flow.",
+   "fix": "Use the A08/A33 wording: Fable 5.1 writes these vectors, including a reference implementation of the meter, from the frozen spec into <workspace>\\gauntlet\\hidden\\A21\\ before the build; the builder never reads that folder. Or set oracle: yes."
+  },
+  {
+   "severity": "medium",
+   "issue": "DAF Act coverage is incomplete. ADM-04 and D17 require 'TCP/DAP status', but there is no TCP activity or status. There is no commencement-date row (the DAF Act applies from about 8 Apr 2027). No caller for the digital_asset_platform check is named (orders is missing from 'Who asks'). The per-client measure and window are assumed rather than set with counsel. The meter counts entries only, while the product map says 'transactions'.",
+   "fix": "Add a tokenised_custody_platform activity or a daf_status field per activity. Add set_with_counsel rows daf_commencement (2027-04-08), client_cap_measure, client_window and counted_kinds (resale trades from P2). Name A37 at order placement and A91 for resale as callers."
+  },
+  {
+   "severity": "medium",
+   "issue": "The _test endpoints (advance-licence, exemption-events) exist in RUN_MODE=local, which is also the Docker preview and launch mode. Nothing excludes them from the OpenAPI document, so the SDK and MCP server would expose them and any token could age a licence without approval. POST /perimeter/evaluate has no permission row, yet it writes GateEvaluation and audit rows.",
+   "fix": "Exclude _test routes from OpenAPI, SDK and MCP generation; allow them only in RUN_MODE=test or behind the test-harness service principal, and add a test that proves this. Give evaluate a permission row and a rate limit."
+  },
+  {
+   "severity": "medium",
+   "issue": "The design references are imprecise. The design footer (line 516) has four sentences, including the past-performance warning, but the spec asserts byte-for-byte equality with a two-sentence string. The footer text is 12px, not 13px. The footer is rendered by A52 and the pill, eyebrow and aside by A54, but the spec says only 'the public-site node'.",
+   "fix": "disclosure_text holds the two CAR/AFSL sentences; add a warnings[] field for the past-performance sentence. Correct the size to 12px. Link A52 for the footer and A54 for the pill, eyebrow and aside."
+  },
+  {
+   "severity": "medium",
+   "issue": "Meter precision is undefined. Challenge 4 expects 99.99 percent for A$9,999,999.99 of A$10m (the true value 99.9999999 rounds to 100.00). used_pct's type and rounding, and the basis of the 80 and 100 percent comparisons, are not stated.",
+   "fix": "used_bp = floor(used_cents * 10000 / cap_cents) as an integer, with used_pct = used_bp / 100 for display only. Compare thresholds in integer cents. Align challenge 4 with this rule."
+  },
+  {
+   "severity": "low",
+   "issue": "The CAR is modelled twice: as licence.kind car_appointment and as a separate car_appointment table. It is unclear which one a binding, G21_CAR_ENDED and the seed use.",
+   "fix": "Keep only the car_appointment table, drop the kind, and state that offers.wholesale bindings name the licensee AFSL version plus the CAR appointment id."
+  },
+  {
+   "severity": "low",
+   "issue": "The 4-8 agent-hour estimate is low for this scope: two lifecycles, about 25 endpoints, three jobs, 10,000-sequence and 5,000-snapshot property tests, the full permission matrix, and the A14 and A13 wiring.",
+   "fix": "Re-estimate to about 8-14 agent-hours, or split the DAF meter and the public statement into a sub-node."
+  }
+ ]
+}

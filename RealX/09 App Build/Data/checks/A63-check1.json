@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Missing dependencies for SPN-07 and the Docker runs. The monitor's application rows, escrow balance, Allotted and Refunded statuses, and the failed, refunding, refunded and minted states need A37 (orders, escrow, refunds) and A38 (finalise-and-mint, revert-and-refund). Challenge 4 and the J05 failed-and-refunded pass criterion need them too. The Kent Street seed, the Marine Parade values and the scenario simulator need A06, and Playwright 'against the Docker stack' needs A23. None of A06, A23, A37 or A38 is an ancestor of A63: A36 does not depend on A37, because A37 depends on A36.",
+   "fix": "Add A06, A23, A37 and A38 to A63's deps in final-graph.json and to the note's Depends on line. All four are in earlier milestones, so there is no cycle, and A65 already depends on A38."
+  },
+  {
+   "severity": "high",
+   "issue": "The G17 block at submission is not enforced server-side by the contract A63 relies on. A36's submit preconditions only require that A43's claims check has run, and they treat flags as warnings at submission. A63 says a block flag disables Submit 'and the server refuses', and challenge 2 expects a separate server refusal. As the upstream specs stand, a forced SDK submit with a block flag would succeed, so the rule would exist only in the UI.",
+   "fix": "Add spec point (g) and raise back-edge A36.x now: A36's submit refuses with a named code (OFR_CLAIMS_BLOCKED carrying A43's rule codes, or A43's gate_failed G17) when the latest A43 report on the listing copy or IM has any block flag or is stale for the current body hash. Name that code in errors.ts, challenge 2 and the G17 pass criterion, and test the forced SDK submit."
+  },
+  {
+   "severity": "high",
+   "issue": "The J12 failure path 'missing or stale document: request for information to the sponsor' has no UI path. A65 (j12-rfi-title-defect.spec.ts) models this request as a due-diligence item rejected with a note while the listing is in review, and the sponsor must re-upload it. A63 renders all four steps read-only in compliance_review and shows 'Changes now go to RealX as an amendment' with no way to edit, which is a dead end. A34 allows PUT due-diligence while the property is in screening or due_diligence.",
+   "fix": "Specify that in compliance_review, SPN-04 rows whose A34 state is rejected, missing or expired stay uploadable through PUT /v1/properties/{id}/due-diligence/{kind}, with the reviewer's sponsor-facing note, while the terms stay locked. The SPN-02 request-for-information task links to that row. Define the 'amendment' route or drop the phrase. Add the request-for-information state to the state gallery and its round trip to the J12 Playwright pass criterion."
+  },
+  {
+   "severity": "high",
+   "issue": "No node owns SPN-07's route folder app\\(sponsor)\\s\\[tenant]\\offers\\. A52's frozen route table puts SPN-07 there, so either the build cannot start (spec point (a)) or it fails the standing criterion 'only owned paths changed'. This is a graph-data defect that can be fixed now; it does not need a build-time user decision.",
+   "fix": "Add <workspace>\\app\\apps\\web\\app\\(sponsor)\\s\\[tenant]\\offers\\ to A63's owned_paths in final-graph.json and to the note's Owned paths section. Replace spec point (a) with the settled rule: the page is a one-line re-export of the feature's OfferMonitorPage."
+  },
+  {
+   "severity": "high",
+   "issue": "A36's submit precondition (property at spv_formed or later) contradicts J12's order and A34, where submission moves the property from sourced to screening. While A36 stands as written, A63's J12 pass criterion (Tom prepares, Mia approves, the listing reaches compliance_review) cannot be met. A63 only defers this to a Specify back-edge (spec point (c)).",
+   "fix": "Amend A36 now: at submit the property must be sourced or later with a complete due-diligence pack, and spv_formed becomes a go-live precondition in the go-live precheck. Then drop spec point (c) from A63 and pin the pass criterion's property state to screening."
+  },
+  {
+   "severity": "medium",
+   "issue": "Missing dependencies A98 and A104. The partner-member behaviour (TP-VAL sees only the valuation row, TP-PM sees leases, rent roll and certificates, both get not-found elsewhere) is defined by A98's role table. The parity pass criterion checks A104's MCP catalogue. Neither node is an ancestor of A63.",
+   "fix": "Add A98 (AM3) and A104 (AM1) to A63's deps. A62 already depends on A98."
+  },
+  {
+   "severity": "medium",
+   "issue": "The parity pass criterion relies on 'A100's harness (run here with its preview script)'. A100 is in AM8 and will not be built yet, and no node defines the preview script, so the criterion cannot be measured at A63's gate.",
+   "fix": "Define the harness inside A63's owned paths, for example features/sponsor-listing/e2e/agent-parity.spec.ts. It runs every actions.ts row three ways (as a person session, as a sponsor token through the SDK and as an MCP call through A104) and compares gate evaluations, reason codes and A10 audit events except actor and on_behalf_of. A100 re-runs it later."
+  },
+  {
+   "severity": "medium",
+   "issue": "Agent-mandate challenge 7 cannot be run as written. The token is 'scoped to Marine Parade's property', but step 1 is what creates that property. A12's rule for properties.create or vehicles.create under allowed_property_ids or allowed_vehicle_ids is not stated. The actions.ts manifest also gives no required scope per row.",
+   "fix": "Seed an existing proposed vehicle (Marine Parade Apartment Trust), issue the token with allowed_vehicle_ids set to it, and use 'Existing trust' in step 1. The refused case creates a property under a different vehicle and expects G22_VEHICLE_NOT_ALLOWED with nothing created. State the expected code for vehicles.create under a vehicle-restricted mandate, raising a back-edge to A12 if it is undefined. Add the A12 scope for each actions.ts row and test it."
+  },
+  {
+   "severity": "medium",
+   "issue": "The oracle flag is false, yet the spec makes Fable's hidden tests mandatory, and this node hosts the G13 authority decisions (listing.submit and request approvals) and the cancel-and-refund request. An orchestrator that runs the Oracle stage only for oracle:true nodes would skip it, and the criterion 'hidden cases pass 100%' could not be checked.",
+   "fix": "Set oracle: true for A63 in final-graph.json and in the frontmatter, since authority is involved. Alternatively, make the App Gauntlet state that the Oracle stage runs for every node whose Oracle rule names a gauntlet\\hidden folder."
+  },
+  {
+   "severity": "medium",
+   "issue": "Money formatting is contradictory. Challenge 1 requires 'A$1,417,501.00' and 'A$262,241.00' (with cents), while the design and the seed-string check require whole-dollar strings: 'A$1,417,500', 'A$262,240' and 'A$1,525,760'. The spec never states when formatAud shows cents, so one of the two checks must fail or be fudged.",
+   "fix": "State A05's formatAud rule for each surface: the KPI tiles, the progress card and the soft-cap echo show whole dollars when the cents are zero and cents otherwise, and the table's Amount is always shown to the cent. Challenge 1 then asserts the string formatAud produces for the planted cents, plus the absence of the locally computed value."
+  },
+  {
+   "severity": "medium",
+   "issue": "Access to SPN-07 is not specified. The product map gives SPN-07 to all sponsor roles, but the spec does not say who may raise requests through 'Request change', what SP-FIN and SP-IR see, or what TP-VAL and TP-PM members get on /offers/[code].",
+   "fix": "Specify, from server permissions: the monitor is readable by all sponsor roles; 'Request change' appears only for principals holding the request permission (SP-OWN, SP-OPS); SP-FIN and SP-IR see the monitor read-only without the action; partner members get the group's not-found page. Add these cases to the state gallery and the tenancy challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec composes the undrawn states itself: out-of-limits field, simulation result, claims flags, owner approval, in review, changes requested, withdrawn, monitor state banners, request dialog and re-confirmation panel. The founder reviews them only after the build, at A65. This contradicts AM4's rule that undesigned surfaces are drawn and reviewed before any UI node uses them, and spec point (b) leaves the choice open.",
+   "fix": "Decide now. The preferred option is to add these states to A50 as loop A50.1, with design-ext keys cited in Design references. The alternative is to record a user decision in Decisions.md that allows post-build HG-REVIEW for undrawn states of designed screens."
+  },
+  {
+   "severity": "low",
+   "issue": "Challenge 3(v) accepts either G13_APPROVAL_MISMATCH or OFR_TERMS_LOCKED. Under A36 the offering stays in draft until the owner approves, so PATCH is allowed and only the terms-hash binding protects the approval. The expected result is therefore ambiguous and two different builds could both pass. The manifest also omits the approval decision for the withdrawal (offerings.cancel, tenant 4E).",
+   "fix": "Pin the expected outcome to G13_APPROVAL_MISMATCH and note that the maker's read-only wizard is only a display state. Add approvals.decide for the withdrawal to actions.ts as a person row."
+  }
+ ]
+}

@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Logs bypass the collector's redaction. Section 2 has Grafana Alloy read container stdout and ship straight to Loki, while the redaction stage (the second line behind A09) sits only in the collector pipeline. A PII string or token secret in a log line that A09's pino key-redaction misses (free-text message, unexpected key) reaches Loki unredacted, so the 'Leak through telemetry' challenge (plant in 'a log line') and the leak-scan pass criterion cannot both be met as specified, and obs.pii_redacted never sees log-path drops.",
+   "fix": "Route Alloy's output to the collector's OTLP receiver (otel-collector:4317) so every log passes the same redaction and conformance stages before the collector exports to Loki. Forbid any direct Alloy-to-Loki write in config, with a no-bypass test that the collector is the only Loki writer. Add a pass criterion that a planted secret in a free-text log message is dropped and counted in realx_obs_redacted_total{kind,service}."
+  },
+  {
+   "severity": "high",
+   "issue": "obs-exporter's permission cells do not cover what it must read. It holds V only on M01, M11, M18, M22, M25 (agent aggregates), M26 and M27, yet it reads chain status, pending custody signatures and paused tokens (M08/M09), client-money delta, deposits, withdrawals and escrow (M16, M04/M05), payouts due (M12), threshold monitors (M10), DAF meter and licence expiries (M02), withholding exceptions (M13) and complaint deadlines (M23). A12/A101 agent access belongs to M26 (ADM-35), not M25. M18 and M22 are granted but never read. Under the false-green rule these reads return 403, the Money path and Adapters panels stay grey forever and the adCmd-facts pass criterion fails. The other outcome is that the builder widens cells outside the spec.",
+   "fix": "Replace the cell list with a table derived from the reads: one row per status.json field and gauge, giving its operation id and the module cell it needs (at least V on M01, M02, M04, M05, M08, M09, M10, M11, M12, M13, M16, M23, M25, M26, M27). Drop M18 and M22 unless a read is added. Add a pass criterion that every exporter read returns 200 on the standard seed and every write route returns 403."
+  },
+  {
+   "severity": "high",
+   "issue": "The two new service principals are never registered. obs-exporter signs in as svc-observability and alert-bridge as svc-alert-bridge (SVCA). But A03 fixes SVCA as a closed set with execute-only cells, A04's service_account rows need a key-custody statement, caps and a disclosure flag (the BQA-10 lesson), and A11 gives SVCA no interactive login. A85 owns none of those paths, and its follow-up list names only A13 and A23. Nothing in the spec says how either service authenticates or gets its read cells.",
+   "fix": "Amend A03, A04 and A11 now, in the plan. A03: add the permission-matrix rows (svc-observability read-only cells; svc-alert-bridge limited to the internal emit/resolve route). A04: add service_account rows with key-custody statement, caps and disclosure flag. A11: define how an SVCA gets a non-interactive credential (for example a client credential minted into realx_state at boot). If that is not done, list them as follow-up item (c) under the same escalate-if-refused rule. Add a pass criterion that both principals appear in the seeded matrix and in A10 audit as SVCA actors."
+  },
+  {
+   "severity": "high",
+   "issue": "The agent lane contradicts A48 and A101. The 'Agent in the runbook' challenge expects a SECO staff token to draft the agents.traffic release through MCP and to read every status.json fact while following O5, and section 5 lists 'release drafts' among agent maker drafts. A48 says agents.traffic may never be turned back on under a token, so no token may draft that release (A21 403 self_subject). A101 says any engaged tier refuses every agent call with 423 AGENTS_PAUSED. At the platform tier (O5, and R1, which engages agents.traffic) staff agents therefore cannot read either. As written, the challenge would fail a correct build or push the builder to give the release row an MCP tool.",
+   "fix": "Rewrite the O5 and R1 agent lanes. Once the platform tier, or any tier covering the staff member, is engaged, the agent lane is empty and every agent call gets 423. The agents.traffic release row is 'human only' for drafting as well as approving. Per A48, only the two money-switch releases may be agent-drafted. Fix the challenge to expect: reads succeed before engagement, 423 on every call after engagement (reads included), and refusal of any agents.traffic release draft. Qualify the D04 parity claim ('every status.json fact is an API read') with 'except while an agent tier covering that staff member is engaged'."
+  },
+  {
+   "severity": "high",
+   "issue": "The A13 changes this node needs are deferred to an unplanned 'follow-up loop' against a frozen, gated AM1 spec. A13's pass criterion says GET /v1/alerts/types returns exactly the 17 catalogue types plus ten extension types, and A13 has no internal emit/resolve route. A85 needs eight new types and POST /internal/alerts/emit|resolve, and says it escalates if the loop is refused, so it depends on work that no node owns. Separately, obs.backstop_missing_run is given 'the job's owner role', but an A13 catalogue type has one fixed owner_role.",
+   "fix": "Nothing is built yet, so amend A13's spec now. Add the eight observability/platform types with fixed owner and secondary roles; for the backstop, either split it into one type per job or give it a fixed owner such as ENGO with the job owner as secondary. Add the SVCA-only internal emit/resolve routes with their tests, and update A13's '17 plus ten' count. Amend A23's images.lock check the same way. Then remove the 'follow-up loop before build' wording from A85."
+  },
+  {
+   "severity": "medium",
+   "issue": "J20 coverage is claimed but not built. The requirements section says each of J20's twelve steps has a dashboard panel or status.json field. Steps 8 (ADM-24 disclosure update, LEGL) and 9 (ADM-29 sponsor performance, PART) are not mapped at all. The facts for steps 3 (threshold monitors G06/G07), 7 (DAF Act meter, licence expiries), 10 (withholding exceptions), 11 (complaint deadlines) and 12 (launch flags resale.board, retail.track, stablecoin.rails off) appear in none of the nine dashboards or the status.json field list in section 3; status.json holds only inflow_freeze, marketplace_suspend and agents.traffic.",
+   "fix": "Add a J20 mapping table to section 3 with columns: step, screen, panel or status.json field, operation id, runbook. Add a Daily run dashboard, or rows in Platform overview, plus status.json fields for: near-cap and foreign-threshold counts, the DAF exemption meter, licence expiries, pending disclosure publications, G19 sponsor-performance exceptions, withholding exceptions, complaint deadlines and every ADM-34 launch flag. Add a pass criterion that the scripted J20 pass checks all twelve rows."
+  },
+  {
+   "severity": "medium",
+   "issue": "Time-based rules use the wrong clock and cannot all be planted. The stack runs on A06's injectable CLOCK_AS_OF (23 Sep 2026), but the spec's ages and windows ('red after 26 h', backstop '30 minutes after its window', the seven-day agent baseline, telemetry_gap 'no spans for 5 minutes') use Prometheus wall-clock time with no Australia/Sydney DST handling. The seed's last recon.nightly run is at 06:00 against a 02:00 schedule (A46). On the standard seed, backstop, stale-run and telemetry_gap alerts would fire on an idle stack, breaking 'open alerts 3 with 1 high'. A seven-day baseline cannot exist on a fresh stack, and a 15-minute latency burn cannot be planted quickly.",
+   "fix": "Have obs-exporter compute every age and overdue flag from the API's system clock and A46's next/last-fire data (DST-correct) and export them as gauges; Prometheus rules only compare those gauges. Give agent.traffic_surge a minimum-baseline floor or a warm-up rule. Add a heartbeat span so an idle stack is not a telemetry gap. Require promtool rule unit tests with synthetic series for every rule, alongside the live planted signals. Add a pass criterion that the standard seed raises no observability alert."
+  },
+  {
+   "severity": "medium",
+   "issue": "The principal attribute does not match the emitters. A85 defines realx.principal_kind as anonymous|HUMAN|PARTNER|AGNT|SVCA. A11 uses principal_type for {HUMAN, PARTNER, AGNT, SVCA} and a finer principal_kind under it (investor, sponsor_user, staff, ...), and A09 logs principal_kind. The 'every AGNT span' conformance rule, the Agent traffic panels and the Loki label would all key on values the emitters never write. The alias mechanism covers different keys, not different value sets.",
+   "fix": "Use both attributes as A11 and A09 name them: realx.principal_type (HUMAN|PARTNER|AGNT|SVCA|anonymous) and realx.principal_kind (A11's sub-kinds). Key the conformance rule and the Loki label on principal_type. Record the source node and value set for each in attributes.yaml."
+  },
+  {
+   "severity": "medium",
+   "issue": "The runbook examples contradict the data the lint enforces. R1 puts agents.traffic before the distribution hold and calls it 'agents.traffic off'; A48's seed puts the distribution hold first and uses the action code agents.traffic.kill_switch (also used by A77). R4 says the forced re-sync is 4E, but A20 makes POST /v1/recon/vehicles/{id}/resync an audited REGO action, and the product map has REGO as maker with the head of operations as checker; A103 already flags this conflict. A builder copying the examples either fails the lint or writes a wrong policy code.",
+   "fix": "Either remove the order and policy codes from the prose examples or copy them exactly from A48's seed (R1: token.pause, kill_switch.marketplace_suspend, kill_switch.inflow_freeze, distribution hold, agents.traffic.kill_switch, full A20 run). Settle the R4 resync policy across A20, A48 and the product map before A85's Specify step, and record it in the frozen hashes."
+  },
+  {
+   "severity": "medium",
+   "issue": "O5 does not cover A101's tiers. A101 defines user, tenant and user-type tiers plus the platform tier (refusal order platform > type > tenant > user), and makes staff-engaged user, tenant and type tiers SGL+R with ratification by a different person. O5 lists only token, per-user, per-tenant and platform, and gives the SGL+R 2-hour ratification to the platform tier only. The D04 done-when ('all four kill-switch tiers') is therefore ambiguous, and the lint cannot check the policy codes.",
+   "fix": "List the tiers exactly as A101 and A48 define them: token revoke/suspend in A12; user, tenant and user-type in A101; platform in A48. Give each tier its action code, policy code (SGL+R with ratification by a different person for staff-engaged tiers) and release policy. Add the type tier to the Agent traffic dashboard's 423-by-tier panel and to the challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "Value-based redaction only catches secrets. The collector drops PII by key (PII_PATHS), and by value only for token secrets, bearer values, cookies and private-key shapes. The challenge plants a TFN, a BSB and an email. If those sit under a key missing from PII_PATHS, or inside free-text log messages, nothing catches them, so the challenge result depends on how Fable names the key.",
+   "fix": "Add value patterns, generated alongside pii-keys.yaml, for: TFNs (8 or 9 digits that pass the checksum), BSBs (NNN-NNN), account-number-shaped values next to a BSB, email addresses and A06's fixture PII strings. State that the challenge plants values under neutral keys and in message text."
+  },
+  {
+   "severity": "low",
+   "issue": "Grafana and Tempo give unaudited access to one person's activity. The Follow dashboard searches by on_behalf_of_id and token_id, so anyone with the single Grafana admin password sees that person's full agent activity, outside RBAC, tenant scoping and A10 audit. A12's activity list is the audited view.",
+   "fix": "State that Grafana, Tempo and Loki are local engineering tools bound to 127.0.0.1. Record production access (SSO, per-role access, audit of person-level trace searches) as an HG-PROD item under Production differences. Runbook 'done when' cells must never point at a person-level Follow search."
+  },
+  {
+   "severity": "low",
+   "issue": "Some runbook codes and roles would fail the node's own lint. O4 break-glass has no screen in the 91-screen list: A67 and A51 call the break-glass screen ADM-37, which is not in the list. 'Board chair', 'RE board delegate', 'registrar contact' and the V1/V2/V3 signers are not codes in the 52-role list.",
+   "fix": "Map each one to a listed code (ADM-30 or ADM-01 as the break-glass entry point; TP-RE, TP-REG, TP-SIGN, CEO), or let the lint accept a design-ext: or roster placeholder for them. Record the ADM-37 gap for A00 and A51."
+  },
+  {
+   "severity": "low",
+   "issue": "The interfaces the lint and tests hook into are ambiguous. The lint compares against 'A48's runbooks.ts', but A11, A53 and A67 place that file at packages/domain/runbooks.ts while A48 seeds it from its own module. Section 6 adds stack tests to verify:stack, whose composition A23 defines.",
+   "fix": "Have the lint read A48's GET /v1/runbooks, plus one fixed, named file path for the Docker-free verify. Register the observability stack tests either through a documented A23 hook or as a separate verify:obs script under A01's script-registration convention."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec relies on the HG-OPS standing roles in [[Human Gates]], but 08 Build Plan/Human Gates.md does not exist yet.",
+   "fix": "When Human Gates.md is assembled, include HG-OPS with the roles A85 names (on-call ENGO, CCO, SECO, CEO, CFO, MLRO, RE board delegate, V1/V2/V3 signers, registrar contact) and list A85 and A103 in the gates-by-node table."
+  },
+  {
+   "severity": "low",
+   "issue": "The 4-8 agent-hour estimate looks low for this scope: two services, nine dashboards, a collector with redaction and conformance, fifteen runbooks with a mutation-tested lint, four stack test suites and up to three fix loops. The comparable nodes A48 and A103 are estimated at 6-10.",
+   "fix": "Raise the estimate to about 8-12 agent-hours, or split the runbooks and lint (sections 5-6) into their own node."
+  }
+ ]
+}

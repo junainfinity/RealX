@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Graph: A81's deps [A59,A66,A68,A72,A75,A73] leave out, even transitively, nodes the suite drives directly: A06 (scenarios), A23/A61 (stack, preview profile, layout-token comparer), A78 (console service in the stack), A104 (MCP), A48 (halts, kill switches), A101 (sensitive notices, kill switches), A77 (ADM-35 revoke), A55 (PUB-08), A64 (SPN-08/SPN-09), A40/A74 (distribution holds), A34, A37/A38, A47 (statement PDF) and A76 (ADM-26). Spec point (a) says the milestone order implies them, but conventions 3.5 says the scheduler starts nodes on dependencies, not milestones.",
+   "fix": "Add A55, A61 and A78 to A81's deps in final-graph.json and on the Depends on line. With those, the closure covers every node listed. Optionally also list A48, A64, A101 and A104 explicitly. Replace spec point (a) with a note that the edges were added."
+  },
+  {
+   "severity": "high",
+   "issue": "The forbidden-string scan contradicts the rest of the spec and the upstream nodes. It requires zero occurrences of 'AML', 'sanction' and every case id outside ADM-25/ADM-10/ADM-02 for MLRO/CCO/KYCA, including in the evidence folder and in partner responses. But the spec requires the ADM-14 freeze op as 'Freeze wallet · <wallet> · <case alias>', which TOKO and the TP-SIGN partners see (A72 allows the case id). The evidence must record AML_MLRO_ONLY and aml.* action codes. ADM-30, ADM-31 and ADM-26 rows and legitimate disclosure copy also contain these words. A build cannot satisfy both rules.",
+   "fix": "Define the scan as a subject-versus-control differential plus a static allow-list. It fails on any forbidden token that appears for the subject but not the control on investor, sponsor, SUPP and IRCM surfaces, tokens, inbox, webhooks and PDFs. Name the staff views that may show the case alias (ADM-14, ADM-30, ADM-31 and ADM-26 per A72 and A42). Exclude reason and action codes in the evidence, and scan the evidence only for case content and PII."
+  },
+  {
+   "severity": "high",
+   "issue": "J09-F is wrong about the money. A28 resolves OP-7731 as a 12-unit estate transfer out of 0x4b…19 in Bay Road, where the Estate of H. Lowe holds 60 units (A06, SPN-08). Yet the spec says the SPN-08 estate row 'becomes the new holder reference', and the pass criteria require 'old wallet balance is 0 after J09-B and J09-F'. The assertion cannot hold, or it pushes the builder to change the seed.",
+   "fix": "Take J09-F's expected effects from A28's OP-7731 seed: 12 units move, the estate row keeps 48, and a new 12-unit holder row appears. Limit the 'old balance 0' criterion to J09-B (recoveryAddress). Assert supply and register totals unchanged, estate minus 12, new holder plus 12."
+  },
+  {
+   "severity": "high",
+   "issue": "The J09 premise, 'an investor loses every device', is never exercised. J09-A signs Alex in with a still-working login passkey on a second browser context, and J09-B does not say how the persona signs in. A29 requires A11's login recovery when the login passkey is lost too, which is a non-delegable act. A build whose recovery only works while some passkey survives would pass.",
+   "fix": "Make the J09-B persona lose every passkey. It goes through A11's login/account recovery (liveness plus document, person present, refused to its API token with AGNT_NOT_ALLOWED) before POST /v1/wallets/recovery. Assert the order of steps and the audit events."
+  },
+  {
+   "severity": "high",
+   "issue": "The J10 specs run in order in one reset group on the same subject. By J10-C the subject is offboarded with the restriction kept (end of J10-A), so J10-C step 4's withdrawal refusal passes because of the restriction, not because of G02's synchronous screenForPayout. The G02 done-criterion can pass with no payout re-screen implemented. J10-B's persona is also unspecified.",
+   "fix": "Give J10-B and J10-C each a fresh, unrestricted seeded persona, or reset before each spec. In J10-C step 4, assert that the refusal's GateEvaluation is G02 from screenForPayout, with a screening row timestamped at the withdrawal request and no restriction before the list update."
+  },
+  {
+   "severity": "medium",
+   "issue": "The coverage criteria require all 16 SM-11 and all SM-13 transitions, but no scenario schedules some of them. SM-11: account_restricted->investigating, and post_filing_monitoring->case_closed (A42's POST .../close). SM-13: triage->legal_review (court or error type), and a successful checker_approval->executing via a valid CCO+CEO waiver (J09-E lists only refusals).",
+   "fix": "Add explicit steps. J10-A returns to investigating after the restriction. Add a J10-D step that closes a filed case from post_filing_monitoring. Extend J09-E with a court-type request that runs triage->legal_review->...->checker_approval, then a valid waiver->executing->confirmed->register_updated->closed. Map each transition to its scenario in the Challenge material."
+  },
+  {
+   "severity": "medium",
+   "issue": "Two product-map journey steps are not taken on their owning screens. J09 step 3 (ADM-13: KYCA re-verifies, 'Approve smart-wallet recovery' KYCA->CCO) is done on ADM-10 and ADM-30, so ADM-13 appears in no step. J10 step 5 (ADM-26: MLRO decides and files the SMR) moves to ADM-25 with ADM-26 checked by API only. The J09 closing 'notifies the investor' is never asserted.",
+   "fix": "Have KYCA submit wallet.recovery.approve from ADM-13's recovery panel (A72). With A76 in the closure through A78, also exercise the SMR filing and the obligation row on ADM-26's filing workspace. Assert the recovery-complete notice in the captured inbox."
+  },
+  {
+   "severity": "medium",
+   "issue": "The tipping-off equality is not measurable. 'Latency within noise' has no threshold, and the clock is injected while latency is wall-clock. Byte-equality needs identical balances and history, but the control has only 'the same profile shape'. The recovery-frozen J09-B wallet is named as the control for the AML-frozen wallet, yet its pages show a recovery stepper, so whole-page equality cannot hold.",
+   "fix": "Set a numeric rule, for example p95 difference <=10% or <=15 ms over N>=200 samples per route, with a named statistical test. Seed the control with identical cash, units, lots and history, so that only ids differ, or define the amount substitution map. Limit the J09-B pairing to the frozen-reason field and SPN-08 'Frozen'."
+  },
+  {
+   "severity": "medium",
+   "issue": "Reason codes are incomplete or unclear. The agent-as-custody-signer refusal is only 'G22 never a custody signer' with no code, while A12 and A15 define G22_AGENT_NEVER_CHECKER and P9_AGENT_PRINCIPAL. The recon refusal is recon_not_clear, while A14 also defines APR_RECON_BREAK_OPEN. The parity 'refused before scope evaluation' class has no exact code to assert.",
+   "fix": "Name the codes: P9_AGENT_PRINCIPAL plus G22_AGENT_NEVER_CHECKER for a custody signer, and recon_not_clear (record APR_RECON_BREAK_OPEN as an alias to reconcile at Specify). Use them in the challenges and in parity.test.ts."
+  },
+  {
+   "severity": "medium",
+   "issue": "One closure attempt approves AND executes the 6E register adjustment on the registry drift, which changes the legal register. The spec then corrects the planted source with a clean extract, which produces a new opposite break. The path to 'a clean re-run closes it' is undefined, and the builder may skip executing the adjustment to make the test pass.",
+   "fix": "Run the adjustment-execution attempt as its own sub-spec from a fresh baseline, with its expected post-run outcome in the Challenge matrix. Or limit the attempt to approval without execution."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec says parity-rows.json is consumed by A100's matrix. A100 does not depend on A81 and never mentions the file, so nothing guarantees the file exists when A100 runs.",
+   "fix": "Drop the claim and keep the file as A81 evidence consumed by A88, or add A81 to A100's deps and to A100's spec."
+  },
+  {
+   "severity": "low",
+   "issue": "The allowed-controls list ('only these') omits the worker container restart that a closure attempt and the challenges require. It also allows a 'read-only database connection' that contradicts the packages/db import lint.",
+   "fix": "Add 'docker compose restart worker' (A23's compose project) to the allowed controls. Replace the DB connection with A10's verifier CLI/API output."
+  },
+  {
+   "severity": "low",
+   "issue": "The design key 'design:prop ProofBand' does not exist in RealX App.dc.html. Line 277 belongs to the 'prop' screen and has no ProofBand name.",
+   "fix": "Cite it as design:prop (line 277, 'Register and chain agree' band)."
+  },
+  {
+   "severity": "low",
+   "issue": "The 8-12 agent-hour estimate looks low for this scope: 10 journey specs, a three-sided tipping-off comparer, 4 drifts plus combined plus natural expiry, full parity, shots at 2 widths and three seeded runs. A79, which is smaller, is 10-14.",
+   "fix": "Re-estimate to about 12-18, or split the planted-breaks group into its own node."
+  }
+ ]
+}

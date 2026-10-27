@@ -1,0 +1,95 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The oracle flag is wrong and contradicts the spec. The graph data and the frontmatter say oracle false. Yet the node owns an effector that moves money and holdings (investor.minor.handover: register transfer of every holding, token movement, AUD ledger transfer), the development promote calculation that feeds the exit waterfall, and the draw-precheck and LVR money gates. The spec's own 'Oracle rule' paragraph also makes Fable write hidden tests first. An orchestrator that reads oracle=false skips the Oracle stage, so the hidden suites the pass criteria depend on may never exist, or the builder may be allowed to see them.",
+   "fix": "Set oracle true in final-graph.json and the node data, and set oracle: yes in the frontmatter. Replace 'this is not an oracle node' with the standard oracle rule, and name the hidden suites: handover exactly-once, minor gating property, SM-03 branch oracle, promote and LVR vectors, venue perimeter matrix and lapse probe."
+  },
+  {
+   "severity": "high",
+   "issue": "The handover token leg does not match A28 or A18, and it bypasses custody binding. A97 moves the tokens 'through the existing recovery path's allow-list' under a 4E REGO->CCO request, and it does the register transfer first, with kind 'transmission'. But in A28, recovery means recoveryAddress for a lost wallet: 6E+Q, a 48 h timelock, the custody quorum and a freeze of the old wallet first. A28's SM-13 request_types have no minor type. A28 sends the A18 'transfer' instruction only after chain confirmation, under the same approval id. A18 has no 'transmission' kind. No V2 custody signing bound to the approval id is named.",
+   "fix": "Make the token leg an A28 forced_transfer with a new SM-13 request_type 'minor_handover' (data diff A28.x, listed in Specify). Use A28's catalogue code (6E+Q with timelock), or a lighter code set by the founder or counsel and recorded as an A03 policy row. Require V2 custody signing bound to the handover approval id. Order: A28's chain op first, then A28's own A18 'transfer' instruction; A97 never calls A18 first. G06 and G07 at the destination run through A28. Add a challenge that nothing moves without a custody signature carrying the approval id."
+  },
+  {
+   "severity": "high",
+   "issue": "Development and debt payouts from trust client money have no approval code, no maker-checker chain and no custody or bank binding. Two large money movements are affected: progress-claim drawdowns to the builder, and the debt drawdown (principal paid to the borrower at funded->operating 'loan drawn'). The spec only says 'A39's payment path with its own policy', and its five A14 codes exclude both. It never says who moves a progress claim from submitted to certified to paid. A build that pays out on one sponsor action would still pass every listed criterion.",
+   "fix": "Add A14 codes vehicle.development.draw, vehicle.debt.drawdown and progress_claim.certify. Give each a policy row, for example 4E with SP-FIN maker, SP-OWN, trustee/RE countersign and a RealX TRSY or ASTM checker, with thresholds as data. Bind each by one approval id to the A39 payment. Add the codes to Specify's follow-up list, the agent-never-checker list and D04's two-human rule. Add challenges that a draw without an approval id, or approved by the maker's agent, is refused."
+  },
+  {
+   "severity": "high",
+   "issue": "Existing SM-03 transitions let a development vehicle skip practical completion and pay income. The spec says 'no existing transition changes', so distressed->operating (remediated) and legal_hold->operating (order discharged) stay legal for a development vehicle that went distressed during construction. That vehicle can reach operating without an occupation certificate. The DEV_NO_INCOME_DURING_CONSTRUCTION precheck only checks under_construction and practical_completion, so it would not stop a distribution of capital labelled as rent.",
+   "fix": "Add a strategy guard: while a development vehicle has no recorded practical completion, refuse distressed->operating and legal_hold->operating. Base the no-income precheck on 'practical completion not yet recorded', not on the current state. Add both paths to the SM-03 branch oracle. Add a challenge that runs overrun, distressed, remediated, then tries operating and a distribution."
+  },
+  {
+   "severity": "high",
+   "issue": "The specified mechanism cannot deliver the licence-lapse guarantee. The halt opens in the consumer transaction of an outbox event emitted after A21's revert commits; A91 itself only promises 'within one tick'. Yet the pass criteria require zero trades with a match time after the lapse across 50 races. Between the revert and the consumer's halt, A91's matcher sees no halt row and keeps matching.",
+   "fix": "Require a synchronous check of the licence binding on the continuous-mode match path. Either A21's revert and A48's halt row are written in one transaction (an A21 follow-up), or A91.1 adds a per-match check of isEnabled('market.continuous') and binding validity under the instrument lock. State which one, add it to the Specify follow-ups and keep the race probe."
+  },
+  {
+   "severity": "high",
+   "issue": "Guardian agent access depends on A12 features that do not exist and are not in the follow-up list. A12 refuses INV-M token creation with PHASE_NOT_ENABLED. agent_mandate has no allowed_accounts. A12 has no 'account.closed' event. When an account closes, A12 revokes every token of the principal, so at handover the guardian's own-account tokens would be revoked too. As written, the D04 challenge (G22_SCOPE_MISSING naming the account) and the parity criteria cannot pass.",
+   "fix": "Add an A12.x follow-up to Specify with three changes. Lift the INV-M refusal when investors.minor_guardian is on. Add allowed_account_ids to agent_mandate, with G22 naming the account. Add an account-scoped revocation event, used at transferred and closed, that revokes only tokens scoped to that account."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec never defines the minor account's smart wallet or its on-chain delegation. It does not say who creates the wallet (D04 lists 'creating the first passkey/wallet' as non-delegable). It does not say whose passkey is the owner key: one guardian, or both under signing_rule both. It does not say how a guardian change rotates the owners, or how guardian-agent session keys are registered on the wallet. Yet MINOR_ATF, the handover token move and agent orders all assume the wallet exists. A29 has no support for minors, so the builder would have to invent custody for a child's assets.",
+   "fix": "Add a wallet subsection. A29 creates the minor account's wallet with the guardians' passkeys as owners; under signing_rule both, both owners must assert. Wallet creation is requiresHuman. A guardian change rotates the owners under investor.minor.guardian_change. Session keys follow A12 and A29 limits and are revoked at transferred. List the A29 diff in Specify and add a challenge that a removed guardian's passkey can no longer sign."
+  },
+  {
+   "severity": "high",
+   "issue": "No UI and no owning node exist for the people who run these features. Sponsors, valuers and quantity surveyors have no screens to enter development plans, progress claims, loans, interest statements or practical-completion requests. Staff have no ADM-21 control (A92) to choose 'continuous', a market licence and a session calendar. The console nodes are not dependencies, and no fix items or design-extension addenda are raised. D04 parity is inverted: agents can act, but people cannot.",
+   "fix": "Either add sponsor and console pages to this node (or a sibling P3 node) using existing blocks, or raise named fix items on A63, A64, A70, A71 and A92, plus design-extension addenda on A50 and A51 under HG-REVIEW, and list them in Specify. Add a pass criterion that every new sponsor or staff action has a screen and an A100 parity row."
+  },
+  {
+   "severity": "medium",
+   "issue": "The dependencies miss interfaces the spec uses. None of these nodes is in A97's transitive closure: A39, A98 (SP-VAL and SP-PM agents), A104 (MCP catalogue criterion), A100 (parity matrix), A54, A58 and A70 (facts rendering in M03 done), A59, A43, A44, A46 and A101.",
+   "fix": "Add A39, A98, A100, A101, A104, A54, A58, A59, A70, A43, A44 and A46 to deps; all are in earlier milestones. Then regenerate the graph."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several hook interfaces the spec relies on do not exist upstream, and they are not in the Specify follow-ups, so the escalation rule will fire every time. A30 has no case-kind hook, and its kyc_case.kind describes purpose (initial, refresh, and so on), not subject. A34 has no guard hook. A40 has no precheck hook, and its waterfall takes fees_cents[], not fee_lines[]. A39 has no destination hook. GET /v1/investors/types and GET /v1/investors/me/accounts do not exist. The A56, A58 and A59 changes are fix items on nodes that have already passed.",
+   "fix": "List each as a named follow-up diff with its function signature: A30.1 (case-subject kinds, hook, type catalogue, accounts endpoint), A34.1 (guard hook), A40.1 (precheck hook plus income_source), A39.1 (destination and draw hooks), and A56.1, A58.1 and A59.1 (UI mounts). Use fees_cents[]."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec uses the wrong upstream error code. The spec and the pass criteria require SM03_ILLEGAL_TRANSITION, but A34 refuses illegal SM-03 pairs with PROP_ILLEGAL_TRANSITION.",
+   "fix": "Replace SM03_ILLEGAL_TRANSITION with PROP_ILLEGAL_TRANSITION everywhere."
+  },
+  {
+   "severity": "medium",
+   "issue": "The venue vocabulary and behaviour conflict with A91 and the product map. A91's venue_mode is disabled | bulletin_board | licensed_partner (the product map's ADM-21 says licensed partner); A97 adds continuous with operator=partner and never resolves licensed_partner. A91 has no market orders, and its time in force is rest | fill_and_cancel. A97 adds market-to-limit conversion, day and gtc, and a pre-open cross, while claiming it adds no matching. It also invents a licence_lapse halt cause, although A91.1 already added 'perimeter'.",
+   "fix": "Map licensed_partner to continuous with operator=partner, through A91.1. Either drop market orders or list the conversion in A91.1. List day and gtc and the opening-cross rule in A91.1. Reuse A48's 'perimeter' cause with a market.continuous criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "A legal conclusion is hard-coded. The spec says an asic_relief binding can never enable market.continuous, which rules out an ASIC exemption (s791C). But the product map says a continuous market needs 'a market licence or ASIC relief'.",
+   "fix": "Make the licence kinds allowed for market.continuous a data row set with counsel (default: market_licence only), and add the relief question to HG-LEGAL. Rephrase the challenge so that a binding whose kind is not in that row is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "A challenge contradicts the consumer-credit rule. The rule refuses loans by purpose only, but the challenge expects a business-purpose loan secured by the director's owner-occupied home to be refused. No field or rule detects that case.",
+   "fix": "Add an owner-occupied flag on the security, checked against individual borrower directors and guarantors, and refuse with DEBT_CONSUMER_CREDIT_NOT_ALLOWED by default until counsel confirms. Otherwise change the challenge to match the purpose-only rule."
+  },
+  {
+   "severity": "medium",
+   "issue": "Debt receipts are undefined. Arrears, 'repaid only when principal and all interest received' and 'interest received, never due' all depend on how borrower payments are matched to the loan and split into interest and principal. The spec does not cover this, including part payments and overpayments.",
+   "fix": "Specify an A17 PayID or reference per loan and an allocation order: fees, interest arrears, current interest, then principal (a data row set with counsel). Record receipts in distinct A16 accounts. Add vectors for a part payment and an overpayment."
+  },
+  {
+   "severity": "medium",
+   "issue": "Some listed codes and non-delegable acts have no defined behaviour. DEV_PLAN_REQUIRED has no rule. Closing a minor account and the child and relationship document uploads are listed as non-delegable but have no routes. The spec does not say how signing_rule both applies to guardian orders and guardian agents.",
+   "fix": "Define DEV_PLAN_REQUIRED. Name the close and upload routes and mark them requiresHuman. Under signing_rule both, hold an order by one guardian or their agent until the other guardian approves by passkey (or refuse agents), and add a challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "The estimate is too low for the scope. The node bundles three unrelated P3 capabilities, six pages, three jobs, about 20 hidden suites and a 10,000-sequence property test into 8-12 h. That is the same as A30 alone and less than A91 (12-14 h).",
+   "fix": "Split it into three nodes (minors; development and debt; continuous venue), each with its own deps and oracle flag, or raise the estimate to at least 18-26 agent-hours."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec names two owners for delegable.ts: §2 and §5 say A03, but Specify says A12.",
+   "fix": "Use A03's delegable.ts everywhere, because A03 owns it."
+  }
+ ]
+}

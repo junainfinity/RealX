@@ -1,0 +1,70 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "EntryPoint v0.7 at the canonical address cannot come from a local compile as written. The compiler list has only solc 0.8.17, but @account-abstraction/contracts 0.7 needs ^0.8.23. The canonical CREATE2 address 0x0000000071727De22E5E9d8BAf0edAc6f37da032 also needs the exact canonical init code (solc 0.8.23, 1,000,000 optimizer runs, same metadata and source paths). A RealX recompile gives a different address, or the builder fakes it with hardhat_setCode. The pass criterion only checks that code is non-empty.",
+   "fix": "Deploy EntryPoint from the canonical init code bytes shipped with the pinned @account-abstraction/contracts 0.7 artifacts (SHA-256 recorded in TOOLCHAIN.md), by CREATE2 through 0x4e59...956C with the canonical salt, and never recompile it. Change the pass criterion so the keccak of eth_getCode equals the published EntryPoint v0.7 runtime code hash, re-derived independently by Fable, and forbid hardhat_setCode at the EntryPoint address. Restate or drop the 'byte-identical EntryPoint compile' criterion."
+  },
+  {
+   "severity": "high",
+   "issue": "One Hardhat 2 project cannot hold two OpenZeppelin majors. T-REX v4.1.x and ONCHAINID use OpenZeppelin 4.x (plus contracts-upgradeable), while @account-abstraction/contracts 0.7 needs OpenZeppelin ^5, and Hardhat 2 resolves one version per package name. The spec compiles both in one project and tells A26 it can add a 0.8.2x entry without touching the toolchain.",
+   "fix": "Make library coexistence an A07 deliverable. Pin OpenZeppelin to T-REX's lockfile versions for the vendored build, and choose and record one mechanism for AA sources: Hardhat 3 npm remappings, a separate A07-owned sub-project for 0.8.23 and OZ5, or npm aliases with remapping. Add a pass criterion: a throwaway 0.8.23 probe importing AA 0.7 interfaces compiles while the T-REX bytecode stays unchanged."
+  },
+  {
+   "severity": "high",
+   "issue": "The config guard contradicts A08 and A23. A07's RPC allow-list is loopback and 'chain' only, but A08 also allows *.base.org and testnet hosts, and A23 asserts the two lists are identical. Under the only run modes (local, test) the baseSepolia entry can never be used. The guard fires only under local, test or unset, but A23's live test sets RUN_MODE=production and expects the chain container to fail with A07's named errors. The guard reads BASE_SEPOLIA_RPC_URL, not A08's CHAIN_ID and CHAIN_RPC_URL, and nothing says the Docker chain's hardhat node loads the guard.",
+   "fix": "Any RUN_MODE other than unset, local or test fails with a named error. hardhat.config.ts reads CHAIN_ID and CHAIN_RPC_URL, and chain ids outside {31337, 84532} fail with CHAIN_ID_NOT_ALLOWED. Allowed RPC hosts: loopback and 'chain' for 31337; A08's *.base.org host list only for 84532, and only on an explicit --network baseSepolia run. Copy the host list into TOOLCHAIN.md so it equals A08's. The chain container entrypoint runs the same guard and exits non-zero before hardhat node starts. Add in-container tests for RUN_MODE=production, CHAIN_ID=8453 and a mainnet RPC."
+  },
+  {
+   "severity": "high",
+   "issue": "EntryPoint placement lives only in the host script 'npm run chain:up'. Pass criterion 3 uses a bare 'docker compose up' of the fragment, and A23 includes the fragment directly and expects EntryPoint code on 'chain'. hardhat_setCode state is lost on restart, and the healthcheck (eth_chainId only) goes green before EntryPoint exists.",
+   "fix": "Do the proxy placement and the EntryPoint CREATE2 deploy in the chain container's entrypoint before the service reports healthy. The healthcheck requires eth_chainId 0x7a69 and non-empty EntryPoint code. chain:up becomes a thin compose wrapper. Add a restart criterion."
+  },
+  {
+   "severity": "high",
+   "issue": "The submodule mechanics break A01's rules. npm ci and upstream compile inside contracts/vendor/T-REX leave untracked content, so A01's verify step 12 (clean git status) fails. The root .gitmodules file is owned by no node. An npm overrides entry in contracts/package.json is ignored (npm honours only the root package.json's overrides, and never inside a separate submodule install). 'Tree hash' is undefined. A fresh-clone verify for every later node fails unless setup:chain has run.",
+   "fix": "Run the upstream suite in a gitignored working copy made by setup:chain from the pinned commit. Apply dependency overrides only to that copy's package.json, as a patch in OVERRIDES.md, with sources checksum-verified before each run. Set 'ignore = dirty' on the submodule. Add .gitmodules to A07's owned paths. The binding checksum is the commit SHA plus the git tree SHA plus a sorted per-file SHA-256 list. State how verify handles an uninitialised submodule, and align A01's fresh-clone challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "infra/chain is not an npm workspace under A01's globs. So control.ts and smoke.ts are never typechecked or tested by verify, and A27 must import them by relative path. smoke.ts also imports the upstream fixture from contracts/vendor, which breaks A01's boundary rule and trips A07's own licence grep.",
+   "fix": "Put control.ts in an A07-owned workspace (e.g. packages/chain-control) and run smoke as a Hardhat script in the contracts workspace (an A07-owned contracts/scripts/toolchain/). Keep only the Dockerfile, entrypoint, compose fragment and accounts.json in infra/chain. Update the owned paths and A27's reference."
+  },
+  {
+   "severity": "medium",
+   "issue": "A07's verify checks will fail later nodes. The 'no .sol outside vendor' check fails A26 and A25, which add contracts/src and test mocks; A26 can gate before A24, and A24 is told to lift a check in A07-owned files. The name-based licence grep flags A07's own smoke.ts, A24's allowed imports and inheritance, and A27's ABI exports and typed helpers named Token, IdentityRegistry and so on.",
+   "fix": "Write the final-form checks now. .sol is allowed only under contracts/vendor, src and test. The licence check is a content fingerprint of vendored files found outside vendor, any GPL-3.0 SPDX file outside vendor must appear in LICENSE-NOTES' inheritance list, and ABI JSON is excluded. Add fault plants for a legitimate import (pass) and a copied interface (fail)."
+  },
+  {
+   "severity": "medium",
+   "issue": "Interfaces do not match the graph. The README assigns packages/contracts/src/abis, src/deployments and addresses to A24 and A26, but the graph gives packages/contracts/src/ and deployments/ to A27, which already plans to edit A07's README. A25 writes to 'A07's local deployment output folder', which A07 never defines.",
+   "fix": "Name A27 as the owner of packages/contracts/src/ and deployments/<chain>.json and as the only exporter. Define a gitignored local deployment output folder (e.g. contracts/deployments-local/<chainId>/, schema in TOOLCHAIN.md) that A24, A25 and A26 write and A27 reads."
+  },
+  {
+   "severity": "medium",
+   "issue": "The owned paths in the note and the node data disagree. The data lists hardhat.config.ts, package.json and LICENSE notes; the note adds tsconfig.json, .gitignore and TOOLCHAIN.md. The guard tests have no owned folder. The edit to scripts\\secrets-allowlist.json is outside A07's paths and not tolerated by A01's check-owned-paths, so standing criterion 3 fails.",
+   "fix": "Update final-graph.json and the note together: add the extra root files, contracts/test/toolchain/ and .gitmodules. Either add a named exception for appending to the allow-list, or have A01's scanner load per-workspace allow-list files (like secrets-patterns.json) so A07's entries live in contracts/."
+  },
+  {
+   "severity": "medium",
+   "issue": "The T-REX pass criteria can be gamed or may be impossible. The builder records the 'upstream count' itself. '0 skipped' may be impossible if the pinned tag has skips. The challenge checks 'the network the spec names' for test:trex, but none is named. There is no criterion that the RealX compile of T-REX equals the upstream bytecode.",
+   "fix": "Fable derives the expected count independently (mocha --dry-run or its own clean run). Expected skips equal the skips declared in the source, with no .only and no --grep. State that test:trex runs in-process on 'hardhat' and chain:smoke is the Docker proof. Add a criterion that metadata-stripped deployedBytecode equals the upstream compile, and a check that the OpenZeppelin and @onchain-id pins equal T-REX's lockfile."
+  },
+  {
+   "severity": "medium",
+   "issue": "The download list omits solc binaries (binaries.soliditylang.org), the git clone from GitHub and Docker Hub. GitHub-generated tarball SHA-256s are not guaranteed stable, so Fable's recomputation of the tarball hash can fail for no real reason.",
+   "fix": "List these sources as allowed downloads and record the solc long-version and SHA-256. Make the tarball hash informational, and make commit SHA plus tree SHA plus the per-file hash list the binding checksum."
+  },
+  {
+   "severity": "low",
+   "issue": "The design references cite nonexistent keys: OfferProgressCard, ProofBand and 'units = tokens' have zero hits in RealX App.dc.html.",
+   "fix": "Cite only existing strings ('10,000 tokens', 'Kent Street Terrace · 6,400 of 10,000 tokens', 'Register and chain agree'), or say 'none'."
+  },
+  {
+   "severity": "low",
+   "issue": "'node:24 slim by digest' does not force Node 24.21.0, but A23 asserts the container's node -v equals the host's. The two-boot check compares the committed accounts.json rather than chain output. 'ENGO' is not explained.",
+   "fix": "Pin node:24.21.0-slim@sha256. Compare eth_accounts from each boot to accounts.json. Expand or remove 'ENGO'."
+  }
+ ]
+}

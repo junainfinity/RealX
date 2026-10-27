@@ -1,0 +1,110 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Interface with A04 does not match A04's spec. A10 claims A04 already defines audit_anchor (in INSERT_ONLY_TABLES) and audit_export, and forbids itself any migration (Escalate fires if the builder 'adds a migration under this node'). A04 says the opposite: no audit_anchor in INSERT_ONLY_TABLES, neither table in its list, and 'A10 adds hashing, the head lock, anchors, holds and exports through the registry'. Column sets differ: A04 has object_type + object_id (A10 hashes/filters object_ref), stores actor_label, actor_role, object_label, before_ref, after_ref, gate_codes[], rule_pack_version, sensitivity, but no gate_evaluation_id (needed by A10's G13 'Done'). Stored actor_label/object_label contradict A10's 'ids, codes and hashes only' and put masked names in an unerasable row. A04's investor RLS does not define the 'actor, on-behalf-of or subject' rule A10 relies on.",
+   "fix": "Pick one ownership model in both specs before Specify: either A10 registers audit_anchor (insert-only, same trigger) and audit_export via A04's module-schema registry under services\\api\\src\\modules\\audit\\migrations\\ and the escalation trigger is narrowed to 'alters audit_event or an A04 core table', or open A04.x now. Fix the column contract: object_type+object_id (object_ref as derived API field) or A04.x for object_ref; add gate_evaluation_id; actor_label/object_label stay NULL or are dropped; list the exact audit_event RLS policy (actor, on_behalf_of, subject, tenant, platform, partner scope, sandbox) as an A04.x item with a test."
+  },
+  {
+   "severity": "high",
+   "issue": "Missing dependency: A06 is not a dependency or ancestor of A10 (ancestors A00-A04, A08, A09), yet pass criteria and the design-fidelity challenge require A06's seeded chain to verify and the five design rows to return from one call. The seeded rows also contradict the spec: A06 changed the 22 Sep 17:04 quorum row to trustee transfer OP-7728 while A10 requires 'OP-7726 mint · APR-2270', and A06 seeds 08:47 as 'agent treasury-drafter on behalf of Priya N. (TRSY)' while A10 expects 'Priya N. (Treasury)'. A06 writes rows 'through A04's append-only API', which does not exist.",
+   "fix": "Add A06 to A10's deps in final-graph.json (AM0 -> AM1, no order violation) or move the seeded-chain and five-row checks to A23/A66. Reconcile the five expected rows with A06's fix table in one place and state the exact expected strings per column (object label for 17:04, actor/on_behalf_of_label/token_prefix for the 08:47 agent row)."
+  },
+  {
+   "severity": "high",
+   "issue": "Canonical form is not byte-exact, yet the oracle is twenty golden vectors computed independently in Python that must match byte for byte. Undefined: snake_case column names vs Drizzle camelCase keys; whether prev_event_sha256 || canonical concatenates 64-char hex text or 32 raw bytes; encoding of non-bigint integers (smallint canonical_version), booleans, enums, text arrays (gate_codes[]); unicode escaping/normalisation; whether prev_event_sha256 is also inside canonical(event); truncation of Postgres microsecond timestamps to ms. Two correct readings give different hashes, so a correct build fails or Fable must peek at the build.",
+   "fix": "Specify normatively: RFC 8785 (JCS) over an object keyed by snake_case DB column names; every integer as decimal string; booleans as JSON booleans; arrays in stored order; strings NFC, raw UTF-8, JCS escaping; timestamps truncated to ms 'YYYY-MM-DDTHH:mm:ss.SSSZ'; lowercase hex; event_sha256 = sha256_hex(utf8(prev_hex) + utf8(canonical_json)) with prev excluded (or included, say which). Include one worked example (row, canonical string, hash) in the spec."
+  },
+  {
+   "severity": "high",
+   "issue": "Tamper criterion contradicts the canonical form. Pass criteria and oracle (d) require a one-byte flip in ANY column of any row to be detected at that row's seq, but canonical(event) excludes id, seq, event_sha256 and created_*, and A04 adds updated_at, updated_by, deleted_at to every table. Changing id or created_by (or sub-ms ts digits) is detected by no hash.",
+   "fix": "Include id and all convention columns except seq and event_sha256 in the canonical object; require updated_*/deleted_at NULL on audit_event by CHECK (A04.x); store ts as timestamptz(3). State how seq and event_sha256 are protected (linkage order, recomputation) and rewrite the tamper criterion to list exactly which columns are covered and how."
+  },
+  {
+   "severity": "high",
+   "issue": "The daily verifier walks only 'from the last anchor to the head', so a change to any row older than the last anchor (trigger disabled by a superuser, as A06's audit-tamper scenario does) is never recomputed; R18 stays green. The tamper pass criterion does not say which verifier mode, so an incremental-only daily job can pass by testing only the full CLI.",
+   "fix": "Make daily audit.verify a full recomputation from genesis (1M rows < 120 s already allows it), or incremental plus a weekly full walk plus a check that every stored anchor's head_sha256 equals the recomputed hash at its to_seq and its evidence file. Run the tamper and re-chain oracles through the scheduled job and through verifyChain() as R18 calls it, with a tamper placed before the latest anchor."
+  },
+  {
+   "severity": "high",
+   "issue": "seq contiguity cannot hold. seq is one bigserial shared by the live chain and all sandbox partitions, and sequences are non-transactional: any business transaction that records and rolls back consumes a value. Pass criteria still require 'no gaps in seq' for 10,000 concurrent inserts and 'seq contiguous' for 50x200 calls with a concurrent sandbox chain. A correct build fails; a builder chasing it may add hacks.",
+   "fix": "State seq is a global ordering key that may have gaps and interleave, never shown. Define continuity per partition as prev linkage in seq order from genesis. If a gap-free position is wanted, add chain_pos under the advisory lock with UNIQUE(partition, chain_pos). Rewrite both criteria and oracle (c) and add deliberate rollbacks between records."
+  },
+  {
+   "severity": "high",
+   "issue": "Deletion paths contradict the immutability contract. A99 requires A10 to let a SECURITY DEFINER function purge a sandbox partition chain (A99 upstream item (c)) and A10 says sandboxes can be reset; A102 purges after seven years under a retention role. A10's pass criteria refuse DELETE for every role including superuser and define no exception, caller or verifier behaviour after a prefix purge. The sandbox genesis sha256('realx-audit-genesis:'+sandbox_of) is identical for every generation, colliding with UNIQUE(prev_event_sha256) if any old row survives.",
+   "fix": "Add a sanctioned-deletion section: only (1) A99's developer_purge_partition(principal_id) for rows with that sandbox_of (never live), by realx_sandbox_admin, and (2) A102's retention purge of a whole prefix up to a verified anchor older than seven years and not held, by the retention role; the trigger admits only a transaction-local flag set by those functions; each writes a live event with purged head hash and count. Verifier starts from the oldest retained anchor. Partition key includes generation (sandbox:<principal>:<generation>). Add oracle cases for both paths and all other roles."
+  },
+  {
+   "severity": "high",
+   "issue": "No need-to-know or tipping-off rule on reads. Investors see every row where they are the subject; every staff role with M25 read or ADM-09's audit tab sees all rows. AML actions (alert, case, SMR clock, sanctions hit, AML-held distribution exceptions as in the product map's 'distribution.exception.held ... AML_HOLD'), AML-driven unmasks and break-glass rows would appear in the investor's /v1/me/activity, exports and support's view, risking tipping-off. A04, A42, A101, A102 guard this and A66 assumes need-to-know hiding; A10 has no visibility attribute or test.",
+   "fix": "Add a visibility class to every action entry (subject_visible, staff, need_to_know:<acl> e.g. MLRO+CCO, security) and enforce it server-side in list, detail, export and me/activity (and RLS via A04.x); staff actors shown to investors as a generic label. Oracle probe: seed an AML case and AML unmask on INV-A, diff INV-A's activity/export, SUPP's list and an ordinary investor's activity: zero AML rows or count differences."
+  },
+  {
+   "severity": "high",
+   "issue": "G13, the node's only gate, is not testable. 'Done' says approval_id is mandatory for every G13 action, but the action table has only label, mutation flag and sensitivity; no requires_approval_id attribute, no refusal code, and the action-table test does not check it. The hand-written step list misses SM-00 transitions draft, submitted, closed and broadcast -> failed, so a failed custody broadcast could go unaudited.",
+   "fix": "Add requires_approval_id (and requires_custody_op_id for custody signed/broadcast/confirmed/failed) per action; record refuses without it with registered code audit_missing_approval_id. Generate approval.* codes from A03's SM-00 transition table with a drift test. Add pass criteria for both."
+  },
+  {
+   "severity": "high",
+   "issue": "D04 agent access is not specified for this node's own operations. Nine routes go into OpenAPI and hence A104's MCP catalogue, but A10 never says which a token may call, under which G22 scope, or which are human-only. A66 already classifies verify-now and legal hold place/release as human-only and export as agent-maker. As written, a staff agent token can call POST /v1/audit/verify and, before A14, the hold routes; an agent bulk export is not marked sensitive so A101 would not notify the person.",
+   "fix": "Add an Agent and API parity list: events, detail, head, me/activity, holds list = agent-read; export = agent within the human's read rights under a named export scope, sensitivity sensitive, A101 notice; verify and hold place/release = human-only, refused for tokens with a registered code before any work and flagged in meta so A104 omits them. Oracle: token verify refused; token export allowed with AGNT actor, on_behalf_of and sensitive class."
+  },
+  {
+   "severity": "medium",
+   "issue": "Partner users are not scoped. ADM-31's product-map roles include TP-AUD and TP-OBS and its only action is 'scoped export for auditors and regulators', but A10's visibility rules cover only staff, sponsor users and investors.",
+   "fix": "Define PARTNER visibility (rows in app.vehicle_scope/engagement, never need-to-know) and an auditor/regulator export scope; add TP-AUD and TP-OBS probes."
+  },
+  {
+   "severity": "medium",
+   "issue": "Export row count and file can disagree: audit.exported records the row count at request time, but the file is written later while events keep arriving (including the export's own event). A66 sends a reason field the contract does not accept.",
+   "fix": "Store max_seq per partition in audit_export at request time and apply seq <= max_seq when writing; require event row_count = rows in file. Accept and store an optional reason_code enum."
+  },
+  {
+   "severity": "medium",
+   "issue": "PII guard is inconsistent and weak: write path scans only reason, but the challenge expects an email inside object_ref refused; regexes 'generated from PII_FIELDS' (field names) cannot catch names; a DOB shape refuses legitimate dates; free text in an immutable unerasable chain conflicts with Privacy Act erasure.",
+   "fix": "Replace free-text reason with a reason_code enum plus structured params (ids/codes only), or store free text in a separate erasable table referenced by hash. Validate object ids against A02's id grammar. Ship an explicit field-class-to-pattern mapping tested on a corpus with no false positives on ISO dates and ids."
+  },
+  {
+   "severity": "medium",
+   "issue": "Ordering unspecified: list 'cursor on seq' does not say descending though the design order (newest first) is a pass criterion; /v1/me/activity is 'oldest-first', unlike the POR-04, ACC-05, SPN-16 activity screens.",
+   "fix": "State seq DESC (newest first) as default for /v1/audit/events and /v1/me/activity with optional order=asc; tie the design-order criterion to it."
+  },
+  {
+   "severity": "medium",
+   "issue": "pg_advisory_xact_lock on the live partition is held until the caller commits, serialising all business transactions after their record call; a transaction taking row locks after record can deadlock with one that took them first. The concurrency oracle uses bare record calls and would not show it.",
+   "fix": "Require record to run last before commit (withTx commit hook flushing queued events inside the same transaction), document lock order, and extend the concurrency oracle with callers holding business row locks and long transactions, with a p95 bound."
+  },
+  {
+   "severity": "medium",
+   "issue": "No audit-layer net for 'staff agents never checker': record accepts approval.approved/rejected/ratified/vetoed or custody.signed with actor_type AGNT.",
+   "fix": "Add a human_only flag to those actions; record refuses them for AGNT (plus a DB CHECK via A04.x if feasible) with a registered code and an oracle case."
+  },
+  {
+   "severity": "medium",
+   "issue": "The boundary-lint rule making record the only writer lives in A09's root eslint.config.js and the byte-identity check runs in root npm run verify; both are outside A10's owned paths, violating the 'only owned paths changed' standing criterion.",
+   "fix": "Use an A09 extension point under A10's paths (module-supplied lint rule and verify hook) or open an A09 follow-up loop at Specify and name it."
+  },
+  {
+   "severity": "medium",
+   "issue": "Evidence paths: the worker in a Linux container is told to write the Windows path <workspace>\\app\\evidence\\audit\\..., and audit.evidence-ship copies into 'the gauntlet evidence tree' under <workspace>\\gauntlet\\ where hidden oracles live and the builder must not go. File-name date basis unstated.",
+   "fix": "Use a configurable AUDIT_EVIDENCE_DIR (A08 config) mounted from app\\evidence\\audit in compose, name files by the Australia/Sydney date, and ship the off-database copy to a mount outside gauntlet\\ (e.g. app\\evidence\\audit-offsite\\) or defer it to the on-chain anchor node."
+  },
+  {
+   "severity": "medium",
+   "issue": "Performance criterion not measurable: 'any 200-row page with any filter combination under 300 ms' has no dataset size, role, percentile or filter set, and RLS subject rules/type-prefix filters may need unlisted indexes.",
+   "fix": "State p95 < 300 ms on the 1,000,000-event dataset (3 tenants, 1,000 investors) over a fixed set of 50 filter combinations as staff, sponsor and investor; list indexes incl. (object_type, object_id, seq) and (on_behalf_of_id, seq)."
+  },
+  {
+   "severity": "low",
+   "issue": "Four wikilinks do not resolve because file names replace ':' and '/' with '-': A66 'Console: ...', A99 'Developer surface: ... SDK/MCP packaging', A101 'Agent guard: ...', A51 'Design extension B: ...'.",
+   "fix": "Use exact file names or fix plan-wide in the generator."
+  },
+  {
+   "severity": "low",
+   "issue": "Error-code casing disagrees with A09 ('A10's AUDIT_*' vs A10's lowercase audit_*); the D04 label form 'agent <token prefix> on behalf of <person>' is described but not tested.",
+   "fix": "Keep lowercase and note it for A09; add a pass criterion asserting the exact label string for an AGNT row in the list and in /v1/me/activity."
+  }
+ ]
+}

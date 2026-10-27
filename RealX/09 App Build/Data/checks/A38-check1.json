@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Escrow release is double-owned with A39. A38 drafts the escrow.release 6E approval, registers its A14 effector, posts the journal through a non-existent A37 postEscrowRelease, and emits settlement.escrow_released for A39. But A39 already owns POST /v1/treasury/escrow/{offeringId}/release, the same escrow.release 6E FINA->CFO+CCO request, its effector, the A16 offer_escrow/payout_clearing journal (external_ref = offering id) and the A17 payout. The catalogue also maps J04 step 9 to D07/treasury, and A37 says it never releases escrow. Two effectors for one action code and two journal keys make a double release possible, or the A14 registration collides. A39 is not a dependency of A38.",
+   "fix": "Take drafting, effecting and posting of escrow.release out of A38 and add A39 to A38's deps (same milestone, AM3). F4 becomes a wait: A38 emits the finalise fact A39 checks (settle the state name: SM-04 says finalising, A39/A18 say finalised), then waits for A39's release event, correlated on offering id and approval id, before F5. Remove POST /v1/settlement/runs/{id}/escrow-release and the escrow.release effector registration."
+  },
+  {
+   "severity": "high",
+   "issue": "The interface contract with A37 does not match A37's frozen note, and it duplicates A37's primitives. A38 calls computeAllocation, transitionOrder, postOrderRefund, postEscrowRelease and expireUnfunded. A37 exposes previewAllocation, lockAllocation, getLockedFile, excludeAllocationLine, computeRefundBatch, executeRefundBatch and settle. A37 already drafts the allocation-lock approval (orders.allocation.lock, CAPM->CFO 4E), drafts the scale-back and exclusion refund batches in its own refund_batches table, runs the orders.refund_sla clock and issues the allotment confirmation inside settle. A38 re-specifies all of these: its own allocation.lock draft, refund_batch/refund_line tables, a refund.pay clock, a refund_overdue alert and confirmations. The result is a second allocation approval, duplicate refund batches or alerts, or calls to functions that do not exist. The 'exactly one request' oracle cannot hold.",
+   "fix": "Rewrite the orchestration against A37's real exports. Lock through lockAllocation (A37 drafts the approval). Refunds go through computeRefundBatch/executeRefundBatch: drop A38's refund tables, clock and alert. Exclusion goes through excludeAllocationLine. Settle goes through settle(order_id,{register_entry_id,register_version_id,token_delivery}), so F9 reuses A37's allotment confirmation record and hash. Anything missing (for example expiry at close) is a recorded change on A37, not an invented name."
+  },
+  {
+   "severity": "high",
+   "issue": "The soft-cap and hard-cap tests compare the wrong quantity. F1 compares funded_total_cents with soft_cap_cents, and the hard-cap trigger uses hard_cap_cents. R2 defines funded_total_cents as including the 0.5% fee, while A36 defines the caps in units (soft_cap_units, hard_cap_units) at price, excluding fees. An offer up to 0.5% short of the soft cap in units would wrongly finalise, so the one-cent G11 boundary oracle is built on the wrong basis. The '64% of 75%' timeline figure is skewed the same way.",
+   "fix": "Test the soft and hard caps on units (A36's soft_cap_units and hard_cap_units) or on subtotal cents excluding fees. Name the field, and keep fee-inclusive totals only for refund conservation. Add a boundary case where subtotal < soft cap <= subtotal + fees, which must revert. Compute the timeline percentage from units and state its rounding rule."
+  },
+  {
+   "severity": "high",
+   "issue": "Refunding a recipient who becomes ineligible after escrow release has no money source. Exclusion point 3 and the after-issue path come after F4 has released offer_escrow to payout_clearing/the trustee. The spec still refunds the excluded line 'from offer_escrow', which is zero by then, so A16 refuses with LDG_INSUFFICIENT_AVAILABLE. The money-conservation property with random exclusion points cannot pass, or a builder will invent an unapproved journal.",
+   "fix": "Specify the post-release refund leg. Either (a) hold the release in payout_clearing until the register ack and refund via a payout_clearing/investor_cash journal under the exclusion approval, or (b) have the trustee fund it through the redeem, as a trustee receivable A39 tracks with its own clock. Name the accounts, the approval and the ordering, extend the conservation property and the gate matrix to cover it, and flag it as a counsel or treasury question if it depends on the trust deed."
+  },
+  {
+   "severity": "high",
+   "issue": "SM-04 does not allow two paths the spec requires, yet the pass criteria require every forbidden SM-04 pair to be refused. The 'abandon' path (revert at or before escrow_release_pending) happens after F2 has moved the offering to finalising, and SM-04 has no finalising->failed. The CAPM revert of a live offer and close_early need live->closed or soft_cap_reached->closed before the end date, but SM-04 guards those with 'end date and soft cap missed' and 'end date or hard cap'. A36's transition() will refuse them. SM-05 is also inconsistent: F0 uses eligibility_check->cancelled (not in SM-05), and 'Requirements covered' lists allocated->refund_pending for partial allocations while F2 and A37 keep partials in allocated.",
+   "fix": "Either forbid these paths (revert only while SM-04 is closed; close_early only via an A36 end-date change) or record them as SM-04 extensions in A03/A36 with owner sign-off, and base the state-coverage criterion on the extended table. For SM-05, adopt A37's recorded reading and drop, or formally add, eligibility_check->cancelled."
+  },
+  {
+   "severity": "medium",
+   "issue": "The A28 interface named in the spec does not exist. requestMint(...) and checkAllowList(...) are not in A28, which exposes POST /v1/token-ops/operations (it creates the A14 draft itself) plus /submit, /precheck and /broadcast, with broadcast open to the SVCA principal for A38. A38 never says who broadcasts after the V2 quorum. It ignores A28's open gap on the mint row's checkers (the product map's 'Mint or batch mint' is TOKO->CFO(+CCO) 4E+Q, and the CEO question is open). J04 step 10's TOKO actor is not placed anywhere.",
+   "fix": "Bind F6 to A28's real routes or exports, passing A38's allocation.mint approval id as the existing approval (no second draft). State who calls /broadcast (svc-settlement or TOKO on ADM-14) and map J04 step 10's TOKO actor to it. Cite A28's checker-set gap as the same open decision."
+  },
+  {
+   "severity": "medium",
+   "issue": "The mint-queue freeze is a per-run column (settlement_run.mint_queue_frozen), yet the spec says it refuses every later mint for the vehicle, including other offerings' runs and corrections. A28's not-from-file mints never read it. It also duplicates A20's vehicle-level recon_halt, which assertClear('mint') already enforces. A38 subscribes to recon.run.completed and recon.break.closed as outbox events, but A20 defines them only as audit events.",
+   "fix": "Use A20's vehicle-level recon_halt through assertClear/isHalted as the freeze, or a vehicle-keyed table that A28's precheck also reads. Either add recon.run.completed and recon.break.closed as A20 outbox events as a recorded change, or poll A20's run-by-trigger_ref query."
+  },
+  {
+   "severity": "medium",
+   "issue": "Dependencies miss interfaces the spec and its criteria use. A104 (MCP server) is not an ancestor, yet the spec cites 'A12's generator' and a pass criterion needs the MCP catalogue to list every route. A42 is not an ancestor, yet the late-ineligibility challenge has A42 restrict an investor. A39, A47 and A43 are used through stubs, so the J04 'confirmation PDF generated' hook can pass with a stub recorder.",
+   "fix": "Replace A12 with A104, and either add A104 as a dependency or move the MCP check to A100. Drive the late-ineligibility challenge through A19's G02 fixture or A22's sanctions sandbox, or add A42. Add A39. Make the confirmation criterion assert A37's allotment confirmation record and hash."
+  },
+  {
+   "severity": "medium",
+   "issue": "D04/G22 coverage for staff and sponsor agents is only 'behaves exactly as its human as maker'. Nothing requires G22 token limits (per-action and daily amount caps, allowed trusts, time windows, IP allow-list) on agent drafts of refund batches or mints. A101's sensitive-action notice, anomaly signals and kill-switch refusal are absent. Scopes are named as module ids (M05, M09, M11) rather than A03 scope strings.",
+   "fix": "Add tests: a token without the vehicle in its allowed trusts, or with a per-action cap below the batch or mint total, is refused by evaluateG22 before any A14 draft. A token draft triggers A101's notice to the human. A revoked or kill-switched token fails within one request. Name every route's x-realx-scope from A03's catalogue."
+  },
+  {
+   "severity": "medium",
+   "issue": "The approval binding matrix cannot be measured as written: it asserts equality with product-map rows that do not exist for settlement.exclude_after_issue, settlement.trustee_ack and offer.close_early. The after-issue redeem also conflicts with A18: A18 requires approval object_ref = instruction reference and lists REGO (by hand) as the redeem caller, while A38 submits the redeem as svc-settlement with reference 'manual: registry_correction'.",
+   "fix": "List the three new A14 policy rows as additions seeded via A03/A14 (recorded change, owner sign-off) and assert against that list, or map exclude-after-issue onto the product map's 6E register-adjustment row. Register svc-settlement as an A18 redeem caller and set object_ref to match A18's rule."
+  },
+  {
+   "severity": "medium",
+   "issue": "Seed changes fall outside the owned path and reopen choices A06 already made. A06 has Unley Road closed on 21 Sep at 91% with the allocation locked, OP-7730 pending and the listing change renumbered to APR-2278. A38 reopens that choice and gives 'seed reconciliation' to its sub-agent 4, but packages/db/seed/ belongs to A06. Under A38's step order, a waiting OP-7730 also needs Unley Road's escrow release and a register ack for 9,100 units in the seed, which A06 does not state.",
+   "fix": "Reference A06's resolution. List the seed preconditions OP-7730 needs under A38's step order (escrow released, issue acked for 9,100 units, allocation.mint = APR-2279) and send them to A06 as a recorded change request; A38 does not edit the seed."
+  },
+  {
+   "severity": "medium",
+   "issue": "F3 hard-codes the fee as mulBp(..., 50, 'half_up'), but fee_bps is a per-listing parameter from the rule pack (50 bp is only the default). Refunds would be wrong for any non-default fee, and the sum-only conservation property would not catch it.",
+   "fix": "Use the offering's fee_bps via A37's computeRefundBatch. Add random fee_bps values to the fast-check property and a named case with a non-default fee."
+  },
+  {
+   "severity": "low",
+   "issue": "F10 writes a runtime evidence file to app/evidence/settlement/<run id>.json. That is outside the owned path and mixes runtime output with the gauntlet's evidence manifests.",
+   "fix": "Store per-run evidence in a module table or in an A10 audit payload."
+  },
+  {
+   "severity": "low",
+   "issue": "The 6-10 h estimate looks low for two durable sagas, a chaos harness at every seam, a 10,000-case fast-check, three re-check points plus the after-issue path, three read models and a four-sub-agent build. A37, the smaller primitive layer, is 10-14 h, and A38 is on the critical path.",
+   "fix": "After removing the duplications, re-estimate to around 10-14 h, or split the revert pipeline and read models into a sibling node. Update the graph and the critical-path figure."
+  }
+ ]
+}

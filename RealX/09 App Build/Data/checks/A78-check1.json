@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The step 1 KPIs and the checkpoint table hard-code figures that contradict A06. A06 correction row 6 says ADM-01 computes 'Live offers 2', not 3. A06 locks escrow at A$3,513,200.00, not A$3,048,880.00. A06 row 75 says client money is derived from the generated population and not locked, so A$18,420,316.44 is not a locked figure. verify:operator uses three different --seed strings, so a correct build fails step 1 and the checkpoints.",
+   "fix": "Read every before-figure from A06's seed manifest for the seed in use. Assert only A06's locked invariants plus 'after = before + traced journals'. Change step 1 to 'Live offers 2' and record the design's '3' as a seed-correction finding. File the same conflict on A66."
+  },
+  {
+   "severity": "high",
+   "issue": "The OP-7730 signing path breaks A15's P9. APR-2279 was approved by CFO and CCO (A06). P9 removes the approval's checkers from the signer set, and V2 is TOKO, CCO and CFO, so Helen Tran (CFO) cannot be the second signer and only Kai can sign. The spec requires Helen to sign and P9 to pass, so a correct build fails and a build that weakens P9 passes. OP-7731 and APR-2288 have the same problem.",
+   "fix": "Settle this at Specify with A06 and A15. Reseed the checkers so they are not V2 members, or seed a second eligible V2 signer, and name that signer in §5. Add a negative: an APR-2279 checker who is a V2 member tries to sign and is refused with the P9 code, and the meter does not move."
+  },
+  {
+   "severity": "high",
+   "issue": "The clock script does not hold together in one run. After the OP-7731 move to 24 Sep 09:10, the 72 h TTL probe goes past the 26 Sep bound. It also expires APR-2286 and APR-2290, which contradicts the checkpoint 'still pending'. It expires the 24 h staff token and fires extra escalations, which breaks 'exactly once'. The five spec files share state, but no order, worker count or reset points are given.",
+   "fix": "Add an ordered timeline table: platform time per step, spec file and checkpoint. Run the main run serially (workers=1, project dependencies). Run the TTL, KYC-SLA and OP-7731 timelock probes as separate sub-runs after preview:reset, each with its own expected outcomes."
+  },
+  {
+   "severity": "high",
+   "issue": "The four 'maker as checker' refusals do not test segregation of duties. Priya, Grace, Sam and Ben do not hold the checker role, so a build with no maker-identity check still refuses all four through the role check. A14 does not fix which check runs first, so APR_MAKER_IS_CHECKER can legitimately come back as APR_ROLE_NOT_HELD.",
+   "fix": "Add a matrix and pass-criteria case where the maker holds a checker role at draft time. For example, Kai (TOKO) drafts a rule-pack change whose checkers are CCO + TOKO and tries to approve it, and must get APR_MAKER_IS_CHECKER. For makers without the role, settle A14's precedence at Specify or accept either code."
+  },
+  {
+   "severity": "high",
+   "issue": "The wrong person takes the trustee seat on APR-2292. GYM01 is NLC's trust (own AFSL), but the seeded TP-RE persona is YBP's hired RE, which has no standing on GYM01. A correct build refuses that persona, and a build that accepts any TP-RE across tenants passes. The A105-or-SDK branch is dead code because A105 is an ancestor through A65, and it only gives the builder an SDK bypass.",
+   "fix": "Name GYM01's trustee principal as A14 and A33 resolve it, and require the owning surface. Remove the SDK fallback. Add a negative: YBP's TP-RE tries to decide APR-2292 and is refused."
+  },
+  {
+   "severity": "medium",
+   "issue": "The MCP parity reads are compared with Ben's reads from steps 2 and 5. The state has changed since then (alerts resolved, dead letter replayed, a new recon run), so 'row for row' fails on a correct build.",
+   "fix": "Take a paired read: Ben's session and the agent's MCP call read the same resources at the same frozen platform instant, with no mutation in between. Only actor, token_id and on_behalf_of may differ."
+  },
+  {
+   "severity": "medium",
+   "issue": "'Refused on both API processes, 20 of 20' cannot be tested. A23 runs a single api container, and A78 may add no service.",
+   "fix": "Define the two processes as the api and mcp containers. Leave the multi-replica property to A12 and A103, or file a fix item on A23 or A61 for a second api replica with a named host port."
+  },
+  {
+   "severity": "medium",
+   "issue": "The gated ADM-30 capture uses Jordan (CCO) with APR-2291 selected and expects 'you are not the maker, so you can approve' and the Approve button. APR-2291's only checker is CFO, and A66 shows that slot only to eligible checkers. A correct build fails the text gate, and a build that wrongly makes CCO eligible passes.",
+   "fix": "Capture Jordan with APR-2292 selected (CCO is in its 6E set) and cite the list differences as seed corrections. Alternatively, record the APR-2291 SoD-note region as a cited finding instead of a text gate."
+  },
+  {
+   "severity": "medium",
+   "issue": "The SUPER toggle 'refused at creation, no approval request exists' conflicts with A21 and A14. A21's toggle route opens a flag.toggle draft, and A14 turns a hard precheck failure into prechecked -> rejected with the row kept. The code is hedged, although A69 already names G21_NO_BINDING. The route (the UI switch is disabled) is not stated.",
+   "fix": "Through the SDK as Lena, assert G21_NO_BINDING either before any row exists or as prechecked -> rejected, as settled at Specify. Also assert that it never reaches a checker, that no flag changes, and that the console shows the disabled switch with A69's sentence."
+  },
+  {
+   "severity": "medium",
+   "issue": "The SM-00 coverage claims approved -> expired from the TTL probe, but the probe decides a request that is still pending. In the catalogue, expiry exists only from approved. The pending-request expiry and APR-2285's checker reject from prechecked both depend on A03 extension (c), which is still open.",
+   "fix": "Make the TTL probe approve a custody-bound request, leave it unsigned, move the clock past 72 h and assert approved -> expired plus a sign refused with P1_EXPIRED. State the expected transitions under both outcomes of extension (c)."
+  },
+  {
+   "severity": "medium",
+   "issue": "The suite depends on page objects 'exported by A66 to A77', but only A66 commits to them, so PAGE_OBJECT_MISSING will block the run. expected-tiles.json is generated from A66's tiles.ts, an apps/console source the lint forbids and the same map that drives the rendering, so the tile check is circular.",
+   "fix": "Own the page objects in e2e/operator/pages/, or file fix items on A67 to A77 before the build. Generate expected tiles only from A03's matrix and A06's roles, with a tile catalogue kept in this node."
+  },
+  {
+   "severity": "medium",
+   "issue": "§11 'adds an admin route to prototype-driver' means editing A61's owned e2e/preview/shots/prototype-driver.ts, which breaks the owned-path rule.",
+   "fix": "Put the admin navigation in e2e/operator/shots/admin-driver.ts, importing A61's helpers read-only, or file a fix item on A61."
+  },
+  {
+   "severity": "medium",
+   "issue": "The refusal matrix is underspecified. The 'sibling agent of the checker's team' has no seeded principal (A06 seeds only treasury-drafter), the SUPER self-grant has no code, and the pass criteria say at least 12 cases while the matrix lists 10.",
+   "fix": "Replace the list with a table: case, A06 principal, request, route and expected code. Seed or create the sibling agent, name A67's SoD code, and make the count match the rows."
+  },
+  {
+   "severity": "medium",
+   "issue": "Step 12 approves 'the pending data-room grant', but A76's seed has no pending grant. The policy is CCO maker and SECO checker, and the spec names neither.",
+   "fix": "Jordan (CCO) creates the grant on ADM-26 for the seeded TP-AUD, Jordan's own approve is refused, and Aisha (SECO) approves with a hardware key. Add these to the persona table and the refusal matrix."
+  },
+  {
+   "severity": "low",
+   "issue": "§7 expects the same chain head from a same-seed re-run. WebAuthn signatures and request ids are random on each run, so the head cannot repeat.",
+   "fix": "Drop the claim. Assert that the chain verifies, that A10 and ADM-31 agree, and that the head equals GET /v1/audit/head."
+  },
+  {
+   "severity": "low",
+   "issue": "Spec point (a) says A06 has no PART person. A65 already lists PART, VALO, MKTG, IRCM, PROP, ASTM and INVM personas, and §10 does not say which persona set console.ts uses.",
+   "fix": "Reuse A65's persona set for §10 and the PART step, and narrow spec point (a) to TAXO if PART is already provided."
+  }
+ ]
+}

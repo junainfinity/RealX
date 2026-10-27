@@ -1,0 +1,110 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "J06 path B steps 4-5 can't be driven on SM-08's edges, yet the pass criteria require 19 of 19 transitions and 'no transition outside the A03 tables'. Step 4 mixes per-line states with run-level states. Line 1 goes 'partially_failed -> retrying -> executed for that line', then line 2 goes 'partially_failed -> manual_payout -> executed'. At run level, SM-08 has no retrying -> partially_failed edge and no retrying -> manual_payout edge. (A40's retry rule itself moves the run of a still-failing line from retrying to manual_payout, which is not in the table.) Step 5 says that after the planted mismatch (reconciling -> partially_failed) the run 're-reconciles and moves to closed', but SM-08 has no partially_failed -> reconciling edge.",
+   "fix": "Rewrite steps 4-5 as exact run-level edge sequences that exist in SM-08, splitting them across separate runs if needed. Path B run: executing -> partially_failed (one transient line) -> retrying -> executed -> reconciling -> partially_failed (mismatch) -> retrying or manual_payout (name which) -> executed -> reconciling -> closed. Variant run: executing -> partially_failed (non-retryable line) -> manual_payout -> executed -> reconciling -> closed. Add spec point (g): A40 and A03 must confirm the edge a run takes when a retried line fails again, and how a run leaves partially_failed after a reconciliation mismatch. Any new edge is an A03 extension."
+  },
+  {
+   "severity": "high",
+   "issue": "The J06 negative 'execution attempted after the payment file was regenerated with one line changed (the run stays funded)' can't be built under this node's own rules, and its expected result contradicts A40. The suite has no import of services/db/adapters, no SDK write outside parity/, and only A65's /__test allowlist. A40's post-approval trigger refuses any line UPDATE, so the suite has no legitimate way to change a payment file. A40 also checks the hash before funding, and funded -> executing fires automatically, so 'stays funded' is not what A40 specifies. A40 specifies: DST_FILE_HASH_MISMATCH, hash_mismatch true, a Sev1 alert, and reopen to draft as the only way forward.",
+   "fix": "Take this negative out of the builder's scope, since it is A40's oracle and Fable's challenge material. Alternatively, name an exact permitted mechanism (a SandboxControl verb added as a fix item on A40 or A17) and state A40's real outcome: DST_FILE_HASH_MISMATCH, one Sev1, the old approval never executes, and progress only through reopen (4E FINA -> CFO) with a fresh approval. Align Fable's 'Paid is not approved' challenge with the same outcome."
+  },
+  {
+   "severity": "high",
+   "issue": "The operating month is too loosely specified for Fable's expected-morning table (written from the note alone) to match the builder's mornings.ts. First, the scripted mornings are never listed: the table gives only six rows marked 'for example', and the ADM-24 step 'publishes a disclosure update' each morning without saying what. Second, A06 baseline items have no scripted outcome: (1) HAW01's September run waits in RealX review until 16 Nov, well past its 10-business-day due date, so lateness alerts appear. (2) MRN01's September run waits at APR-2291. (3) APR-2285 and APR-2286 pass their SLA. (4) The baseline GYM01 register break contradicts 'never shows a break the day's journeys did not plant'. (5) 14 wholesale certificates expire during the month. (6) Marine Parade's offer ends on 12 Nov with no outcome. (7) Nothing says where the orders that fill J12-A to its hard cap come from. Each of these leaves morning traces nothing explains.",
+   "fix": "Add a normative table of every scripted morning, with its date and full expected trace list in Australia/Sydney time. Add a background disposition table for every seeded pending item (HAW01 and MRN01 September runs, APR-2285/2286/2291, the GYM01 break, the expiring certificates, MPA01's 12 Nov close, ANN01, and the J12-A orders and their source), giving the date, persona and screen that resolves each item, or the alert each morning must show. Define what LEGL publishes each morning, or make that step read-only when nothing is due. Reword the break rule as 'no break except those in the disposition table'."
+  },
+  {
+   "severity": "high",
+   "issue": "The G19 'late-report pause' (J19) has no trigger and no target in the timeline. The product map says 'reporting overdue 10+ days: new offers pause', but J14 files the September attestation on time, with only the insurance renewal outstanding, so nothing makes HCO's reporting 10+ days overdue. The spec also requires 'an HCO go-live requested during the pause' to be refused. However, both new HCO listings go live on 1 Oct, and no HCO listing is scheduled during the J14 window. Fable's challenge invents 'a second HCO listing already in scheduled'. So G19's required refused step can't be built from the note.",
+   "fix": "Add to the timeline: the event and date that start the pause (for example, an HCO attestation left unfiled past A34's grace row, or A34 confirming that an overdue insurance obligation triggers the sponsor pause). Add a third HCO listing that reaches 'scheduled' and has a go-live requested during the pause. State the expected G19 refusal code and the date the pause lifts. Name KST01, J12-A and MPA01 as the live offers that must keep accepting orders."
+  },
+  {
+   "severity": "high",
+   "issue": "The J21 step order conflicts with A48's wind-down checklist. A48 creates the wind-down row only at exit_approved, with steps in a fixed order (halt_published, holders_notified, trustee_control, sale_recorded, and so on), and refuses out-of-order steps with WD_STEP_ORDER. A80 sends the holder notice in step 3 and records winddown.trustee_control in step 4 while HAW01 is still distressed, before the court order moves it to legal_hold -> exit_approved. As written, those steps will be refused.",
+   "fix": "Reorder step 4: LEGL records the court order and the court-directed sale (distressed -> legal_hold -> exit_approved), then TP-RE records trustee control, then INVM starts the sale. State how the checklist's halt_published and holders_notified steps are satisfied, either by the earlier halt and notice or by re-notifying after exit_approved. If trustee control before exit is wanted, raise it as a spec point on A48."
+  },
+  {
+   "severity": "medium",
+   "issue": "HAW01's distress, legal-hold and token_pause halts are never disposed of. Step 7 clears only the manual halt. The distress halt's criterion ('every signal cleared') can never be met on a sold property. So G10's done criterion and the 18 Dec morning have no defined expected state for these halts.",
+   "fix": "Add to step 7 the expected end state of every HAW01 halt: its cause and state, who or what clears it, and the code or approval used. Take this from A48's rule for vehicles in an exit state. If A48 has no such rule, raise a fix item on A48 and mark the assertion pending A48."
+  },
+  {
+   "severity": "medium",
+   "issue": "The halt extension to Tue 29 Dec may break A48's limit. ends_at is at most halt.max_days (default 30) from opened_at, and extensions use 'the same limits'. The halt opens around 16-17 Nov, so 29 Dec is about 43 days later. It could be refused with HALT_END_DATE_TOO_FAR or need halt.open_long (6E) instead of the scripted 4E extension.",
+   "fix": "Derive the extension date from A48's halt.max_days row and its base date instead of hard-coding 29 Dec. Or add a spec point asking A48 which base date applies, and script the 6E path if the limit runs from opened_at."
+  },
+  {
+   "severity": "medium",
+   "issue": "G03 and G21 have no scripted refused step, although the pass criteria require one per gate, and G03's done criterion names two refusals. The J11 month rows cover only the happy path.",
+   "fix": "Add J11 negatives with persona, screen and expected code: an ADM-33 tenant creation attempted before entity, director and 25% owner verification; an SPN-14 invitee attempting an approval before being verified; and a G21 refusal (tenant activation before the licence is verified on ADM-04, or a flag write without an approval id)."
+  },
+  {
+   "severity": "medium",
+   "issue": "The zero/reduced distribution variant has the wrong maker and checkers. The product map and A40 have the asset manager (ASTM) declaring through POST .../declare, with the CFO and a board-member role approving under 6E. A80 has 'the proposer' (Leo Park on SPN-09) declaring, with unnamed approvers.",
+   "fix": "Script ASTM declaring on ADM-19 through A40's distribution.declare_reduced (6E, CFO and board-member checkers). SPN-09 shows the declaration to the sponsor read-only. Cover both kind=zero and kind=reduced."
+  },
+  {
+   "severity": "medium",
+   "issue": "The CEO-row variant runs from ops:reset, where BAY01 September is still at 'calculated'. If A40 compares with the last closed run (August, A$2,560.00), A$3,240.00 is +26.56% and A$3,300.00 is +28.91%, so the +25.00% boundary probe tests nothing.",
+   "fix": "Make the variant close the September run first, or name A40's comparator (last closed or last approved run) and compute the boundary figure from that comparator."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec says A80.actions.json is 'handed to A100', but A100 doesn't depend on A80 (its deps are A61, A65, A78, A12, A104, A99) and its spec never mentions A80. A100 can pass its gate before this file exists.",
+   "fix": "Add A80 as a dependency of A100 (this creates no cycle) and add a line to A100's spec that consumes the file. Or drop the claim and name A88 as the consumer."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several expected refusal codes are given as alternatives ('SPONSOR_APPROVER_MUST_BE_HUMAN or G22_AGENT_NEVER_CHECKER', 'APR_CHECKER_MUST_BE_HUMAN or A48's human-only codes'). A build that returns the wrong node's code, or refuses at the wrong layer, still passes.",
+   "fix": "Pin one exact code per negative from the owning node's error catalogue, and state that the refusal happens before scope evaluation."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 10-14 agent-hour estimate doesn't fit the node's own runtime. One verify:operations run takes about 6 hours (3 x 30 min J06, 3 x 40 min J21, 150 min month, plus shadow and shots). Challenge re-runs it with a fifth seed, and each of up to three fix loops re-runs it in full.",
+   "fix": "Re-estimate at about 20-30 agent-hours, or make fix loops cheaper by re-running only the failing mode plus the month, keeping the three-seed run for Build and Challenge."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec imports page objects that A62, A63 and A64 never promise. Only A66, A74 and A105 mention exporting testing/page-objects.ts. So the sponsor screens J06 path B and J19 drive (SPN-09, SPN-10, SPN-11, SPN-14, SPN-16) have no promised test driver.",
+   "fix": "Name A65's e2e/sponsor step functions as the sponsor-side driver, or raise fix items on A62, A63 and A64 to export page objects."
+  },
+  {
+   "severity": "medium",
+   "issue": "The J21 24 h board-ratification clock is 'asserted absent', but the product map's J21 ADM-34 step says 'Board ratifies within 24 h' with no P2 qualifier. A48 makes the clock P2-only and 'set with counsel'. Asserting absence turns an open question into a tested requirement.",
+   "fix": "Read A48's phase row and assert whatever it says. Record the difference from the product map as a founder or counsel question under HG-LEGAL, not as a standalone pass condition."
+  },
+  {
+   "severity": "medium",
+   "issue": "The J06 legal-hold variant places the hold 'while a funded run waits'. But A40's funded -> executing fires automatically, so a funded run never waits long enough for a 4E distress flag followed by a 4E court order.",
+   "fix": "Place the hold while the run is 'approved' and assert that funding is refused with DST_LEGAL_HOLD. Or specify A40's mid-batch case: the current line finishes, the run stops, and paid lines stay paid."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec lists 'clock read' as part of A65's /__test allowlist, but A65's list has only clock advance, job run-now, the simulated authenticator and SandboxControl.trigger.",
+   "fix": "Read the clock from a public API field, or raise a fix item on A65 to add clock read to the allowlist."
+  },
+  {
+   "severity": "low",
+   "issue": "J21 uses A34's action names (property.court_directed_sale, property.record_court_order), while A70 records that A48's names take precedence for the wind-down half.",
+   "fix": "At Specify, take action codes from A03's approval-code catalogue."
+  },
+  {
+   "severity": "low",
+   "issue": "Three product-map items are neither covered nor recorded as pending: J13's P2 ADM-21 band recalculation, J14's P2 ADM-21 resale-halt review, and J14's 'rates 30 days overdue: Sev2'.",
+   "fix": "Record the two P2 steps as pending A91/A94 in the evidence. Assert the Sev2 alert for J21's rates-overdue signal."
+  },
+  {
+   "severity": "low",
+   "issue": "The J21 burn step names no maker persona; the product map uses TOKO. The product map's J08 also says 'owner quorum for final burns', while A80 uses the V2 2-of-3 quorum.",
+   "fix": "Name TOKO as the burn maker, and raise the final-burn quorum question with A28."
+  },
+  {
+   "severity": "low",
+   "issue": "The 17 Nov adCmd capture gates on exact text matching against a static EXT-B drawing, but the live ADM-01 screen shows changing values that can never match a drawing.",
+   "fix": "Gate text only on static labels and the band copy template. Treat the dynamic tiles as style-only regions."
+  }
+ ]
+}

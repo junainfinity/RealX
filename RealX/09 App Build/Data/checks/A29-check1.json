@@ -1,0 +1,90 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Token-level fallback, freeze, waiver and recoveryAddress are specified twice with conflicting contracts. A28 (frozen) owns SM-13 for forced transfers AND the token-level fallback of a wallet recovery in its transfer_requests table: A29 must only mark a RecoveryRequest 'unrecoverable', then A28 opens a lost_wallet transfer request, submits the old-wallet freeze under its own approval, runs the 48 h queue, the court_order_waiver (6E, TOP_WAIVER_NEEDS_COURT_ORDER; lost-wallet recovery cannot be waived at all) and recoveryAddress plus the A18 register step. A29 instead builds its own fallback end to end (wallet.recovery.fallback, its own waiver wallet.recovery.waive_timelock with RECOVERY_WAIVER_REQUIRED, recovery_type 'court', a local TokenRecoveryExecutor) and says 'A28 replaces that implementation', although A28 neither depends on A29 nor may edit A29's paths. A29 has no 'unrecoverable' handoff. The J09 step-6 TOKO freeze has no maker or policy in A29.",
+   "fix": "Add A28 as a dependency of A29 (no cycle). Delete A29's TokenRecoveryExecutor, the fallback approval chain, the waiver route and recovery_type 'court'. The token_fallback path records the 'unrecoverable' reason and evidence, opens a lost_wallet transfer request through A28's public API, and mirrors its state for ACC-02 (fallback: true). Rewrite the oracle, pass criteria and challenges to prove the handoff (new wallet registered first, linkage recorded). A28's oracle keeps the zero-old-balance, waiver and timelock checks."
+  },
+  {
+   "severity": "high",
+   "issue": "The cancel/dispute design relies on an on-chain action A26 does not have. A26's veto(account, proposalId, ownerSig) needs a current OWNER passkey signature. The RealX guardian can propose, execute and revoke session keys, but it cannot veto. In the lost-passkey case there is no owner passkey, so 'vetoes the on-chain proposal through the RealX guardian in the same request (SGL+R, original approval id)' cannot be built. Reusing the original approval id for a different custody call also clashes with A15's one-approval-one-call binding. A26 also blocks a new proposal until expiresAt (executableAt + 7 days), which the spec ignores.",
+   "fix": "Make the cancel an off-chain block: on 'disputed', A15's policy refuses to sign executeRecovery for that proposalId (only the RealX guardian can execute, so the proposal can never mature). Use the old-passkey veto only when an owner passkey exists. Record and show that a new proposal is blocked until A26's expiresAt. Otherwise escalate to reopen A26 for a guardian cancelProposal. Give protective acts their own SGL+R request, and rewrite the hijack challenge to assert that execution is refused."
+  },
+  {
+   "severity": "high",
+   "issue": "The SM-13 smart-wallet path cannot run on A03's frozen table. (a) A03 says extensions.ts contains exactly its two named extensions, its oracle checks that list, and anything else is a spec defect to escalate. A03 is AM0 and its paths are owned, so A29 cannot 'contribute the extension row' or have it 'requested before the build'. (b) Even with the extension, the smart-wallet path takes checker_approval -> old_wallet_frozen on the CCO decision alone, but the catalogue guard on that edge is 'CFO and trustee'. (c) old_wallet_frozen is redefined to mean 'pending owner proposal', unlike in SM-13, A28 and ADM-15.",
+   "fix": "Decide at plan level before Specify. Either route the smart-wallet path through the table as it stands (legal_review with a light LEGL check, then compliance_approval KYCA->CCO) with a path-conditional guard on checker_approval -> old_wallet_frozen, recorded as a reopen of A03 (spec plus oracle list) with a decision id; or give the smart-wallet path its own internal machine and keep SM-13 for the fallback only. Stop A29 from editing A03, and stop overloading old_wallet_frozen."
+  },
+  {
+   "severity": "high",
+   "issue": "Graph deps miss core interfaces, and the scheduler waits only for declared deps. Not ancestors of A29: A15 (custody ops for the RealX guardian, the V7 record, P4, the one-Sev2 runway rule), A22 (liveness re-verification, screenWallet), A18 (register instruction), A20 (clean recon before closed), A28 (fallback), A06 (seed investor 280 / 3 trusts / 3 passkeys used in pass criteria). The email and sms adapters for the notices belong to A43 (AM3), and the milestone-order rule forbids an AM2 dependency on AM3. So the oracle invariant 'notice per channel kind before timelock' has no adapter when A29 builds.",
+   "fix": "Add A15, A22, A28 (which brings A18 and A20) and A06 to A29's deps in final-graph.json and the note. Give NoticeSender a sandbox implementation inside the wallets module that captures to recovery_notice with a local inbox read, and add A43's later swap to A43's brief and challenges. Remove the 'A08 registry email/sms' wording."
+  },
+  {
+   "severity": "high",
+   "issue": "The same-transaction session-key revocation cannot be built as specified. A12 is upstream and, per its frozen spec, only emits the outbox event agent.mandate.revoked. It cannot import A29's index.ts and has no synchronous hook. Yet the brief, oracle and pass criteria require A12 to call revokeSessionKey through index.ts inside the same database transaction. The build either edits A12 or fails the oracle.",
+   "fix": "session-keys/check.ts reads mandate and token status synchronously through A12's introspect on every session-key op, so the next op fails at once. Handle agent.mandate.revoked, agent.token.revoked and auth.recovery.completed in an outbox consumer that marks the key revoked and submits the guardian revoke. Restate the oracle as: no op admitted after the revocation commits, and on-chain revoke recorded within N s. Or reopen A12 to add registerMandateRevocationHook."
+  },
+  {
+   "severity": "high",
+   "issue": "The registry_status vocabulary contradicts A31 and breaks registration. A29 uses {unregistered, eligible, registered, stale, deleted} and sets 'eligible' once KYC is approved. A31 (frozen) registers only wallets whose status is 'unregistered', moves them unregistered -> registering -> registered, and deletion gives 'deregistered'. Wallets that A29 moved to 'eligible' will never be registered, which stalls J02, J04 step 12 and the fallback's registered-new-wallet rule. ONB-08 labels also conflict ('Pending identity verification'/'Ready to link' against A31's 'Pending identity review'/'Not yet linked').",
+   "fix": "Adopt A31's enum: unregistered, registering, registered, stale, deregistered. Make eligibility a computed can_register field. Take labels from A31/A50 or A03 labels.ts. State that A31 writes registry_status only through a function exported from A29's index.ts, and list that function in A29's interface."
+  },
+  {
+   "severity": "high",
+   "issue": "The guardian model contradicts A26's two-slot RecoveryModule. A26 has exactly realxGuardian (an address) and recoveryPasskey (a non-owner P-256 key on a second device), changed only by setRecoveryPasskey/setRealXGuardian through an owner UserOp. A29 makes second_device 'one of the investor's own wallet passkeys' (an owner, so useless as a guardian), adds a trusted_contact guardian (another investor's smart account) for which A26 has no slot, and calls registerGuardian/removeGuardian verbs A26 does not expose. Trusted contacts cannot be registered on-chain, and the guardian challenges cannot pass against the frozen contracts.",
+   "fix": "Map second_device to the recoveryPasskey slot (a distinct non-owner credential, purpose wallet_recovery) and rename the verbs to setRecoveryPasskey/clearRecoveryPasskey. Make trusted_contact off-chain only (it may start or countersign a RecoveryRequest) or defer it with a Decisions entry, because ONB-08 lists an optional trusted contact. Otherwise escalate to reopen A26."
+  },
+  {
+   "severity": "medium",
+   "issue": "The waiting-period job cannot produce the owner signature. wallets.guardians.activate 'submits the owner-signed registerGuardian UserOp when the period elapses', but an owner signature is a WebAuthn assertion over a userOpHash that binds the nonce, gas and paymaster validity window. A server job 24 h later has none of these, and the spec does not say whether the op is pre-signed or re-signed.",
+   "fix": "Specify either pre-signing at request time (a dedicated 2D nonce key, validAfter = effective_at, paymaster data valid across the window, and a cancel that invalidates the nonce) or a 'confirm guardian' notice that the person signs at effective_at. Add a challenge for a stale pre-signed op."
+  },
+  {
+   "severity": "medium",
+   "issue": "A gas-policy change updates only the off-chain paymaster_policy. A26's RealXPaymaster enforces allowedTargets, perWalletDailyCapWei and dailyCapWei on-chain (set by PAYMASTER_OWNER), and A15's V7 daily_cap is a third copy. An approved ENGO->CFO change leaves the on-chain limits unchanged, and the postcondition checks only the DB hash.",
+   "fix": "The effector also submits the on-chain paymaster owner calls as a custody op under the same approval id. The postcondition compares the on-chain targets and caps and A15's V7 record with the approved payload, and the job alerts on drift. Add a challenge for a direct on-chain cap edit."
+  },
+  {
+   "severity": "medium",
+   "issue": "Guardian-side session-key revocation uses the wrong transport and has no approval policy. The guardian's revokeSessionKey is sent 'through the bundler', but the guardian is an address (A25 gateway / 2-of-3), not the account, so its call is a custody-signed transaction. G13 requires an approval id on every custody call, and no policy is named for these automatic protective revocations.",
+   "fix": "Route guardian revocations through A14/A15 under a named protective policy (for example wallet.session_key.revoke, AUTO or SGL+R, restrict-only, with an approval id). Keep the bundler for owner-signed revokes. Add a pass criterion that every guardian revoke carries an approval id."
+  },
+  {
+   "severity": "medium",
+   "issue": "The D04 non-delegable list is incomplete and staff-agent rules are missing. POST /recovery/{id}/reverify (liveness, non-delegable in A03 delegable.ts) is absent from requiresHuman. The staff routes (triage, legal-review, fallback, waiver, paymaster policy) do not say which a staff agent may call as maker, that legal-review and waiver decisions are never agent acts, or that SoD counts the agent as its human. The challenge expects AGNT_NOT_ALLOWED for an INVESTOR token 'confirming a waiver', which is really a scope/RBAC refusal.",
+   "fix": "Add reverify to requiresHuman. Add a staff-agent table: maker drafting is allowed within the human's role, while legal-review decisions, waiver decisions and every A14 decision get AGNT_NOT_ALLOWED, and SoD treats agent = human. Add staff-token challenges (KYCA, LEGL, ENGO, CCO). Change the investor waiver case to expect the scope refusal."
+  },
+  {
+   "severity": "medium",
+   "issue": "isRegisteredDestination is declared 'the single function A15's P4 and A28's mint path call', but A15 is upstream and A28 is an unrelated sibling. Neither can import A29, and both define their own off-chain registry check. The G01 'done means' cannot be tested in A29 and invites two sources of truth.",
+   "fix": "Specify a provider hook: A15 and A28 expose a DestinationRegistry interface that A29 registers isRegisteredDestination into at boot, with a test that A15 P4 uses that provider. Otherwise move the wiring check to A49."
+  },
+  {
+   "severity": "medium",
+   "issue": "The binding between the session key and A12's consumed fresh assertion ('covers the same key and policy') is undefined. A12's mandate hash is not specified to include the agent's session public key, fresh assertions are single-use, and the agent key may be generated after the mandate exists. The check cannot be implemented or tested without guessing.",
+   "fix": "State that A12's canonical mandate payload includes session_key_policy_hash and the session public key (an A12 spec change if needed). Otherwise drop the clause and rely on the owner-passkey-signed registerSessionKey UserOp whose policy hash must equal the mandate's."
+  },
+  {
+   "severity": "low",
+   "issue": "The 24 h guardian waiting period is invented (the sources say only 'a waiting period') but is treated as founder-escalation material. Wallet risk is stored as not_applicable_in_phase in P1/P2, while product map J02 step 9 and the ADM-13 risk column expect a P1 score. This conflict is decided silently.",
+   "fix": "Record both as proposed defaults in Decisions.md (founder-visible) and name them in the Specify step."
+  },
+  {
+   "severity": "low",
+   "issue": "The design strings are misquoted. The ONB-08 DropBox title is 'Create passkey wallet' with the caption 'Uses Face ID, Touch ID or Windows Hello', and the second CheckRow has the sub-line 'Required to receive tokens'. The spec's own label strings have no design source.",
+   "fix": "Quote the design exactly. Source non-prototype labels from A50 or A03 labels.ts."
+  },
+  {
+   "severity": "low",
+   "issue": "The interim direct kyc_case table read (bypassing A30's public interface, which A31 forbids) has no scheduled switch-over to A30.",
+   "fix": "Use an injected KycStatusProvider with a fixture, and add the switch to A30's or A49's brief with a test."
+  },
+  {
+   "severity": "low",
+   "issue": "The 8-12 h estimate is light for the scope (bundler adapter plus conformance, the wallet module, paymaster, guardians, two SM-13 paths, session keys, notices, six screen contracts, 10,000-sequence property runs, compose e2e). Siblings A26 and A28 are 10-14 h.",
+   "fix": "Keep 8-12 h only if the fallback moves to A28. Otherwise use 10-14 h or split out the bundler and paymaster."
+  }
+ ]
+}

@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The agent-marker link cannot be built as specified. A58 links POR-04's 'by your agent {name}' marker to ACC-05 'filtered by its public prefix only'. A60 forbids the prefix, name or secret as a path or query parameter (A52's allow-list test enforces this) and expects `/agents/[tokenId]#activity` with the TOK- id. A47's investor `placed_by` has no token id, only `{kind, agent_name, token_prefix}`. The ACC-05 route also conflicts: A52 has `/account/agents`, while A60 builds it under `(investor)/agents/`.",
+   "fix": "Ask A47 (follow-up) to add `placed_by.token_id` to the investor read. Link through A52's ACC-05 route helper with `{tokenId}` plus `#activity`, never with the prefix. When there is no id, show the marker without a link. Add a test that the href contains no prefix. Raise the route mismatch with A52 and A60."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec contradicts A50's drawings, while the pass criteria require zero fidelity differences. POR-02 checking band: A50 has it grey with 'your tokens are safe'; A58 has it amber with exact text. Sell: A50 has 'Sell (resale · 2027)' outlineSoft opening a PreviewBanner; A58 has outline-ink and disabled. POR-03 KPIs: A50 has FY27 to date / FY26 total / Tax withheld; A58 has Gross / Withheld / Paid. A58 defines no POR-03 empty text, although A50 draws one. `design-ext:POR-04 columns` does not exist in A50.",
+   "fix": "Settle each conflict at Specify with one source of truth, changing either A58 or A50. Add the POR-04 Reference, Confirmation and agent-marker cells to A50's scope as a follow-up. Exclude those cells from the zero-diff criterion until they are drawn."
+  },
+  {
+   "severity": "high",
+   "issue": "The POR-01 empty-state endpoint `GET /v1/public/vehicles?status=open` does not exist. The real read is A36's `GET /v1/public/offerings?status=open`, and A36 is not in A58's dependency closure. The SDK is said to be generated only from A47's and A41's OpenAPI. The Buy and 'Buy more' links go to `/invest/{code}`, which is not a route; PUB-04 is `/investments/[code]`.",
+   "fix": "Use A36's offerings read through the full SDK and add A36 as a dep. Take PropertyCard from A05. Link through A52's route helpers for PUB-04 and INV-05. Add a Playwright check that every link on the five pages resolves to a registered route."
+  },
+  {
+   "severity": "high",
+   "issue": "The Sell reason contract is under-specified. A47's `can_sell` is a boolean with an unnamed reason code and no precedence rule. In P1, `board_closed` is always true, so the challenge that expects 'Trading halted', 'Not available' and 'Locked until 3 Oct 2026' fails unless precedence is defined; otherwise the browser has to derive the reason. `partially_frozen` has no specified Sell rendering.",
+   "fix": "Have A47 name the field (for example `sell_block_reason`) with the precedence halted > frozen > locked > board_closed. A58 renders only that field. Add a table test over all combinations, including P1 with the flag off. Specify how a partially_frozen holding renders."
+  },
+  {
+   "severity": "high",
+   "issue": "POR-01 is missing product-map components: the 'Monthly distributions chart', and the alerts for an expiring certificate (G04), an open vote (P2) and a proof-of-property flag (G19). A58's alerts cover only lock-in, checking and delayed, and A47's `alerts[]` carries only those.",
+   "fix": "Add the alert kinds certificate_expiring (A32), proof_of_property_flag (A34/G19) and vote_open (P2, hidden in P1), each with text, a link and a state-matrix entry. Ask A47, or A32 and A34 as deps, to supply them. Either render `income_series[12]` on POR-01 or record in A00 that the chart lives on POR-03, with a link test."
+  },
+  {
+   "severity": "medium",
+   "issue": "The product-map state requires withheld tax to show for foreign residents as well as for no TFN; only no-TFN is specified. POR-07's tile uses A47's two-value `tfn_status`, while POR-03 uses A41's `withholding_applies`. The two screens can disagree, and a foreign resident with non-zero withholding would get a green 'TFN on file' caption.",
+   "fix": "Drive all TFN and withholding captions from A41 `me/tax-profile` (`withholding_applies`, `rate_reason`). Add a foreign-resident fixture (MIT withholding at 15%) to the challenges and the state matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "The POR-03 withheld-cell popover needs a `run_id`, but A47's `me/distributions` items do not carry one.",
+   "fix": "Ask A47 (follow-up) to add `run_id` and the line id to those items, or restrict the popover to POR-02's income_lines."
+  },
+  {
+   "severity": "medium",
+   "issue": "The filters need query parameters A47 lacks. There is no `kind=` on `me/statements` (POR-07 kind chips). POR-04 type groups need a multi-value `type`. `adjustment` and `recovery` are unmapped. The spec does not say whether POR-03 `series` follows the fy and vehicle filters. A client-side filter over paginated data would drop rows.",
+   "fix": "Ask A47 for `kind=` and a multi-value `type` or `group`, and state that `series` follows the filters. Map every type to a group. Add a pagination property test per filter."
+  },
+  {
+   "severity": "medium",
+   "issue": "Vehicle code resolution is wrong: `packages/domain/screens.ts` holds screen codes, and A47 takes a vehicleId. The escrow application case contradicts itself: Kent Street is a 404, so the `not_issued` band can never be reached. The SM-07 pass criterion asserts rendering for eligible_empty, deregistered and recovered_out, but the note never specifies it.",
+   "fix": "Resolve code to id from `me/portfolio.holdings[].code`, or have A47 accept a code. Decide whether escrow applications show (a row plus the not_issued view) or not, and align the challenge. Specify the row, chip and Sell state for every SM-07 state."
+  },
+  {
+   "severity": "medium",
+   "issue": "The challenge fixtures do not match A06. The Gympie Road break is on GYM01, not Bay Road, and Alex does not hold GYM01. The estate holder (INV-00377) is a different investor from Alex, so one POR-01 cannot show the halted, frozen and locked rows together.",
+   "fix": "Rewrite per investor: Alex with Bay Road halted via `-DRIFT+1` and Hawthorn Grove locked, and INV-00377 frozen. Or state that the challenge uses a composed SDK fixture."
+  },
+  {
+   "severity": "medium",
+   "issue": "Dependencies are missing: A23 (Docker Playwright J17), A06 (seed fixtures and figures), A35 (document downloads), A36 (open offerings) and A60 (the ACC-05 target, a peer in AM5). None is in A58's closure.",
+   "fix": "Add A06, A23, A35 and A36 to deps in final-graph.json and the note. Either add A60 as a dep or rely only on A52's registered route plus a contract test."
+  },
+  {
+   "severity": "medium",
+   "issue": "Joint and entity accounts (D04 sub-types) are unhandled. 'by your agent' and kind 'you' assume a single person, so a co-holder's or another signatory's agent is misattributed. D04's audit wording is 'agent on behalf of <person>'.",
+   "fix": "Ask A47 to add `placed_by.on_behalf_of_display`. When that person is not the viewer, render 'by {person}'s agent {name}' and 'by {person}'. Add joint and entity fixtures."
+  },
+  {
+   "severity": "medium",
+   "issue": "Owned-path rules contradict the brief. The pass criteria allow only the two owned paths to change, but the brief registers routes in A52, puts lint rules in the root ESLint config and writes evidence to app/evidence.",
+   "fix": "State that the routes are only asserted, since they already exist in A52's table. Put the lint config inside features/portfolio and load it by A01's convention. Mark the evidence paths as exempt under App Gauntlet §4."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec says a confirmation opened from POR-04 or POR-07 hits the same URL, but POR-04 uses `/me/transactions/{id}/confirmation.pdf` and POR-07 uses `download_url` (`/me/documents/{id}`).",
+   "fix": "Use one route for both, or change the criterion to same bytes and the same sha256."
+  },
+  {
+   "severity": "low",
+   "issue": "The caption 'Paid to your wallet by the 10th business day' is a hard-coded service claim (G17). The FY chips come 'from the seed's FYs' rather than from the API.",
+   "fix": "Source the caption from an A40 or A47 policy string reviewed under G17. Take the FY list from the API."
+  },
+  {
+   "severity": "low",
+   "issue": "The parity.json scope names (`portfolio:read`, `statements:read`, `tax:read`, `public:read`) are not in A12's A03 cell-id format, and `public:read` does not exist.",
+   "fix": "Generate the scope strings from each route's OpenAPI `x-realx-scope` and mark public routes as `auth: none`."
+  }
+ ]
+}

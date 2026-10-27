@@ -1,0 +1,90 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The oracle flag is wrong for a node that moves money. A95 pulls money from the investor's bank account every month by PayTo debit, decides how much to collect and spends it through orders. Yet the graph and the frontmatter say oracle: no. The conventions require oracle: yes wherever money moves, and the orchestrator reads the graph flag to decide whether the Oracle stage runs. The spec's own 'Oracle rule' paragraph asks Fable to write hidden tests anyway, so the flag and the text contradict each other. If the orchestrator follows the flag, every pass criterion that cites gauntlet\\hidden\\A95 either cannot be met or ends up graded by the builder.",
+   "fix": "Set oracle: true for A95 in final-graph.json and app-graph.json and oracle: yes in the frontmatter. Replace the 'this is not an oracle node' paragraph with the standard Oracle rule sentence, followed by the list of hidden suites the spec already names."
+  },
+  {
+   "severity": "high",
+   "issue": "A17 cannot match a PayTo collection to the investor as specified. Step (1) of A17's matching engine resolves only a PayID or a virtual-account reference; anything else becomes 'held: unknown_destination'. A95 sets the payment reference to run_id, says the port never sees a PayID, and waits for payment.credited. No agreed loop changes A17's matcher to resolve rail=payto credits by agreement reference. Every run's money would land in the held queue, every run would go funding_failed, and J18 could only pass if the builder edited A17 outside its owned paths.",
+   "fix": "Add loop A17.2 to the agreed-loop list: for rail = payto, step (1) looks up the provider agreement reference through a resolver that A95 registers (payto_agreement to the investor's virtual account). Steps (2) to (5) stay unchanged: restriction hold, exact name rule, one journal, payment.credited. Add a hidden test that a credit with an unknown agreement reference is held with no journal."
+  },
+  {
+   "severity": "high",
+   "issue": "Auto Invest orders in trusts the person already holds have no working path through G12. A37 accepts G12 only through per-order acknowledgements or an agent mandate's standing consent. A35's delegated acknowledgement needs a token actor, an A12 mandate, the agent's own document_open rows and the CQ-02 parameter. A37's orders.agent_standing_consent defaults to wholesale_only, so it is off for retail. SVCA-AUTOINVEST is none of these, and the only agreed A37 loop (A37.1) adds a confirmation kind, not a G12 path. The builder must either bypass G12 or turn every line into a proposal, and J18 month 1 ('places orders in two held trusts') depends on which.",
+   "fix": "Specify loops A35.1 and A37.2. They should add an acknowledgement row with actor SVCA-AUTOINVEST on behalf of the holder, with standing_consent_id mandatory. The holder's own document opens at consent time replace the agent-open requirement. The CQ-02, first-purchase and new-version checks stay the same, and a named default applies (orders.autoinvest_standing_consent, wholesale_only). State that under the default a retail line in a held trust becomes a proposal, and add hidden vectors for each refusal reason."
+  },
+  {
+   "severity": "high",
+   "issue": "Retail run orders contradict the run's money invariants. Under A90's cooling-off, A37's default fund_at = after_reflection leaves a retail run order in reflection_period with no money moved. The spec still requires 'no unfunded run order survives the run' and counts the order in placed_cents while the cash stays withdrawable. When the timer ends the order may expire, and 'awaiting_funds is cancelled at once' only covers placement time. The fast-check property as written fails on any retail line, or pushes the builder to fund during cooling-off.",
+   "fix": "Add a run-line decision placed_pending_reflection with its own reflection_cents term, so that placed + reflection + fees + cash_left = budget. Exempt these orders from the 'unfunded' rule: at timer end they fund or expire under A37's rules, with a run-line update and a notification. State that this cash is not reserved, have INV-04 show 'awaiting cooling-off', and update the property test and the J18 fixtures."
+  },
+  {
+   "severity": "high",
+   "issue": "Amending an active plan has no modelled lifecycle. The plan machine only has draft -> pending_confirmation, and plan_version has no state column. Yet PATCH creates versions, widening needs a signature, and an agent's widening 'moves the draft to pending_confirmation'. In the challenge, where an agent raises an ACTIVE plan from A$500 to A$5,000, the transition table either refuses (AIP_ILLEGAL_TRANSITION) or the builder invents a state. There is also no way out of pending_confirmation when A12's confirmation is rejected or expires, and no rule for a joint account with signing_rule = both confirming an agent's widening.",
+   "fix": "Give plan_version a state (pending_confirmation, effective, superseded, rejected, expired) and give the plan pending_version_id and confirmation_id. A widening under a token inserts a pending version while the plan keeps its active or paused state. The version becomes effective only on A12's approved resolution with the required assertions (both holders for signing_rule = both); otherwise it is rejected or expired. Add pending_confirmation -> draft on rejection. Add all of these to the refused-pair tests."
+  },
+  {
+   "severity": "high",
+   "issue": "The narrowing/widening classification lets an agent widen a plan without a passkey. An empty states[] or sponsor_include means 'all', so removing the last state (['NSW'] -> []) or emptying the include list widens the plan to everything. Removing a sponsor exclusion, raising max_per_listing or max_per_property, and changing run_day are not classified. A literal build would apply these at once under a token.",
+   "fix": "Specify one pure function isNarrowing(old, new) that returns true only when every field is provably no more permissive. For example, a states list is narrower only if the new list is non-empty and a subset of the old one. Anything else, including a run_day change, is widening and returns 428. Add a fast-check property over random pairs of versions, plus explicit vectors for ['NSW'] -> [] and for removing an exclusion."
+  },
+  {
+   "severity": "high",
+   "issue": "Tipping-off equivalence cannot be achieved as specified. An A42 restriction leaves the plan active with its runs skipped (the suspension is optional: A42 'may' suspend). A staff suspension moves the plan to suspended and also suspends the PayTo agreement, which the payer can see in their own banking app. The staff SGL+R suspension also reverts on a ratification lapse, which a restriction does not. GET /plan and the bank therefore show different states, but the challenge demands byte-equal responses.",
+   "fix": "By rule, a restriction always applies the same suspended transition and copy as a staff suspension. Choose one agreement policy for both cases: neither suspends the agreement, or both do. A restriction-backed suspension never auto-reverts while A42's flag is set. List the investor-visible fields that must match, including plan.state and agreement.state."
+  },
+  {
+   "severity": "high",
+   "issue": "The rule that out-of-market retail orders always skip (G05) has no enforcement point at placement. A90 has outside_market_action = stop | flag, and A37 runs A90's G05 unchanged, so an out-of-market run order under 'flag' is placed with a flag. The spec says the run adds no exception, yet also forbids 'flag and proceed'. The named challenge (a TMD change between dry run and placement) would therefore place the order.",
+   "fix": "Enforce it inside placement. Either verifyPlanInstruction, called by A37 after the gate set, refuses any standing_instruction order whose G05 passed with a flag, or an A90/A19 loop adds g05.auto_invest_outside_market = stop. List the chosen change as an agreed loop, record the refusal as skip_gate = G05, and add a hidden test with outside_market_action = flag."
+  },
+  {
+   "severity": "medium",
+   "issue": "The graph dependencies miss interfaces the spec uses. It relies on A42 (restriction, suspension), A46 (jobs, webhooks), A47 (holdings for trusts_i_hold and max_per_property), A48 (halts, rewiring the kill switch), A60 (confirming on ACC-05), A100 (parity rows), A101 (notices, agent switches) and A104 (MCP catalogue). None of them is in A95's dependency closure. The loops for A48, A71, A60, A100 and A104 are also missing from the agreed-loop list.",
+   "fix": "Add A42, A46, A47, A48, A60, A100, A101 and A104 to A95's deps. All sit in earlier milestones, so no cycle is created. Extend the list of changes recorded elsewhere with A48.1, A71.1, A60.1 and the A100/A104 rows."
+  },
+  {
+   "severity": "medium",
+   "issue": "The run arithmetic has contradictions and undefined cases. (a) The invariant collect <= monthly <= agreement.max contradicts the challenge that raises the plan to A$800 against an A$500 agreement. (b) When capacity <= reinvest pool, collect_cents is 0 and there is no payment, yet the run machine requires a payment to reach funded. (c) The dry-run capacity needs a budget that itself depends on capacity, so the definition is circular. (d) The spec does not say whether proposal lines count in capacity, that is, whether money is pulled for purchases the person may decline.",
+   "fix": "Use collect <= min(monthly amount, currently authorised agreement maximum). Add dry_run -> funded with no payment when collect_cents = 0 and the pool is positive. Define the estimate budget for the dry run as the monthly amount plus the unconsumed pool, run through aiv1. State that proposal lines do not count towards capacity, and add all four cases to the hidden vectors."
+  },
+  {
+   "severity": "medium",
+   "issue": "A37 can spend the collected money before the run executes. A37 funds any of the investor's awaiting_funds orders on each payment.credited, oldest first. A PayTo collection can therefore fund a hand-placed order, an agent order or a retail order whose cooling-off just ended. The run budget then shrinks silently, even though the bank was debited to invest under the plan.",
+   "fix": "Either have autoinvest.execute consume rail=payto run credits while A37's sweep skips them (an A37 loop), or accept the behaviour and document it with a run line and INV-04 copy. Add a challenge in which an awaiting manual order exists at collection time."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec never says which bank account the PayTo agreement debits. INV-04 live mode has no bank-account field, and it is not stated whether the debtor is the nominated ONB-09 account (the mock 'CBA ••4471' suggests so). Changing a bank account is non-delegable under D04.",
+   "fix": "State that the debtor is the verified, name-matched nominated account from A17/ONB-09, shown masked on INV-04. A different account goes through ONB-09's passkey change flow, which is non-delegable. No API or MCP route accepts raw bank-account details."
+  },
+  {
+   "severity": "medium",
+   "issue": "There are two PayTo implementations and two swap points. A17's bank adapter and sandbox already have createPayToMandate, getPayToMandate and cancelPayToMandate with mandate.* events. A95 adds a separate payto port with agreement.* events and its own vendor manifest. The builder cannot tell which sandbox mandate state is authoritative.",
+   "fix": "Choose one. Either A95's port supersedes A17's PayTo verbs, through an A17 deprecation loop, or A95 extends A17's interface with amend, suspend, resume, initiatePayment and the payer-side events. Record a single row in SWAP-POINTS."
+  },
+  {
+   "severity": "medium",
+   "issue": "The J18 month 3 script is not coherent. A G04 certificate expiry is investor-wide, so it skips every wholesale listing for the wholesale persona. The reinvested distribution could then only go to a retail sub-fund, which needs TMD answers, cooling-off handling and standing consent, and the script sets up none of them.",
+   "fix": "Spell out the fixtures for each month: the listings and their track (wholesale or retail), the persona's TMD answers and standing consents, and the expected run lines and amounts."
+  },
+  {
+   "severity": "low",
+   "issue": "Investor and staff share one route. GET /v1/autoinvest/runs is the investor's history and also the staff summary, with a different scope and a different response shape.",
+   "fix": "Move the staff reads, and the suspend and reinstate actions, under /v1/admin/autoinvest/..., matching A37's /v1/admin/orders."
+  },
+  {
+   "severity": "low",
+   "issue": "The plain top-up agreement (a PayTo agreement with a null plan_id) and ONB-09's 'Set up PayTo' action (gate G02) are mentioned but not specified.",
+   "fix": "Either drop the top-up case and name the node that will own it, or specify its routes and payment schedule in A95."
+  },
+  {
+   "severity": "low",
+   "issue": "The 8-12 h estimate looks low for this scope: a new adapter with a conformance suite, two state machines, the allocation algorithm, five jobs, the agent confirmation path, 17 INV-04 states, the J18 Playwright test and 10,000-case property tests. The comparable nodes A90 and A96 are estimated at 10-14 h.",
+   "fix": "Raise the estimate to 12-16 h, or split the PayTo port and its sandbox into a separate node."
+  }
+ ]
+}

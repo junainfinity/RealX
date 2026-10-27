@@ -1,0 +1,65 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Missing graph dependencies. The spec relies on A06's seed (Marine Parade with APR-2290, Kent Street at 64%, the WLG01 fixture, the seven adListing rows), A104's MCP tool list (unit test in section 6 and the parity pass criterion), A43's G17 flags (the go-live challenge clears flags 'in A43'; A36 itself does not depend on A43), and A42's freeze (the 'hash moved under the checker' challenge). None of A06, A104, A43 or A42 is in A71's transitive dependency closure.",
+   "fix": "Add A06, A104 and A43 to A71's deps in final-graph.json and the note's 'Depends on' line. Either add A42 or rewrite the challenge so the supersede is triggered by A38's mint-time exclusion (A37 excludeAllocationLine), which is already in the closure."
+  },
+  {
+   "severity": "high",
+   "issue": "The journey pass criteria and two challenges need the ADM-30 approvals inbox (A66), a sibling node in the same milestone AM7 that is not a dependency. Examples: 'approvals decided by the seeded human checkers on ADM-30', and 'the human behind the agent opens the lock request in the inbox and sees the not-eligible state'. A71 can reach its gate before A66 exists.",
+   "fix": "In A71's Playwright journeys, decide approvals through A14's SDK decision route as the seeded human checker (A11 sandbox authenticator), and assert not-eligible from A14's approval detail or A53's KeyConfirmModal. Move the ADM-30 UI walk to A78 and A79, which already depend on A66. Or add A66 as a dependency."
+  },
+  {
+   "severity": "medium",
+   "issue": "Specify point (a) misreads the upstream contracts. A38's finalise drafts 'allocation.lock' and calls A37 lockAllocation after approval. A37's lockAllocation itself raises 'orders.allocation.lock'. The spec says both draft 'orders.allocation.lock'. The two codes differ, and as written one Allocate click could raise two A14 requests. The parity manifest binds 'orders.allocation.lock'.",
+   "fix": "Restate point (a): the two nodes use different action codes and each raises its own approval. Make one code and one approval per Allocate the Specify outcome (loop A37.1 or A38.1). Bind actions.ts to the resolved code. Add a hidden assertion that one Allocate produces exactly one A14 request."
+  },
+  {
+   "severity": "medium",
+   "issue": "Specify point (b) misstates A37 and misses two conflicts. A37's refund_batches already covers soft_cap_missed, offering_cancelled, scaled_back, excluded_at_allocation and excluded_at_mint, not only single-order reasons. A37 uses the code 'orders.refund.batch' and A38 uses 'order.refund.batch' (A71 uses A38's). A37 runs the soft-cap-missed batch AUTO on the revert approval's hash, while A38 R2 requires its own 4E FINA-to-CFO approval. J05 step 2 depends on which is true.",
+   "fix": "Rewrite point (b) to settle three things: one record and one list route, one action code, and one approval policy for revert and soft-cap batches. Bind 'Issue refund', the AUTO display and the J05 test to the settled answer."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec treats the staff agent on pause (SGL+R) as agent-confirm (428 CONFIRMATION_REQUIRED, then the human's hardware key), and the challenge enforces this. A36's parity paragraph says a CAPM's agent can pause as maker, and A36 records no confirmation rule. The challenge would fail against the upstream contract, and the UI node cannot change it.",
+   "fix": "Add specify point (f): classify offer.pause and other SGL acts as confirmable for staff tokens, confirmed by the human's hardware key through A12's 428 route, and record it as loop A36.1 or A12. Or align the challenge with whatever A36 and A12 freeze."
+  },
+  {
+   "severity": "medium",
+   "issue": "The workbench rule line has no read source. A37's allocation preview and file return no rule-line text. Only A38's finalise, a write that drafts the approval, returns 'pro-rata, scaled to hard cap, 5 % cap'. The screen must show the rule line before Allocate without composing it in the client.",
+   "fix": "Add to loop A37.1: allocation/preview and allocation/file return a server 'rule_line' string. Freeze it at Specify and make the hidden mock plant it."
+  },
+  {
+   "severity": "medium",
+   "issue": "The M04/M05 done criterion contradicts the spec. It requires 'every product-map component and action for ADM-07, ADM-08 and ADM-12 on screen and bound to an operation'. But the spec deliberately moves 'Approve for go-live' to ADM-30, 'Deliver tokens' (TOKO, custody quorum) to ADM-14, and 'Finalise and mint' to a link. J12 step 11 'Goes live' (a CAPM act with G13 in the product map) is A36's automatic schedule sweep. A literal checker fails; a lenient one proves nothing.",
+   "fix": "Add a reconciliation table: each product-map action and journey step, and where it lives (operation on this screen, ADM-30 inbox, ADM-14, or scheduled job), with its reason. Make the done criterion check that table and actions.ts against it."
+  },
+  {
+   "severity": "medium",
+   "issue": "The not-eligible rule on the allocation workbench is garbled: 'The CFO who must check, or the maker's agent, sees the modal's not-eligible or agent state'. The CFO is the legitimate checker. A builder could render the CFO as not-eligible, and a test could lock that in.",
+   "fix": "Reword: no role sees Approve on ADM-12, because the decision is on ADM-30. The CAPM maker, and the human behind an agent-drafted lock, sees not-eligible. An agent sees the agent state. The CFO sees a link to the inbox request."
+  },
+  {
+   "severity": "low",
+   "issue": "The agent marker links to ADM-35 'for callers with V on M25'. ADM-35 'Agent and API access' is module M26; M25 is the approvals inbox.",
+   "fix": "Change the permission check to V on M26."
+  },
+  {
+   "severity": "low",
+   "issue": "The DST challenge says Kent Street's close falls on 4 Oct 2026. The seed and the design close it on 14 Oct 2026 ('21 days left'). It does not say how the fixture moves the close date, or what time-zone label the display should use after the change to AEDT.",
+   "fix": "State that the e2e setup moves closes_at to 4 Oct 2026 through the sandbox (not a seed edit). Assert the countdown and formatDateAest output around the 02:00 change."
+  },
+  {
+   "severity": "low",
+   "issue": "The generated copy-coverage test covers only the error catalogues of A36, A37 and A38 plus a hand list of A14 codes. The G22 refusals that A12 returns on these routes (G22_AGENT_NEVER_CHECKER, AGENTS_PAUSED, 428 CONFIRMATION_REQUIRED, RATE_LIMITED) can reach the page with no sentence.",
+   "fix": "Extend the generated test to A12's and A14's error catalogues."
+  },
+  {
+   "severity": "low",
+   "issue": "The blotter filters 'agent only' and 'refund state' are not among A37's admin/orders filters (offering, investor, state, flag, channel).",
+   "fix": "Map 'agent only' to flag=agent_placed, and add a refund_state filter to loop A37.1."
+  }
+ ]
+}

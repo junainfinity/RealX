@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "packages/ui/src/format/ builds its own formatAud, formatPct and formatTokens. A02 (packages/domain) already owns these: formatAud(Cents bigint) with negatives as '-A$1,000.00', formatUnits and formatBp. A05 does not depend on A02. A01's no-float-money lint rule forbids arithmetic on identifiers ending in cents/amount/price/units outside calls into @realx/domain, so a local formatAud either breaks lint or is written to dodge it. The challenge also allows a U+2212 minus 'or the design's convention', which conflicts with A02's '-A$'. The result is two money formatters and two different negative signs.",
+   "fix": "Add A02 to deps (both are AM0). format/ re-exports A02's formatAud, formatAudCompact, formatUnits, formatUnitsOf and formatBp and adds only truncateAddress and the date helper. Replace the float-rejection challenge with a tsc-must-fail fixture, because Cents is a branded bigint. Fix the negative sign to A02's '-A$1,000.00'."
+  },
+  {
+   "severity": "medium",
+   "issue": "Ownership of src/ext is contradicted three ways. The A05 note reserves packages/ui/src/ext for A50/A51. final-graph.json gives A05 all of packages\\ui\\ and gives A50/A51 only design-ext\\ folders. A51 says A53 codes the blocks in src/ext/admin. A53 says that path is not owned and builds them in apps/console/src/shell/blocks/. The reserved folder is never filled, and A05's claim that its lint, token and contrast tests cover the extension blocks automatically is untrue.",
+   "fix": "Drop the src/ext reservation and the 'exists and empty' pass criterion. Export the no-raw-hex / no-font-literal lint rule and the contrast checker from @realx/ui (e.g. @realx/ui/lint, @realx/ui/contrast) for A52, A53, A60 and A77 to apply to their block folders. Or carve src/ext out of A05's owned_paths in the graph data and give it to A52/A53."
+  },
+  {
+   "severity": "medium",
+   "issue": "gateLabel hard-codes the G01-G22 titles, and toneFor is tested only against the design-analysis §7 display strings. A03 owns gates.ts and the 181 states of SM-00..13, and A05 depends on neither. Gate titles can drift. Any A03 state missing from §7 (halted, suspended, rejected, expired, changes requested) silently defaults to grey instead of red or brick.",
+   "fix": "Add A03 as a dependency. gateLabel reads A03's gate registry (a test asserts all 22 ids and G22 = 'Agent authority'). toneFor accepts a {machine, state} key, and its test iterates every A03 state and requires an explicit tone for each, with no defaulting, plus the §7 strings."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec never says how its checks get into npm run verify. A01's root eslint.config.js (ESLint 9 flat config, looked up from cwd) is A01-owned, so a package-local lint rule is not run by verify step 5. The axe catalogue run and the dist assertions also need registered build and browser steps. A05 never uses A01's mechanism for this (the realx.verify block plus scripts:sync). The builder then either edits A01's root files or the checks never run.",
+   "fix": "Add a brief item: packages/ui/package.json declares realx.verify steps (lint with the package config, dist build, dist and no-Google-Fonts checks, Playwright plus axe catalogue run, 375px overflow run), and the builder runs scripts:sync and commits the generated targets. Add a challenge in which Fable removes the registration and verify goes red."
+  },
+  {
+   "severity": "medium",
+   "issue": "The pass criterion '46 components exist' cannot be measured. The 46 §2 entries bundle several components each (KpiGrid/KpiTile, ProofBand/ProofRow, CheckList/CheckRow, ApprovalListCard/ApprovalDetail/EmptyState, KycReview/DecisionBanner, TokenOpRow/SignatureMeter, two BarChart variants), and the brief adds ValueChip, NavPill and Avatar, for about 56 folders. The builder and Fable will count differently.",
+   "fix": "Add a canonical table to the spec: exported name, §2 item, required states and catalogue URLs. Assert that exact count (e.g. 56 exports covering the 46 §2 entries). Generate the evidence count from the export map."
+  },
+  {
+   "severity": "medium",
+   "issue": "The dev entry contradicts the dist checks. §7 says @realx/ui/dev exports DevRoleSwitcher and the fixtures, while the security challenge requires dist to contain no DevRoleSwitcher and no fixtures (Alex Morgan, PayID, wallet strings). Nothing stops apps from importing @realx/ui/dev in production code.",
+   "fix": "Make ./dev a source-only export under the 'development' condition (or a dist-dev/ output that is not in the files list). Keep the dist/ assertion. Export a consumer lint rule that forbids importing @realx/ui/dev outside catalogue, e2e and tests, and add a challenge that plants such an import."
+  },
+  {
+   "severity": "medium",
+   "issue": "The font check runs one way only, and there is no count assertion, so a dc shorthand with no type role never fails. The role list already misses dc styles: Newsreader 400 32px numerals, Geist 400 24px qty glyph, Geist 500 16px, font-size 18px, and Geist Mono 400 13/14/15. letter-spacing and max-width values are extracted but have no failure condition.",
+   "fix": "Make the check two-way: every distinct dc font shorthand and font-size (46 distinct shorthands measured 24 Sep 2026) maps to a role, and every role maps back. Assert the count. Add failure conditions for the 6 letter-spacing values and the 1240/1280 widths. Add the missing roles."
+  },
+  {
+   "severity": "medium",
+   "issue": "Non-text contrast is not covered, and the contrast test does not define how usage pairs are classified. DF-A05-01 records only the input and card borders. The design also has state-bearing graphics below 3:1: VerticalStepper future dot #B9B4AA on cream 1.85, Timeline pending node on white 2.06, stepper inactive bar 1.34, RaiseBar track 1.22, and the PriceBand allowed zone vs outside zone 1.07 (the G09 display). A usage-generated test either fails on these unfixably (recolouring is forbidden) or ignores them silently.",
+   "fix": "Tag each token usage with a role (text, large-text, ui-boundary, state-graphic, decorative) and apply the thresholds per role. Record the five sub-3:1 state-graphic pairs in DF-A05-01 with their ratios, and require a non-colour cue for each (number or check mark, 'Pending' label, band lo/hi labels)."
+  },
+  {
+   "severity": "medium",
+   "issue": "Phone width is only specified and tested for the shell frames and three components. HoldingRow (more than 580px of minimum grid), FeeRow, KeyValueList (160px label column), KycReview, BarChart (12 bars) and WalletCard overflow at 343px. The shell-frame scrollWidth check does not exercise them, so A58 and A59 inherit overflow the gate never saw.",
+   "fix": "Add a phone rule for every public or investor component (HoldingRow, FeeRow and KeyValueList stack; BarChart scrolls inside its card). Run a Playwright check at 375px on every catalogue entry: frame scrollWidth must not exceed clientWidth, except for an allow-list of in-card scrollers (DataTable, Tabs)."
+  },
+  {
+   "severity": "medium",
+   "issue": "formatDateAest is unspecified and wrong for half the year. Sydney and Melbourne switch to AEDT (UTC+11) on 4 Oct 2026, and seed dates such as Kent Street's 14 Oct close and Ann Street's 2 Nov are in AEDT. A fixed +10 'AEST' helper would print offer-close and order times an hour off, with the wrong zone label.",
+   "fix": "Specify formatDateTimeAu(instant, zone = 'Australia/Sydney'), labelling AEST or AEDT from the IANA zone. Test the DST boundaries (5 Apr 2026, 4 Oct 2026) and the seed dates 22 Sep (AEST) and 14 Oct (AEDT). Brisbane is a caller-chosen zone."
+  },
+  {
+   "severity": "medium",
+   "issue": "The token-diff test reads the dc path from packages/config, which A08 owns. A08 is not a dependency of A05 and may be built in parallel in AM0. The skip-with-warning when the file is absent could also let a clean clone pass the token gate.",
+   "fix": "Read the path from A00's charter record (as A01's design-untouched check does) or from an env var defaulting to <workspace>\\design\\. Allow the skip only when CI=true is set explicitly, and record it in evidence. Under RUN_MODE=local a missing file fails."
+  },
+  {
+   "severity": "low",
+   "issue": "Counts are stale or inconsistent. The spec says 88 screens where D04 makes it 91 (ACC-05, SPN-16, ADM-35). The 'twelve reference components' list has 14 items. 'Confirmed' appears twice in the toneFor list.",
+   "fix": "Change 88 to 91. Make the reference-component count match its list in both the Challenge and Pass sections. Remove the duplicate."
+  },
+  {
+   "severity": "low",
+   "issue": "PriceBand defaults to 85-115 and RaiseBar to a 75% soft cap. These are compliance parameters (G09 band, offer terms), so a caller that forgets the prop renders a plausible but wrong band.",
+   "fix": "Make the band edges, marker and soft-cap percentage required props. Only the catalogue fixtures pass 85/115/75."
+  },
+  {
+   "severity": "low",
+   "issue": "'The masked TextField must not put the raw TFN into the DOM' cannot be satisfied for an editable input, because the input's value property holds what the user types.",
+   "fix": "Reword: no raw value in any attribute, text node or data-* while unfocused; only the value property may hold it while focused; the display is masked after blur. Test attributes and textContent."
+  },
+  {
+   "severity": "low",
+   "issue": "The prototype loads no Newsreader italic, so the browser synthesises the logo 'X'. Vendoring a true italic changes the glyph, and the fidelity comparison will flag drift.",
+   "fix": "Ship no italic file (synthetic, matching the prototype), or record the real italic as a DF finding for the founder before the build."
+  },
+  {
+   "severity": "low",
+   "issue": "Evidence is written to evidence/A05.json and evidence/A05/, outside A05's owned path. This is the same plan-wide gap raised in A01-check1.",
+   "fix": "Follow the evidence-path carve-out A01 adopts, and cite it."
+  }
+ ]
+}

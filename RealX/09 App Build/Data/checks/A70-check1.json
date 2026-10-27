@@ -1,0 +1,65 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "SM-03 back-half action codes, policies, routes and error codes contradict the frozen upstream specs. A70 section 5 and section 9(d) use `property.legal_hold`, `property.discharge`, `property.exit_court_directed` and `property.under_sale`, plus `SM03_COURT_ORDER_REQUIRED`, `SM03_CALLER_NOT_HALTS` and `SM03_ILLEGAL_TRANSITION`. None of these names exist in A34, A48 or A03. Section 9(d) says 'A48's names win', but A48 section 3 uses A34's names: `property.record_court_order`, `property.discharge_court_order`, `property.court_directed_sale`. The policies also differ. Court-directed sale is 6E in A70 but 4E LEGL -> CCO in A34 and A48. 'Record contract exchange' is 4E LEGL -> CFO in A70, but in A34 `exit_approved -> under_sale` is a single-actor INVM transition. 'Record court order from operating' conflicts with A34, which refuses operating -> legal_hold because a court order goes through distressed first. The parity route `POST /v1/vehicles/{id}/lifecycle/{transition}` does not exist: A34 owns the distress, court-order and sale routes, and A48 exposes only exit/propose|approve|withdraw and the wind-down routes. Fable's hidden tests would assert codes, policies and routes the API can never return.",
+   "fix": "Rewrite section 5, section 9(d) and the section 7 parity rows from A34 line 31 and A48 sections 3, 4 and 6. Use property.record_court_order (4E LEGL -> CCO, from distressed only), property.discharge_court_order (4E), property.court_directed_sale (4E LEGL -> CCO) and exit_approved -> under_sale (INVM single actor). Map each action to its real owner route. Take the error codes from A34's and A48's catalogues (PROP_ILLEGAL_TRANSITION, A34's court-order evidence code, WD_*). Delete the invented SM03_* codes and the 'A48's names win' sentence."
+  },
+  {
+   "severity": "high",
+   "issue": "PROP is made a maker of property.flag_distressed ('ASTM or PROP -> CCO'; 'PROP escalates distress' for J21 step 1). A34 and A48 define the maker as ASTM or LEGL with CCO as checker; A51's ADM-22 frame and the product map say ASTM -> CCO (ASTM or LEGL on ADM-05). Buttons render only from allowed_transitions, so the seeded PROP persona never sees the button and the J21 step 1 journey cannot pass. Two challenges have the same fault: a PROP token calls /decide on a distress request its human could not have drafted, and a break-glass CCO 'approves a distress flag she drafted', but CCO is never a maker of that action.",
+   "fix": "Either keep the upstream policy (J21 step 1 = PROP sees the signals and records a notice, ASTM or LEGL drafts flag_distressed, CCO approves; recast the agent challenge with an ASTM staff token and the break-glass case with an action the CCO can make), or have the founder add PROP to the A03/A34 policy row now and record it in A34's spec."
+  },
+  {
+   "severity": "high",
+   "issue": "Many API fields and routes this node relies on are missing from A34, A48 and A53, and section 9 lists only some of them. Those nodes pass in AM3 and AM4 before this AM7 node, so settling the gaps at Specify guarantees upstream reopenings and an escalation. A34's list has no proof= filter, no q filter and no multi-state bucket filter. Its rows have no proof state (only proof_score), so the 'tone from API proof state, not a threshold' rule cannot be met; they also lack holder-cap and halt fields. supply-preview returns only nav_per_unit_cents, not units/value/cash/debt/liabilities. There is no compliance-score field or band, no summary reads for the three badges and the ADM-22 KPI tiles, no valuation-schedule read, no allowed_transitions on the detail, no reserve top-up, and record_notice does not create an obligation. A53's flow has no createVia for approval requests the modules create themselves.",
+   "fix": "Settle these in the plan now. Amend A34's spec (list filters proof, q and bucket; row fields proof_state, holder_cap_bps, halt_state; the supply-preview breakdown; compliance_score with its band; the summary reads; GET /v1/valuations/schedule; allowed_transitions; the record_notice obligation rule). Amend A53's spec to add createVia. Put the reserve top-up to the founder as a recorded question. Then make section 9 reference the settled items, and add a Specify check that each named field exists in the frozen OpenAPI."
+  },
+  {
+   "severity": "medium",
+   "issue": "Pass criteria and challenges rely on AM7 sibling nodes that are not dependencies. 'One audit event per act visible in ADM-31' and the ADM-30 inbox path need A66; the follow-through to ADM-19 and ADM-14 needs A74 and A72; the ADM-28 and ADM-34 links need A75 and A69. The partner portal is misattributed to A64/A98 when it is A105 (valuers and property managers use the sponsor console, A62/A64). Direct interfaces A54 (snapshot comparison), A104 (MCP tests) and A06 (seed) are not listed as dependencies.",
+   "fix": "Check audit through A10's audit API filtered by approval id, not the ADM-31 screen. Assert the ADM-19, ADM-14, ADM-28, ADM-30 and ADM-34 hand-offs by href and query parameters only, or add A66, A72 and A74 as dependencies. Correct the partner-portal reference to A105. List A54, A104 and A06 as explicit dependencies."
+  },
+  {
+   "severity": "medium",
+   "issue": "The expected MCP result for the 'never' rows is wrong. A104 excludes every decide, ratify, veto and sign operation from the MCP catalogue (agent_never_checker, requires_human), and A48 says MCP exposes none of the acts. Yet the challenges and the D04 and Parity pass criteria expect APR_CHECKER_MUST_BE_HUMAN and ATT_SIGNER_NOT_HUMAN through the MCP server.",
+   "fix": "Split the expectation. Through MCP: the tool is absent from tools/list, a forced tools/call returns the unknown-tool error, and a checker operation forced into a scratch catalogue is refused by the API (APR_CHECKER_MUST_BE_HUMAN / G22_AGENT_NEVER_CHECKER). Through SDK/REST: the refusal codes as listed."
+  },
+  {
+   "severity": "medium",
+   "issue": "The token-valuation pass criteria cannot be met on the seed. 'Rendered token valuation equals the PAD01 vector (A$121.22)' and the challenge's fail rule treat PAD01 as a property, but PAD01 is A34's unit-test vector, not an A06 seeded trust (the seed has KST01, MRN01, BAY01, ANN01, HAW01, MPA01, GYM01 and UNL01). The -JUMP upload applies to a seeded property with different figures, so a correct build fails. The SBK02 header in the fidelity challenge is also not a seeded code.",
+   "fix": "Name the seeded property the -JUMP/-JUMP3 upload targets, and assert that the rendered value equals A34's published nav_per_unit_cents, checked independently with A02's formula over that property's seeded inputs. Alternatively, require an A06 scenario that seeds a PAD01 fixture property. Replace SBK02 with a seeded code."
+  },
+  {
+   "severity": "medium",
+   "issue": "The tone map contradicts itself. tones.ts puts exit_proposed in amber, while the note's own design references (A51's ADM-22 frame and A48's lifecycle strip) say exit_* and under_sale are grey. A hidden fidelity test and a tone test would disagree.",
+   "fix": "Make exit_proposed grey to match A48 and A51. If amber is intended, record it as a design finding for A51 before HG-REVIEW."
+  },
+  {
+   "severity": "medium",
+   "issue": "The valuation committee's independent member has no persona or sign-in surface. The console is staff-only, and valuation.publish needs the CFO plus the independent member, yet the challenge persona list has no such person and the note never says where that member decides. J12 step 7, J13 and the +18.4% challenge cannot reach 'published'.",
+   "fix": "Name the A03 role for the independent member and where they decide (the console with a hardware key if staff, the A105 portal if a partner). Require A06 to seed that persona and add it to the Challenge persona list. The composition stays HG-LEGAL."
+  },
+  {
+   "severity": "medium",
+   "issue": "J14 step 7's product-map outcome is 'Distressed -> operating', but the note's J14 done-definition covers only the PROP review clearing the flag. It does not require property.remediate (ASTM -> CCO) with every signal cleared and G19 passing, or the halt and offer pause lifting. A build could pass with the property stuck in distressed.",
+   "fix": "Add to Requirements and the Journeys pass criterion: after the corrected upload (through the API as SP-OPS) and PROP's review, ASTM drafts Remediate, CCO approves in HardwareKeyConfirm, the state reads operating, and the halt banner and offers-paused note clear from haltState and offers-paused."
+  },
+  {
+   "severity": "low",
+   "issue": "The grep rule 'no SDK decision or approval-creation operation imported in the owned paths' conflicts with section 9(a)'s createVia, which requires passing A34's request-creating operations (publish-request, IC request, title submit) to the flow.",
+   "fix": "Define the forbidden set exactly as A14's POST /v1/approvals, /decide, /ratify, /veto and /cancel. Allow module request operations only as the createVia argument of usePrivilegedAction, checked by a static test."
+  },
+  {
+   "severity": "low",
+   "issue": "The attestation challenge requires the pill to 'stay flagged until PROP reviews', but A34 moves a corrected item to attested on re-attestation before PROP reviews. A literal state assertion would fail a correct build.",
+   "fix": "Assert the tone and the API state: amber (flagged, or attested awaiting review), never reviewed or green, until PROP's review call."
+  },
+  {
+   "severity": "low",
+   "issue": "The estimate of 8-12 agent-hours looks low for three screens, a nine-tab detail, the SM-03 forms, the wind-down checklist and the parity and error-catalogue tests. A72, with comparable scope, is 10-14.",
+   "fix": "Raise the estimate to 10-14 agent-hours, or split the lifecycle and wind-down forms into their own sub-scope in the Build shape."
+  }
+ ]
+}

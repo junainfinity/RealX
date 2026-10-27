@@ -1,0 +1,65 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "Agent ballot contradicts A93's default. A93 ships votes.cast as a 'counsel' cell in A03's delegable.ts, so A12 refuses to issue a token with the governance ballot cell (SCOPE_PENDING_COUNSEL) until counsel answers. A94 section 8 still expects the 'Governance helper' token to cast a ballot, C3 and the Agents pass criterion carve out that ballot, and GUIDE-P2 hands out a governance-scoped investor token. A correct A93 build fails this suite, or the builder would flip a counsel row to get a green run.",
+   "fix": "Default run: assert that issuing a token with the governance ballot cell is refused with SCOPE_PENDING_COUNSEL, and that the ballot route refuses a forged read or invest token with G22_SCOPE_MISSING or G22_SCOPE_NON_DELEGABLE. Run the positive agent ballot (Ed25519 signing key, notice to the person, vote survives revoke) only in a clearly labelled test-only override of the A03 counsel row in RUN_MODE=test, as A93's both-values matrix does, and record it in evidence. Drop the governance-scoped token from GUIDE-P2's defaults and reword C3 and the pass criteria to match."
+  },
+  {
+   "severity": "high",
+   "issue": "The J08 snapshot timing contradicts A93. A93 locks the snapshot at the record date (job governance.lock_snapshot), not in the publish transaction. A94 says the snapshot is taken at filed->discussion, and its challenge takes expected weights from 'the register at the publication instant'. If the 40-unit sale in step 3 falls before the record date, the correct weights are 260 and 380, not 300 and 340. The J08 file also starts from stack:reset but never lists the instrument, although step 3 trades on the board. It also reverses A93's order: the meeting halt must be open before discussion->voting fires (GOV_HALT_NOT_CONFIRMED).",
+   "fix": "Publish with an explicit record date. Advance the clock past it and run governance.lock_snapshot, then assert the snapshot hash and a total of 10,000. Only then run the 40-unit sale, and open voting after A48's meeting halt is confirmed. Add a J08 precondition that repeats J07 step 1 (list, band, OPEN). Change the challenge wording to 'record date'. Add a probe: a trade before the record date is included in the snapshot."
+  },
+  {
+   "severity": "high",
+   "issue": "The J08 execution approvals are wrong against A93, A34 and the product map. certified->executing is governance.outcome.execute (4E, ASTM maker, CFO checker). It comes first and drives exit_proposed->exit_approved. under_sale->sold is property.record_sale (4E, LEGL maker, CFO checker). A94 step 8 has ASTM record exit approved, under sale and sold with no checker. The burn checker is CFO per the product map (ADM-14 Burn: TOKO->CFO), but A94 says the CCO. Fable's expected table, written from this note alone, would carry the wrong policy codes and personas.",
+   "fix": "Step 8: ASTM requests execute, the CFO approves (certified->executing), then exit_approved and under_sale per A34, then sold by LEGL with the CFO as checker. Step 10: take the burn checker from A14's policy row (CFO), not the CCO, and add SM-06 active->redeeming->retired. List these action codes and personas explicitly in expect-table.ts."
+  },
+  {
+   "severity": "high",
+   "issue": "J07 settlement and registration are written as human staff acts, but A91 makes both automatic. The market.settle job runs under the SVCA principal with an AUTO request market.trade.settle, and settled->registered happens only on A18's register.instruction.acked event (A91 says there is no other writer). A94 steps 5 and 6 have SVCA settle on ADM-21 and REGO update the register on ADM-17, controls that do not exist. The bust path also has the wrong retry count: A91 allows 3 retries (4 attempts, backoff 5 min, 30 min and 2 h) and refuses an early bust with MKT_BUST_NOT_ELIGIBLE. A94 says three failures.",
+   "fix": "Steps 5 and 6: advance the clock and run the market.settle job; observe filled->settling->settled on ADM-21's blotter with one AUTO approval id per trade; release the registry ack; observe registered on ADM-17 with no staff act. Failure path: four failed attempts with clock advances; retries_exhausted and the Sev2 alert; an early bust refused with MKT_BUST_NOT_ELIGIBLE; then the MKTO->CCO bust with the buyer's gross plus fee returned and the freeze released."
+  },
+  {
+   "severity": "high",
+   "issue": "The J16 cooling-off money path contradicts A37. A37's default is fund_at = after_reflection: no money moves during reflection_period, and a revoke ends in 'revoked' with nothing to refund. A94 says the funds sit in the client-money trust account during the period, that a cancellation is 'refunded in full', and makes 'full refund' a money pass criterion. A94 also says a cancel one minute after the period is refused, but A37 allows a cancel from awaiting_funds at any time (it becomes 'cancelled').",
+   "fix": "State the fund_at value the suite runs. Default: assert no ledger movement during the period; a cancel inside it gives reflection_period->revoked with no refund row; a cancel after it gives awaiting_funds->cancelled. Optionally run fund_at=confirm as a declared variant: revoked->refund_pending->refunded under FINA then CFO, refund equal to the payment to the cent. Update the pass criteria and the challenge to match."
+  },
+  {
+   "severity": "high",
+   "issue": "A J16 failure path uses a distribution condition that does not exist. A90 and product-map ONB-07 define only 'stop' (listing visible as 'Outside your target market', order refused with G05_OUTSIDE_MARKET) and 'flag'. A94 tests a 'hide' TMD where the listing disappears from PUB-03 and search. A correct A90 build fails this, or the builder adds an unspecified hide behaviour.",
+   "fix": "Replace the 'hide' case with 'stop': the card and PUB-04 show 'Outside your target market' (red); INV-01 and the SDK both refuse with G05_OUTSIDE_MARKET; no order past 'rejected'; no report item. Change G05's 'done' line to 'stops or flags'."
+  },
+  {
+   "severity": "medium",
+   "issue": "The money rules conflict across nodes. A02 says the 150-unit buy total is A$15,100.63 (fee on 150 x the A$100.17 average) and calls A$15,100.13 a slip. A91 (the oracle node) and A94 use A$15,100.13 (per-fill fees). A94 says money.ts uses 'A02's rule', so a builder calling A02's orderLines with the average price gets A$15,100.63. The J08 waterfall identity also omits A02's splitByUnits rounding remainder, and it defines gross as units times a per-unit amount, which A02 forbids.",
+   "fix": "Say money.ts computes the fee per fill with mulBp(gross, 50, half_up), as A91 section 6 does (49.90 + 25.23), and file a spec-defect line against A02's A$15,100.63 vector. Write the waterfall identity with a '+ rounding remainder (0 <= r < holder count in cents)' term, and gross = floor(distributable x units / snapshot total)."
+  },
+  {
+   "severity": "medium",
+   "issue": "Fixtures are too thin for 'to the cent' and 'from this note alone'. No node in the graph owns p2-markets: it appears only in A94, as a loop to be opened on A06 at Specify. A 10,000-unit trust under a 5 percent cap needs at least 20 holders, but only about five are specified. Who casts the ballots that pass 50 percent is not said (C3 requires a human session for each). The step 7 wash and breaker trades have no persona, units or prices, and they change the step 8 holdings. The J08 waterfall inputs are missing: sale price, debt, costs, fees and tax profiles. The BAY01 failure (a) needs an instrument and ballots that no fixture provides. The basis of the 61 percent (units or votes cast) is not given.",
+   "fix": "Write the full p2-markets table into the note: holders summing to 10,000, the voters and their personas, the step 7 trades (personas, units, prices, breaker reference), the waterfall inputs with expected cent figures, the BAY01 instrument and ballots, and the threshold basis. Either add the A06 addendum to the graph or let A94 own e2e/p2/fixtures loaded through A06's scenario API."
+  },
+  {
+   "severity": "medium",
+   "issue": "bind-sample.ts makes direct API writes with a SUPER maker. That conflicts with section 3 (no writes outside the browser) and with Fable's scan for SUPER principals. The note also omits A21's licence.map_flag (4E, SUPER->CCO). BINDING.md claims no token can perform any step, but A21 lets a SUPER's or CCO's agent draft the binding and the toggle as maker. The SECO-token test is vacuous because SECO lacks licences:map anyway.",
+   "fix": "Declare bind-sample.ts an infra exception that runs licence create, licence.map_flag and flag.toggle (SUPER maker, CCO checker), and exempt exactly those action codes from the SUPER scan. Reword BINDING.md: tokens may draft but never decide (APR_CHECKER_MUST_BE_HUMAN). Test a SUPER token drafting (allowed) and a CCO token approving (refused)."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 8-12 agent-hour estimate is not credible. verify:p2 runs the suite three times at up to 60 minutes each, plus A88's regression. Fable adds a fourth seed and scratch-copy runs, and each fix loop re-runs everything. A92 and A93 are each estimated at 10-14.",
+   "fix": "Raise the estimate to about 16-24 agent-hours, or split into A94a (journeys and negatives) and A94b (agents, regression re-run, launch update)."
+  },
+  {
+   "severity": "low",
+   "issue": "Personas and ownership are misattributed. The J16 mint (6E+Q) maker is CAPM per the product map, and CAPM is missing from the staff list. ADM-26 is attributed to A45, but the graph gives the screen to A76. The TP-RE certifies through A105's partner portal as A93's certify checker, not on ADM-23.",
+   "fix": "Add CAPM and name the mint's maker and checkers. Write 'ADM-26 (A76, service A45)'. Say the TP-RE certifies as checker via A105 on LEGL's governance.result.certify request."
+  },
+  {
+   "severity": "low",
+   "issue": "Some assertions are loose or conditional. The flag-off listing accepts 'G21_NO_BINDING (or G21_PHASE_NOT_REACHED)'. The INV-06 gate rows omit G05 and G10, which the product map lists for 'Buy now'. Section 8 asserts a delegated session key and its removal, but A91 says board settlement needs no investor UserOp.",
+   "fix": "Pin the one code A21 evaluates first with PHASE=P1 and no binding. Add G05 (recorded as not applicable) and G10 to the INV-06 rows. Replace the session-key assertions with 'no investor-wallet UserOp for board actions; G22 mandate caps are the control'."
+  }
+ ]
+}

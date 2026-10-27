@@ -1,0 +1,65 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "ACC-05 and SPN-16 are missing actions and states that the product map, A12 and A60 require. A60 must cover A50's screens.json one to one, and A100 reads that file. Not drawn: 'Change scopes or limits' (widening needs a passkey, narrowing is immediate), Rotate, 'Allow on-chain actions' (a delegated session key on the passkey smart wallet, which D04 requires), connection details (REST, MCP server, webhooks, SDK), 'Revoke all', revoke cancelling the agent's open orders (J22), the pending confirmation when an agent goes above its limit, the anomaly hold and resume, the all-tokens-suspended state (account frozen or sponsor suspended, generic wording), the joint 'both to sign' co-signer pending state, and on SPN-16 the owner's 'Set sponsor agent policy', owner revoke of a team member's token, and webhooks for sponsor events.",
+   "fix": "Add each item to section 7 with its states. Add them to screens.json with operation, gates and delegation (widen, rotate, session key, confirm and policy are person; narrow, revoke and pause are agent). Add a challenge that compares the ACC-05 and SPN-16 action lists with the product-map ACC-05 and SPN-16 actions and components, A12's /v1/agent-access surface and A60's parity.json list."
+  },
+  {
+   "severity": "high",
+   "issue": "The sponsor ScopePicker families (Listings, Distributions, Reporting, Register, Announcements, Team) miss actions sponsor roles can take in the product map: Valuations (SPN-11 'Submit valuation' by SP-OWN and SP-FIN, and the valuer's upload), Billing (SPN-15 'Pay invoice'), Meetings (SPN-13 issue notice by SP-OWN and SP-IR) and answering investors. The challenge then requires SP-FIN to have only Distributions (prepare) and Register (read) selectable, which contradicts SP-FIN's real rights. That breaks D04 parity and grades the build against a wrong expectation. The challenges and pass criteria also test an auditor partner ScopePicker, but no partner families are defined and section 2 says A105 draws the partner pages.",
+   "fix": "Derive the sponsor and partner families from A03's permission matrix: add Valuations (submit), Billing (pay invoice, money family with caps), Meetings (draft notice) and Investor messages. Rewrite the SP-FIN expectation from A03's SP-FIN row. Either draw a partner token page (families for TP-RE, TP-AUD, TP-OBS, TP-LIC, prefix rx_ptr_) or remove the auditor persona from the ScopePicker challenge and the 'four partner personas' pass criterion."
+  },
+  {
+   "severity": "medium",
+   "issue": "Graph fit: screens.json operation ids, delegation values, token statuses and refusal codes are treated as authoritative by A60 (whose build fails if a delegable value differs from A03's) and by A100. But A50 depends only on A05 and A00, not on A03, A12 or A09. It writes its own delegation classes, so they can drift from A03.",
+   "fix": "Add A03 and A12 to A50's deps (both AM0 to AM1, so no cycle). Generate each screens.json delegation from A03's delegable values instead of writing them by hand. Make fidelity.test.ts fail when a delegation or operation id differs from A03 or A12's frozen OpenAPI names."
+  },
+  {
+   "severity": "medium",
+   "issue": "PUB-02 places the risks CheckList 'above the fold of the second screen-height', after the step strip and the 'Who holds what' list. The phrase contradicts itself, and at 375px the risks fall below the fold. This violates the product map and J01 step 2, and the pass criterion 'risks above the fold' cannot be measured. The risk list also omits 'no cooling-off', and the links to fees, documents and help are missing.",
+   "fix": "Put the risks CheckList directly under the title, before the steps. Add 'No cooling-off for wholesale offers' and the fee, document and help links. Make the pass criterion measurable: the top of the risks block is under 812px at 375x812 and under 800px at 1280x800."
+  },
+  {
+   "severity": "medium",
+   "issue": "SPN-16 maker-checker when the requester is Mia Chen: the challenge expects the note to name 'a second owner', but Harbour & Co has only one SP-OWN persona. A12 says a sole owner's own token is approved by a RealX PART or SECO. The sandbox token is also drawn with no passkey step, but A12 requires an assertion on every create (A60 records this as an open Specify point).",
+   "fix": "Draw the owner-self-request state as 'Waiting for RealX approval (partner manager or security)' for a single-owner tenant. Draw the sandbox create with the passkey step, or draw both variants driven by the API's FRESH_ASSERTION_REQUIRED and mark the variant for A99."
+  },
+  {
+   "severity": "medium",
+   "issue": "ONB-04 disables Continue until every person is Verified. The product map lets the entity submit to review while people are still invited; only investing waits. ONB-07 draws only the 'you can continue, RealX records it' outside-market outcome. The product map says the purchase is stopped or flagged depending on the TMD's distribution conditions, and significant dealings are reported. A90 also has 'Answer later' for wholesale investors.",
+   "fix": "ONB-04: enable 'Submit for review' once the ABN, the deed and the list of people are complete, show the 'can't invest until X verifies' banner, and put the investing block on the account state. ONB-07: draw both 'stopped' and 'flagged' states with the reporting line, plus 'Answer later' for wholesale."
+  },
+  {
+   "severity": "medium",
+   "issue": "ACC-04 mock dates are inconsistent. CMP-0031 is 'Received 30 Sep 2026', after the fixed as-of date of 23 Sep 2026. 'Response due 14 Oct 2026' does not match the 30-day IDR period (RG 271) that the AFCA line itself states. With as-of 23 Sep the overdue state, where AFCA must be prominent, can never be drawn. The lodge-complaint form (category, description, desired outcome) and 'Raise a ticket' are also missing.",
+   "fix": "Use two complaints: one received 10 Sep 2026, due 10 Oct 2026, Acknowledged; and one received 20 Aug 2026, due 19 Sep 2026, overdue, with the full AFCA Banner. Draw the lodge form and a 'Raise a ticket' action, each with a screens.json entry."
+  },
+  {
+   "severity": "medium",
+   "issue": "Product-map actions and states are missing on non-token screens, so the parity list (built only from drawn actions) and the dependent UI nodes inherit gaps. Missing: PUB-07 'View return breakdown', annualised percentage and assumptions. SPN-15 'Pay invoice'. SPN-11 an explicit 'Submit valuation' button. SPN-14 'Change approval rule'. SPN-01 'More information needed' state, fit-and-proper declarations and planned against actual returns. SPN-12 the RealX-rejected state with reason, approval status and publish date, and the significant-event template. SPN-13 record date, voting window and halt schedule inputs and the deadlock fallback. INV-07 'No trades yet'. INV-06 G05 row and amount input.",
+   "fix": "Add each item to the build brief with its state and its screens.json entry. Add a generated test over data_investor.py and data_sponsor.py so that every product-map action tuple and state for the 26 screens maps to a drawn element."
+  },
+  {
+   "severity": "medium",
+   "issue": "The onboarding branch challenge needs the extension to render the whole stepper (ONB-01 to ONB-10, with 'the original 8 steps byte-for-byte'). But screens.json must list 'exactly' 26 plus 4 plus 4 entries, and the original ONB-01 has a Password field that the pass criteria forbid in the file. The builder cannot satisfy both.",
+   "fix": "Declare ONB-01 to ONB-03, ONB-05, ONB-06 and ONB-08 to ONB-10 as redrawn 'context screens' under a separate screens.json key that is excluded from the counts. Replace ONB-01's Password field with the passkey note and record the change as a DF-A50 finding."
+  },
+  {
+   "severity": "low",
+   "issue": "The mock secret 'rx_inv_K7Q2M4X9B3ND_…' contains '9', which is outside base32, and the copy-once step shows it truncated. It therefore does not match A12's pattern rx_[a-z]+_[A-Z2-7]{12}_[A-Z2-7]{32}, and the check that the full secret appears exactly once has no full string to find.",
+   "fix": "Use a full mock secret that matches A12's pattern, show it in full on the copy-once step, and have Fable's scan use A12's regex."
+  },
+  {
+   "severity": "low",
+   "issue": "INV-06 shows 'up to 380 tokens · cap 5 percent'. The seed has Alex holding 60 Marion Street tokens out of 10,000, so the headroom is 440. That breaks the rule that every derived number is consistent with the seed.",
+   "fix": "Show 'up to 440 tokens', or compute headroom from HOLD and the cap in renderVals(), and add a seed-invariant assertion."
+  },
+  {
+   "severity": "low",
+   "issue": "The P2 pictures keep the 23 Sep 2026 as-of date, with an on-platform vote closing 7 Oct 2026 and a resale-board halt, though P2 starts about 8 Apr 2027. The mandate example uses per-day caps, while product map ACC-05 and J22 use a monthly limit ('$5,000 a month').",
+   "fix": "Label the P2 'live' dates as illustrative, or move them past Apr 2027. Record the daily-against-monthly cap choice as a DF-A50 finding tied to A12's mandate fields."
+  }
+ ]
+}

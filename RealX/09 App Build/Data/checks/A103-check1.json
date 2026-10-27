@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The spec forbids anything beyond the runbook rows, but its own checks need extra calls. A per-drill script 'may add only three things: the trigger, the fixture choices and after-state assertions', and Fable's Challenge diffs executed operation ids against the runbook rows ('nothing extra, nothing missing, same order'). Yet the spec requires several write calls that no runbook row contains: R1's five wrong-path unpause attempts, R1's planted PayID deposit and the second pass that leaves one act unratified (which skips a runbook row), R2's replacement-agent test op, R4's runner-requested holding change, O4's four negative activations, O3's overdue-hot-key op, and O5's background agent load and 20 engage/release cycles per tier. Build either the rule or the checks and Fable must fail the node.",
+   "fix": "Add a fourth declared category, 'negative probes and plants'. Each drill lists them in docs/drills/PLAN.md with the expected refusal code or effect. They run outside the row sequence, are logged in probes.jsonl with kind (agent-lane, wrong-path, plant, load) and are left out of the operation-id diff. The diff then checks them against PLAN.md instead. Make R1's unratified pass a named variant, 'R1-lapse', with its own reset, bundle and A48 drill record."
+  },
+  {
+   "severity": "high",
+   "issue": "Runbook R3 cannot be executed as written. The rows are 'pause; snapshot; redeploy; SM-06 old token active -> migrating', but after the pause the token is paused, not active. SM-06 (data_states.py, A28, A27) allows only active -> migrating, and A27 answers anything else with 409 transition_not_allowed. So R3 stops with DRILL_STEP_NOT_EXECUTABLE every time, while the pass criteria ask for zero of those. A48 seeds R3 the same way.",
+   "fix": "Settle this in the plan before Specify. Either add paused -> migrating (6E+Q, V1) to the SM-06 table through a follow-up loop on A03/A28/A48/A85, and write the after-state 'paused -> migrating -> retired', or remove the pause row from R3. List it in section 1(a) with the other requested follow-up loops."
+  },
+  {
+   "severity": "high",
+   "issue": "The R4 force re-sync policy is left to be decided at runtime, which makes the node unpassable. The product map (ADM-17) lists 'Force re-sync with the registry' with maker REGO and checker 'Head of operations', which is a two-person 4E. A20 defines POST /v1/recon/vehicles/{id}/resync as a single-actor REGO action. A85's R4 says 4E. A row whose policy code the route does not open is DRILL_STEP_NOT_EXECUTABLE, and the pass criteria require zero of those, so A103 cannot pass. The spec also names different owners for the question: A48 and A20 in section 3, A48 and A85 in the Gauntlet section.",
+   "fix": "Record the answer now. The product map is the requirement, so re-sync is 4E (REGO maker, head of operations or CCO checker). Request follow-up loops on A20 (route opens a 4E request through A14) and A03 (policy row) in section 1(a). The drill then checks that REGO acting alone is refused and that the 4E path executes. Use the same owner list (A20, A03, A85) everywhere in the note."
+  },
+  {
+   "severity": "high",
+   "issue": "The design pass criterion depends on frames and a threshold that do not exist. The spec says the Emergency pause confirm card and the Declare incident picker and checklist come from 'design-ext:ADM-01 in A51, built by A66', and requires screenshots 'within A87's screenshot threshold of the A51 frames'. A51 draws no ADM-01 extension; its Emergency pause and inflow freeze buttons and the KillSwitchBanner are on ADM-34 (A69). A66's Emergency pause is only a deep link to ADM-14 (A72). No design node draws the Declare incident dialog or the incident checklist. A87 compares by design token, says no pass or fail depends on pixel diffs, and is not a dependency of A103. The card text 'Act with passkey' is also wrong: staff confirm with A53's HardwareKeyConfirm.",
+   "fix": "Point the Emergency pause and inflow-freeze references at design-ext:ADM-34 (A51, built by A69), and the token pause at design:adToken ADM-14 (A72). Mark the Declare incident dialog and checklist as undesigned and request a design-extension item on A51, or check them for behaviour only. Replace the screenshot-threshold criterion with checks on the DOM and state: banner text, pill tokens #F6E1DE/#A3312A, Release disabled with release_blocked_reason, countdown = ratify_by minus clock now. Or add A87 as a dependency and run its token harness. Change 'Act with passkey' to the hardware-key confirm."
+  },
+  {
+   "severity": "medium",
+   "issue": "Several after-state checks can pass without testing anything. R1's 'payout job fires skipped' and 'zero bank-sandbox debits' pass if no payout was due in the window. R6's 'due payouts queued' and R8's 'mid-batch run stops' need fixtures the spec does not require. The rule about a done-when that is already true covers runbook rows only. Only Fable's hidden challenge schedules a payout inside the window.",
+   "fix": "Add a non-vacuity rule: every after-state assertion must record at least one observed event of its kind, or the drill fails with DRILL_VACUOUS_CHECK. Make fixtures mandatory in PLAN.md: at least one distribution run and one PayID/PayTo receipt due inside R1's window; at least two payouts due during the R6 outage; a distribution run mid-batch at R8's court order. Record these counts in evidence/A103.json."
+  },
+  {
+   "severity": "medium",
+   "issue": "Runbook R5's phase conflicts between sources. A48 seeds 'R5 valuation failure (P2)', but A103 runs R5 in P1 with only the resale-board rows skipped. If the seed carries phase P2, the whole of R5 is skipped under RB_PHASE, and the G10 and G20 checks the spec claims for R5 never run, while the pass criteria require all fifteen drills to complete.",
+   "fix": "State which R5 rows are P1 (valuation_stale halt, G20 refusal of offers and mints, HaltModule set and clear) and request a fix on A48 and A85 so the phases agree. Until then, list R5 as a known disagreement at Specify."
+  },
+  {
+   "severity": "medium",
+   "issue": "R9's retention after-state (retentionHold held for at least 7 years on every vehicle) may not be reachable. A48 places retention only at exit_approved, which needs the P1 exit track (4E propose with a trustee resolution document, then 6E approve). The spec does not say whether R9 drives each vehicle through that track, or which fixtures it uses.",
+   "fix": "Decide in the spec: either R9's rows include exit_propose and exit_approve per vehicle with named A06 fixture documents, or request a follow-up on A48 so that an R9 declaration places the retention row for every vehicle. Assert the chosen path as an after-state."
+  },
+  {
+   "severity": "medium",
+   "issue": "R3's after-state does not prove that the new token keeps the compliance rules. It never checks that the redeployed suite has all six compliance modules bound (holder cap G07, lock-up G08, residency, identity registry) with the same parameters. It also never checks the SM-06 path designed -> ... -> active with one audit event per step, although the coverage section claims it. The deploy_requested step ('tests and audit attached') touches HG-AUDIT, and no sandbox stand-in is named.",
+   "fix": "Add R3 after-state checks: read the new token's modules and parameters on chain and compare them with the old token; check the identity registry address matches; list the new token's SM-06 audit events in order. Name A24's audit placeholder as the HG-AUDIT stand-in."
+  },
+  {
+   "severity": "medium",
+   "issue": "J20 coverage is not testable ('Done when the drills show what a daily run finds and hands to a runbook'). Only step 12 -> R1 is named, although A85 maps step 2 -> O1, step 4 -> O2 and R4, step 5 -> R6 and O6. The pass criteria have no J20 or J21 line.",
+   "fix": "For each drill, assert that its trigger first appears in its J20 step's signal before declaration (ADM-02 chain alert for R1/O1, the ADM-17 break for R4/O2, the ADM-32 connector down for R6/O6, ADM-34 flags for R1 restore), with the A13 alert id in steps.jsonl. Add J20 and J21 pass lines, including R8's holder notice passing G17 and being delivered only after legal_hold confirms."
+  },
+  {
+   "severity": "medium",
+   "issue": "The estimate of 6-10 agent-hours is far too low for what the gate requires. It requires two consecutive full verify:drills runs, each resetting the stack for 15+ drills with real-time 15-minute windows. On top of that come Fable's run, the mutation set and about 10 plants (each re-running a drill from reset), O5's 80 tier measurements, re-runs after owner fixes, and up to three fix loops.",
+   "fix": "Re-estimate to roughly 18-30 agent-hours, or split the node (runner plus R1-R3 and O3 / R4-R9 / O1, O2 and O4-O6). Regenerate the graph figures afterwards."
+  },
+  {
+   "severity": "low",
+   "issue": "Hand-offs go to nodes that do not depend on A103. The probe ledger is 'handed to A100', but A100 does not depend on A103. A86.1 is listed among the loops needed before this build starts, but it runs A103's runner, so it can only happen after A103 exists.",
+   "fix": "Hand the probe ledger to A88, or add the edge A100 -> A103. Move A86.1 to a follow-up after A103's gate in section 5."
+  },
+  {
+   "severity": "low",
+   "issue": "O3's probe 'a direct write to custody_accounts ... probed through the SDK only, never through the database' is self-contradictory: a table write cannot be made through the SDK.",
+   "fix": "Replace it with an SDK attempt to change the vault signer set through any route other than rotateKey (refused under P8), and cite A15's own database-trigger test as evidence."
+  },
+  {
+   "severity": "low",
+   "issue": "The R7 trigger names no real sandbox control. A22's update-01 fixture hits INV-00377, not the largest holder (A06: Kwan Family SMSF on BAY01).",
+   "fix": "Name the trigger: A22 trigger('list-update', {addEntries:[the largest holder's controlling person]}), then A42 rescreen and MLRO confirmation. Fix the vehicle and holder in PLAN.md."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec relies on 'both API processes' (R1, R2, O5), but this node cannot change infra/ and does not say which node starts the second API process.",
+   "fix": "Name the source of the second process (an A23 profile or the A12/A101 harness) and add a preflight check that two API instances answer."
+  },
+  {
+   "severity": "low",
+   "issue": "The claim that agent rows were carried out by agents is checked only against the runner's own log, not against A10 attribution. The A48 drill-record and drill_due criteria cannot be checked across drills, because each reset wipes them.",
+   "fix": "For each agent row, require the A10 event to show actor = token and on_behalf_of = persona, and require it in the persona's activity read. Check the A48 drill record, last_drilled_at and drill_due clearance inside each drill before stack:down, and store the evidence in that drill's bundle."
+  }
+ ]
+}

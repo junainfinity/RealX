@@ -1,0 +1,75 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "PUB-08 ignores the existing A47 contract GET /v1/public/transparency (totals[] with auditor attestations, trusts[] = A20 public rows, contracts[], audit_reports[]; scope public:read for tokens and MCP), which A54 already uses. A55 instead invents an unowned GET /v1/public/metrics (with a basis:'unaudited' payload that contradicts A47's 'omit, never show unaudited' rule), a GET /v1/public/contracts pushed onto an invented A27.2 loop, and fixture providers that the gate accepts. The node can pass on fixtures (a fake), and home and transparency would draw audited totals from two different sources.",
+   "fix": "Read PUB-08 from A47's /v1/public/transparency (and /{vehicleCode}); add A47 to deps; delete the audited-metrics and contracts fixture providers, the A27.2 request, the M19 Specify item and pending_owner rows; rewrite the unaudited challenge as 'a metric without attestation is absent from totals[] and the empty state renders'; take audit reports from audit_reports[]; add a pass criterion that the page's trust rows equal A47/A20 byte for byte."
+  },
+  {
+   "severity": "high",
+   "issue": "Public copy bypasses G17 approval. All prose lives in a local copy/copy.ts checked only by a local lint and a hash, while A43 (AM3, lands before AM5) already owns site_copy marketing items with maker-checker approval routing and the checkClaims ruleset that A54 uses. Risk, calculator and 'who holds what' claims would go live without a marketing-compliance approval record.",
+   "fix": "Add A43 as a dependency. Seed the four pages' copy as approved A43 site_copy items (counsel rows still flagged set_with_counsel) and render them from A43. Use A43's checkClaims instead of a parallel forbidden-phrase list, and keep only structural checks local (risk placement, disclaimer present). Add a pass criterion that every prose string carries an approved marketing_item id and that a withdrawn item leaves its slot empty."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec contradicts A50's frozen design-extension pages, yet pass criteria demand fidelity to A50 and the disclaimer 'exactly once'. PUB-02 steps differ (A50: Verify once / Buy tokens / Get paid monthly / Sell on the board from 2027 with a 2027 pill, plus a Wholesale-only banner). Risk pills differ (5 vs 6 items). The fold rule differs (A50: second screen-height). PUB-07 differs (A50 adds a yield slider, tiles Income received / Value at end / Total return, and caption 'Illustrative only, not a forecast. Past performance is not a guide.'). PUB-08 differs (break 'opened 23 Sep 06:02', 'Audited to 30 Jun 2026'). PUB-09 differs (Sponsor terms, empty state 'No documents match · try the trust name', no Help-articles group).",
+   "fix": "Add a 'Reconciled differences with A50' table naming, for each item, which source wins (product map, A50, or a user decision at Specify), and record it in the Screen Coverage Matrix. Limit the design-fidelity check to tokens, layout and components, not copy. Fix the one exact disclaimer string."
+  },
+  {
+   "severity": "high",
+   "issue": "The PUB-08 seed pass criterion cannot be met. 'Eight rows (seven Matched, one red Break, Marine Parade Not issued)' is nine rows. It also conflicts with A20's seed: Kent Street is result:not_issued with escrow_application_units 6400, and Ann Street (2,800) and Unley Road (9,100) are open offers that are also pre-issue. A correct build fails, or a builder fudges rows to hit the count.",
+   "fix": "Replace the counts with the exact per-vehicle expected rows from A20's seed: fully funded vehicles Matched, Gympie Road Retail 'Break · 2 units · opened 23 Sep 2026', and Kent Street, Ann Street, Unley Road and Marine Parade 'Not issued' with their application sublines. Or assert that every rendered row equals the A20/A47 public row through the label map, and settle the seed with A20 at Specify."
+  },
+  {
+   "severity": "high",
+   "issue": "The calculator's assumption text contradicts its formula. The assumptions list says 'starting value equals the amount less the transaction fee', but the maths uses value_0 = amount and subtracts the fee once at the end. Fable's independently computed 200-row oracle can follow either reading, and the disclosure is misleading (G17).",
+   "fix": "Pick one model and state it in both places. Either value_0 = amount - fee with total = value_years - amount + income, or keep the formula and reword the assumption to 'the one-off transaction fee is deducted from the result; growth and income apply to the full amount'. Then adjust the fast-check properties to match."
+  },
+  {
+   "severity": "medium",
+   "issue": "Missing dependencies. PUB-02 and the car_active state read A21's GET /v1/perimeter/public, but A21 is not in A55's dependency closure. A43 and A47 (above) are missing too.",
+   "fix": "Add A21, A43 and A47 to A55's deps in final-graph.json and to the note's Depends on line."
+  },
+  {
+   "severity": "medium",
+   "issue": "The calculator's fee and yield sources do not exist. A35's public listing carries no fee metadata, so transaction_fee_bps=50 always falls back to a hard-coded number. Fees are per listing (design Fees page; A36's per-offering transaction_fee_bps). A54 links to /calculator?vehicle={code}, which A55 does not handle and which may trigger 'Some values were reset'.",
+   "fix": "Define the vehicle query parameter: read fee bps and estimated net yield from A36's public offering (add A36 as a dependency), labelled with source and date. Otherwise use labelled CALC-01 assumption rows. Ignore unknown parameters. Add both paths to the hidden vectors."
+  },
+  {
+   "severity": "medium",
+   "issue": "D04 parity for the calculator is weak. The 'API twin' is a Next.js route handler outside the /v1 OpenAPI surface and the MCP server, and the pass criterion accepts 'OpenAPI operation id OR the route handler', so A100 passes with no OpenAPI or MCP equivalent. A50 expects 'the API's calculator'.",
+   "fix": "Move computeIllustration into a shared package (packages/domain via an A02 follow-up). Request a public GET /v1/public/calculator operation (scope public:read) and an MCP tool from the API/MCP nodes. Require the parity manifest to name both an OpenAPI operation id and an MCP tool, with the page and the API agreeing to the cent."
+  },
+  {
+   "severity": "medium",
+   "issue": "The verify grep bans the literals 'Matched' and 'Break' in the owned paths, but A20 and A47 send enums (result, client_money_result) and A20 says the UI composes break_summary. The labels must live somewhere, so the rule cannot be satisfied.",
+   "fix": "Keep one enum-to-label map (in the copy set or a packages/domain helper) and exempt only that file from the grep. Test that each pill's label and tone derive from the enum through the map."
+  },
+  {
+   "severity": "medium",
+   "issue": "Parts of the copy lint cannot be measured or satisfied. 'No percentage outside the calculator' would forbid required help facts (the 47% no-TFN withholding rate, fee percentages). 'Risk sentence outside the risks block' and 'yield word adjacent to net, may or past performance' are undefined. The lint also runs over API-supplied document titles the node cannot control.",
+   "fix": "Tag copy rows by kind (risk, fee, tax, performance). Apply the percentage ban to performance-claim and untagged text only, define 'adjacent' as the same sentence, and define a risk sentence as a kind=risk row. Exclude API-supplied fields, which are linted at source by A43/A35."
+  },
+  {
+   "severity": "medium",
+   "issue": "No data source is specified for /help/documents/[documentId] (a single document with all versions) for anonymous visitors. A35's only no-session read is the scope listing, and GET /v1/documents/{id} and /versions are session reads, so the stale-link and 'no longer published' states cannot be built as written.",
+   "fix": "Request a public GET /v1/documents/public/{documentId} from A35 (current and superseded versions, 404 when withdrawn or not public), or define resolution from the scope listings with an explicit 404 rule. Add it to the parity manifest."
+  },
+  {
+   "severity": "low",
+   "issue": "The challenge and A100 run 1,000 random inputs through the handler, which sits under A52's public rate limit of 60 requests per minute per IP, so the runs hit 429s or take about 17 minutes.",
+   "fix": "Raise the configurable limit for the test IP in RUN_MODE=local, and add one test that asserts the 61st request in a minute returns 429 rate_limited."
+  },
+  {
+   "severity": "low",
+   "issue": "The product map tags PUB-09 with G18, but the node's gates data (G10, G12, G17) omits it, although the spec gives a reachability rule.",
+   "fix": "Add G18, scoped to reachability, to A55's gates in final-graph.json, or record in the Screen Coverage Matrix that A44/A59 own G18 with A55's reachability check."
+  },
+  {
+   "severity": "low",
+   "issue": "The spec keeps the toast 'Opens the PDF (G12 acknowledgement recorded)' for a signed-in open when no acknowledgement is recorded, which can mislead an investor.",
+   "fix": "Decide now: use 'Opens the PDF · your open is recorded' and record the change from the design as a reconciled difference."
+  }
+ ]
+}

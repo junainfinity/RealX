@@ -1,0 +1,55 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "The unit model conflicts with the owners' suites, which A88 promises to run unchanged. A88 treats each journey as an independent unit on one shared stack with no resets, using personas generated per unit from a sub-seed. The owners' suites are built differently. A79 Run A is one ordered chain (J01, J02, J03, J17 before, J04 with the J02 persona, J15 using cash left by earlier journeys, J17 after), and Run B starts from its own reset. A79 and A82 use fixed seeded personas: Alex Morgan INV-00841 appears in J15, J17 and every A82 scenario, and A82 asserts exact balances such as A$3,420.18. Each A82 scenario starts from preview:reset. A80's J11-J14 and J19 exist only as timeline steps inside one interleaved operating month (the isolated specs are A65's in e2e\\sponsor\\, not A80's). A78 sets and advances the clock. So splitting J02 and J04 into parallel units, the persona isolation claim, the disjoint-vehicle Stage A and the 'read-only part of J20' are impossible without editing owner suites.",
+   "fix": "Redefine units as the owners' own run groups, each started from its documented reset on a fresh stack or on stack:reset with a fresh chain: A79 Run A, A79 Run B, the A79 negatives, the A65 isolated J11/J12/J13/J14/J19 files under OPERATOR_STEPS=console, A78 J20, the A80 isolated J06 and J21 specs, the A80 operating month, the A81 groups, each A82 scenario, and PROBES. Map each journey ID to the groups that cover it. Keep generated personas only for the probes. Test for hidden order dependence by shuffling group order across resets. Otherwise add a precondition that raises fix items on A79, A80, A82 and A78 before Specify."
+  },
+  {
+   "severity": "high",
+   "issue": "Stage B runs every clock-moving unit serially on one forward-only clock, and runs 2 and 3 reverse or shuffle that order. Owner suites assert absolute dates. A79 J05 moves the clock to three days before ANN01's close on 2 Nov 2026. A80's operating month runs from 23 Sep to December 2026. The G18 probe advances past a final-response deadline. J13 advances by months. Once an earlier unit has moved the clock past 2 Nov, ANN01 has already auto-reverted and J05 fails. In the reverse and shuffled runs this failure is certain, not flaky.",
+   "fix": "Give each clock-moving unit its own clock origin (a fresh stack or reset from A06's AS_OF). Shuffle order only across independent resets. Record each unit's clock start and end in status.json."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec says BREAKS plants the GYM01 registry drift (9,998 against 10,000 units) and closes it. In fact that break is in A06's baseline seed, and A81 leaves it untouched on purpose. A81's four planted drifts are on other vehicles. As written, three checks fail on every run from seeding: 'no Sev1 open except declared', 'zero open breaks except BREAKS-planted, each closed' and 'supply equals the register except declared planted states'.",
+   "fix": "Add a manifest baseline-expected set generated from A06's scenario expect blocks: the GYM01 break, its Sev1 alert and its halt. Every invariant then compares against that set plus the unit's declared plants, exactly. Correct section 2 to list A81's real drifts and vehicles. Require that the baseline break is unchanged at run end and every planted break is closed."
+  },
+  {
+   "severity": "high",
+   "issue": "The section 7 money-conservation formula (deposits - withdrawals - fees = wallet balances + escrow + 'trust-account movements') is ill-defined, yet a failure is a Critical escalation. It leaves out seeded opening balances, refunds, escrow released to sponsors, sponsor distribution funding and payouts. 'Trust-account movements' is undefined, and every term comes from A16's own journals, so the check is not independent. The builder must invent or tune the formula.",
+   "fix": "Define the identity per client-money bank account, as A79's C2 does: opening seeded balance + pay-ins + sponsor funding - settled withdrawals - settled refunds - escrow releases to sponsors - fees swept = closing balance. Read the closing balance from the bank sandbox state(), not the ledger. Require a zero trial balance separately. Have Fable's hidden queries recompute the identity."
+  },
+  {
+   "severity": "medium",
+   "issue": "The kill-and-resume expectations are wrong. At the first kill point (before the PayID receipt is matched) the orphan order is awaiting_funds, not in escrow, and SM-05 later expires it when the clock moves. The J06 orphan is an approved, unfunded run for the same vehicle and period that the resumed J06 must create again; it may be refused as a duplicate or expired by the 72 h approval TTL. 'Ledgers equal a clean run minus orphan personas' cannot hold when the orphan shares the vehicle or period.",
+   "fix": "State the expected orphan states and the transitions allowed later. Make the resumed J06 use a fresh period or vehicle through the owner's parameters, or raise a fix item on A80 or A06. Exclude the orphan's order and run ids from the comparison, with the exact residual listed."
+  },
+  {
+   "severity": "medium",
+   "issue": "The phase-gate probes hard-code refusal codes (LICENCE_PERIMETER, PHASE_NOT_ENABLED), while A83 allows G21_FLAG_OFF, G21_PHASE_NOT_REACHED or PHASE_NOT_ENABLED. The probes also assume a G09 or G15 gate_evaluations row is written, but a P1 sell or stablecoin route may refuse before evaluateAction runs. Then the required P1 form can never appear, which tempts the builder to add a stub route.",
+   "fix": "Take the expected codes from A21's catalogue at the frozen commit. Before Specify, confirm with A19, A21 and A100 that the P1 sell and stablecoin routes run the gate set (G09 or G15 not_applicable plus a G21 fail row) before refusing; otherwise raise fix items on the owners. Forbid adding routes in e2e\\regression\\."
+  },
+  {
+   "severity": "medium",
+   "issue": "G08's fail can be satisfied by 'the on-chain revert recorded by the probe'. That is test output, which contradicts the rule that ledgers are computed from the database, and a mocked revert log would pass.",
+   "fix": "Require a persisted gate_evaluations G08 fail row with the earliest free date (from the A19 simulator or evaluation) plus the A27 indexer's record of the reverted transaction hash. Escalate as the spec-gap case if neither exists."
+  },
+  {
+   "severity": "medium",
+   "issue": "The agent ledger requires activity, audit and gate_evaluations rows to match one-to-one. But TOKEN_REVOKED, AGENTS_PAUSED and non-delegable refusals (AGNT_NOT_ALLOWED 'before scope evaluation', per A82) have no gate row, so correct behaviour fails the check. The G22 P1 form also never requires a non-delegable refusal, which is a core D04 rule.",
+   "fix": "Require one-to-one between activity and audit rows for all calls, and a gate row only for calls that reached evaluateAction. List the pre-evaluation codes from A12. Add to the G22 form at least one non-delegable refusal (for example an agent changing the bank account or creating a token) and one staff-agent never-checker refusal per run, each with an 'agent <token> on behalf of <person>' audit row."
+  },
+  {
+   "severity": "medium",
+   "issue": "The behaviour ledger (33 design behaviours mapped to assertions) and the design checkpoint screenshots at every designed screen both need hooks inside owner suites, which A88 may not edit. No mechanism is given, and a hand-typed mapping could pass unverified.",
+   "fix": "Make the behaviour mapping a versioned manifest file of owner test ids, counted as covered only when those tests pass in the Playwright JSON report. Take checkpoints by post-processing traces (DOM snapshots with computed styles), with trace 'on' forced by the regression config. Have Fable sample the mapping."
+  },
+  {
+   "severity": "low",
+   "issue": "The table is gate_evaluations (A19), not gate_evaluation. The pass rule 'only the two owned paths changed' contradicts writing app\\evidence\\A88.json and A88.qa.md and A01 script registration. No gate-to-source table exists, and J01's G06 refusal is a disabled button in the UI that may write no gate row.",
+   "fix": "Rename the table. Allow the node's commit to include its own evidence files and A01 script-registration entries. Add a manifest table naming the unit and test that produce each gate's server-side pass and fail rows. Add an SDK probe order from seeded INV-F on a residential offer for the G06 fail."
+  }
+ ]
+}

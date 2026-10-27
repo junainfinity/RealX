@@ -1,0 +1,85 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "A12 does not match the frozen A04 schema. A04 uses `state` with values pending_cosign, pending_owner_approval, active, held, revoked, expired, an `environment` column, and tables that A12 registers itself (mandate_signing_key, agent_confirmation, agent_counter, agent_rate_bucket, agent_switch). A12 uses `status` with pending/suspended, `sandbox_of` and `mandate_usage`, says it creates no table, and asks A04.1 for `pending` and agent_confirmation. A12 also needs columns A04 lacks: token limits, a previous secret hash for the rotation grace window, co-signer and approver assertion ids, and mandate ip_allowlist, rate_limit, session_key_policy and standing_disclosure_consent.",
+   "fix": "Add a schema table that matches A04 exactly, or list every difference as an A04.1 item: the enum mapping (held->suspended, pending_*->pending), the table names, which tables A12 registers, and each missing column. Then update the spec, oracle and pass criteria to use the reconciled names."
+  },
+  {
+   "severity": "high",
+   "issue": "Other nodes are expected to change A12's owned module, but A12 defines no extension points. A14 replaces the interim two-step. A48 rewires /switches/platform. A29 expects an in-transaction revokeSessionKey call, which A12 cannot make because it cannot import A29. A101 and A77 depend on an 'A12.1' loop (setTokenHold/releaseTokenHold, an afterEvaluate hook, oversight routes) that A12 never mentions. The interim kill switch also writes feature_flag directly instead of going through A21's setFlag. So 'interfaces import unchanged' and the standing 'only owned paths changed' rule cannot both hold.",
+   "fix": "Export registration ports from index.ts: an IssueApprovalPort (interim implementation here, A14 registers 4E), a PlatformSwitchEffector (A48), synchronous in-transaction onTokenRevoked/onMandateRevoked hooks (A29 session keys, A37 open-order cancel), and afterEvaluate plus hold/release (A101). Add an explicit 'Follow-up loop A12.1' section or fold those items in. Route flag changes through A08/A21."
+  },
+  {
+   "severity": "high",
+   "issue": "The claim that 'every field, action and state' ACC-05, SPN-16 and ADM-35 need already exists is false. Missing: platform agent policy (SECO->CCO), sponsor agent policy (owner only, cannot loosen the platform minimum), who may revoke another person's token (SECO/SUPP, SP-OWN) with owner notification, revoke-all, the team and oversight views, and the ACC-05 monthly limit ('$5,000 a month', which A60 renders; A12 has only daily caps). Also missing: cancelling open orders on revoke, suspending all tokens on account freeze or AML review, and the G01 identity check at token creation that the product map lists.",
+   "fix": "Add all of these to A12 or an explicit A12.1: a monthly cap in evaluateG22 and the oracle; a G01 precondition at issue; suspension on AML freeze from a named event with a fixture until it exists; an open-order-cancel hook; revoke-all; a revoke authorisation matrix; policy objects as ceilings; team and oversight routes. Give each a contract test."
+  },
+  {
+   "severity": "high",
+   "issue": "A12 conflicts with the frozen A03 data. A03's reason codes are SCOPE_NOT_DELEGABLE, SCOPE_COUNSEL_PENDING, SCOPE_PHASE_OFF and SCOPE_UNKNOWN. A12 uses SCOPE_NON_DELEGABLE and SCOPE_PENDING_COUNSEL and ignores the other two. A03 makes token rotation non-delegable (passkey), but A12 allows it with a session only. A03 lets an agent revoke itself, but A12 requires the owner's session. A11 also keeps a separate non-delegable.ts. The oracle checks these codes, so builder and oracle cannot both be satisfied.",
+   "fix": "Use A03's codes verbatim (or reopen A03) and map PHASE_OFF and UNKNOWN. Require a fresh assertion for rotation, or reopen A03. Allow a token to revoke itself and narrow its own mandate, with a test. Name which non-delegable list is authoritative and add a consistency test."
+  },
+  {
+   "severity": "high",
+   "issue": "Several money challenges and 'done' statements need services that do not exist at the AM1 gate: orders (A37), withdrawals (A39), the downstream G07 refusal, sponsor listing requests (A33/A36) and distribution approvals (A40, plus A14, which is a child of A12). The J04 steps 3-8 service-level claim, the mandated-withdrawal claim and the cap-race, in-flight-revoke, sponsor-checker and CFO->SUPP challenges cannot run against anything real, which invites fakes.",
+   "fix": "Specify a test-only fixture kit: a money route declaring x-realx-money with a pluggable downstream gate, a confirmable action, and a fixture approval request carrying maker identity. Rewrite the challenges against it, and move the real J04 and withdrawal checks to A49/A82 with a re-run of A12's hidden oracle there."
+  },
+  {
+   "severity": "high",
+   "issue": "The Argon2id verification memo is described as 'keyed by lookup id and hash', and the spec does not require the presented secret in the key. If the key is lookup plus stored hash, any secret with a valid lookup is accepted after one cached success, which is an authentication bypass. No oracle or challenge tests this.",
+   "fix": "Key the memo on (lookup, SHA-256 of the presented secret, stored secret_hash, row version) and drop it on rotation, grace expiry and revoke. Add a hidden oracle case: after a success, the same lookup with a wrong secret is refused TOKEN_INVALID on both processes."
+  },
+  {
+   "severity": "high",
+   "issue": "The mandate has no standing disclosure consent. D04 requires disclosures acknowledged under the holder's standing consent, A19 (G12 on agent calls) reads an 'A12 mandate flag standing_disclosure_consent', and A35 needs it, but A12 defines no such field, widening rule or test.",
+   "fix": "Add standing_disclosure_consent (document ids and versions covered), created and widened only under a fresh assertion over the mandate hash and gated by counsel parameter CQ-02. Expose it in introspect and the G22 input, and add an oracle case where a new document version is not covered."
+  },
+  {
+   "severity": "medium",
+   "issue": "Auto-revocation events are credited to publishers that do not emit them. A11 has no iam.role.revoked. tenancy.tenant.suspended is A33's (AM3). Partner end is A98's partner.engagement.expired / partner.scope.narrowed. Account closure has no named publisher, and dormancy (iam.account.dormant) is not handled.",
+   "fix": "Name each trigger's exact event and publishing node, use fixture events until each publisher lands, add dormancy handling, and state that the per-request live-role check is the real guarantee."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'exactly one audit event and one gate_evaluation per request' rule contradicts other parts of the plan. Token transitions and business handlers write their own audit events, and A19's G22 adapter stores a second verdict. Because the middleware writes its rows in the request transaction before the handler, a handler failure would roll those rows back.",
+   "fix": "Define one agent.access audit event and one G22 evaluation per request, with other events allowed if they carry on_behalf_of_id and token_id. Have A19 reuse the evaluation id. Commit refusal rows separately, write the outcome after the handler, and test handler failure."
+  },
+  {
+   "severity": "medium",
+   "issue": "A09's kill-switch slot already returns 423 agents_paused (lowercase) before A12's middleware runs. Those refusals leave no audit or activity rows and use a different code from A12's AGENTS_PAUSED. Ownership of the kill-switch tiers is described differently in A09, A12, A48 and A101.",
+   "fix": "Have agentAuth take over A09's slot, align the code name, and state tier ownership once, including the product map's per-user-type tier."
+  },
+  {
+   "severity": "medium",
+   "issue": "The token-bound confirmation scheme is underspecified. It gives no header name (A104 freezes it from A12) and no canonicalisation. The signed fields are only said to 'include the idempotency key', with no binding to token, mandate version, route, amount, units, vehicle, issued_at or expiry. It does not say who confirms a 428 on a joint 'both to sign' account.",
+   "fix": "Specify the header name, RFC 8785 JCS canonicalisation, the exact signed fields with a maximum age, and rejection of signatures made under an old mandate version. Require the owner's fresh assertion to confirm, following the joint signing rule, and add oracle cases for cross-route and stale-signature replay."
+  },
+  {
+   "severity": "medium",
+   "issue": "The product-map maker-checker rows are misquoted. ADM-35 names the line manager as checker for staff write tokens, but A12 requires SECO. The ADM-32 row A12 cites is about sponsor integration keys, not personal tokens. SPN-16 has no second approver, yet A12 makes all sponsor and staff tokens, including read-only ones, two-person.",
+   "fix": "Quote the rows correctly and record the deviation as a decision in Decisions.md: SECO or line manager, and whether read-only tokens skip the second person. Freeze it before the Oracle step."
+  },
+  {
+   "severity": "medium",
+   "issue": "The joint signing rule and the entity 'verified signatory' flag come from A30 (AM3), which is neither a dependency nor built at A12's gate, and no fixture is stated.",
+   "fix": "Define a SignatoryPort backed by a fixture until A30 lands, and require A30 to re-run A12's joint and entity oracle cases."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 8-12 h estimate equals A11's even though A12's scope is far larger (four issue paths, versioned mandates, confirmations, Ed25519 keys, a two-process revocation harness, a full matrix sweep, and the A12.1 items).",
+   "fix": "Raise the estimate to about 14-20 h, or split confirmations, signing keys and the oversight routes into a separate node."
+  },
+  {
+   "severity": "low",
+   "issue": "The prefix-forgery challenge expects TOKEN_WRONG_ENVIRONMENT, but the spec does not say whether a presented prefix that differs from the stored prefix gives TOKEN_INVALID instead.",
+   "fix": "Define the check order (parse, look up, compare prefix, then check environment) and align the challenge's expected code."
+  },
+  {
+   "severity": "low",
+   "issue": "A06's seed token format (SHA-256, rxk_sbx_) contradicts A12's Argon2id and rx_<type>_ format. A12 also uses SP-VAL and SP-PM where the product map uses TP-VAL and TP-PM.",
+   "fix": "Require seeded tokens to be issued through A12's issue path, and use the product-map role ids or give a mapping."
+  }
+ ]
+}

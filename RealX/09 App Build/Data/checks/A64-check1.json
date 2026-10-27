@@ -1,0 +1,80 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "SPN-08 and SPN-09 render many fields that the upstream read contracts do not return, and only some are listed as Specify follow-ups. The spec also bans client formatting (lint on Intl.NumberFormat, toFixed and _cents/_bps arithmetic) and requires every figure to be a formatted twin. A40's sponsor read (GET /v1/sponsor/distributions/runs) has none of the following: legal_hold; due_date (the '10 Oct 2026' Paid-to-wallets chip the pass criteria require); the funding instruction (amount, account name, BSB, account number); the received/required shortfall; on_behalf_of or the agent name on chain stages (needed for the 'agent Month-end bot for Leo P.' challenge). Its past_runs[] also lacks the vehicle name, the kind or declaration reason, the late flag and reason, and a formatted total. A47's register view has no formatted twins for units, pct_bps, largest_holding_bps or holder_cap_bps, and no frozen_units. The builder must either break the lint or escalate mid-build. A QA that accepts client formatting would pass a wrong build.",
+   "fix": "Extend the Specify follow-up list to name every missing field by owner. From A40: legal_hold, due_date, funding{formatted amount, account_name, bsb, account_number, reference, received, required}, chain[].actor{kind, person_name, agent_name, token_prefix}, and past_runs[].{vehicle_name, kind, late, late_reason, declaration_reason, formatted{total, per_unit, paid_at}}. From A47: formatted twins for every KPI and row figure, plus rows[].frozen_units. From A41: confirm formatted twins. Require the page to render '—' for a missing twin and never format locally. Make 'all follow-ups merged upstream' an entry condition of the Build step."
+  },
+  {
+   "severity": "high",
+   "issue": "The spec makes rent-roll import an SP-FIN action (and an action for SP-FIN's agent under distributions:write) through A34's POST /v1/properties/{id}/rent-roll/import. A34 grants rent_roll:import only to SP-OPS and TP-PM/SP-PM, and A98 confirms that SP-PM imports rent rolls. As written, the API would refuse J06 step 1, the J06 and J19 agent runs, and the 'agent as sponsor owner' challenge, and parity.json would record the wrong scope. The spec raises only the 'one import route' conflict, not this role and scope conflict.",
+   "fix": "Raise a Specify follow-up to A34 and A12: either grant rent_roll:import to SP-FIN and SP-FIN's agents, or route SP-FIN's import through A40's income-period import. Name the resolved scopes in the Prepare panel and in parity.json (rent_roll:import for the import, distributions:write for the period and the proposal). Give the challenge's agent token both scopes, and add a probe that a token holding only distributions:write is refused at import."
+  },
+  {
+   "severity": "medium",
+   "issue": "J14 and the 'Late reports pause offers, not money' challenge mix up two A34 mechanisms. The pause is set only when an attestation is still unsigned past grace_until (the 'overdue' state). J14 step 1 is different: an attestation filed on time with the insurance renewal overdue, which leads to a PROP flag and then ASTM's distressed escalation, not a pause. As a result, the challenge expects a pause banner that A34 will not produce. The spec also never asserts J14 step 7's distressed → operating transition.",
+   "fix": "Split the challenge into two fixtures. (a) Flagged attestation: shows the flagged pill, the amber-flag caption and the Distressed pill; the renewed certificate is re-signed and the row reads 'Waiting for RealX review' until PROP reviews it; the flag and the Distressed pill then clear; no pause banner appears. (b) Late attestation: left unsigned past grace + 1 h, the pause banner appears; after a late signature it stays until PROP reviews. State that the page never derives the pause from item state."
+  },
+  {
+   "severity": "medium",
+   "issue": "runStageLabel(state) uses the SM-08 state alone, but a run stays in 'draft' both before and after the sponsor owner approves (A40 leaves draft only when RealX locks the run). After Mia Chen approves, the status line would still read 'Waiting for sponsor owner'. The 'Draft before proposal' case cannot occur, because proposing creates the run. The 15-state table test would pass with this wrong label.",
+   "fix": "Derive the draft label from chain[sponsor_owner_approval].status as well: draft + done → 'With RealX fund accountant'. Give explicit labels for calculating, calculated and funded. Add a draft-after-approval row to the table test and the SM-08 matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "SPN-11 gives SP-VAL the full form: cash, debt and liabilities inputs, the Net assets/Token valuation list and the NAV preview. A98 says SP-VAL may not see the sponsor's cash, debt or liabilities and may not submit. The spec limits SP-VAL only to its own uploads, so a build that leaks these figures would pass.",
+   "fix": "Define an SP-VAL variant: firm-locked valuer, report, date, basis, purpose, property value and comparables only, with no cash/debt/liabilities, no NAV preview and no Submit. Add A98 as a dependency, add the SP-VAL view to the state matrix, and add a DOM probe asserting that none of those fields renders."
+  },
+  {
+   "severity": "medium",
+   "issue": "The graph dependencies miss interfaces the spec uses directly: A41 (the withholding-preview route; A41 names A64 as its consumer), A98 (the SP-PM and SP-VAL roles), A104 (MCP tools used in the pass criteria and challenges), and A06 and A23 (the seed and the compose stack). None of these is in A64's dependency closure.",
+   "fix": "Add A41, A98 and A104 to A64's deps in final-graph.json and in the 'Depends on' line. Add A06 and A23, or state that the AM6 milestone boundary guarantees them. Regenerate the graph."
+  },
+  {
+   "severity": "medium",
+   "issue": "The design-fidelity pass criterion demands zero font, colour, spacing, order or radius differences, and requires every seeded figure to equal the design string (register rows, chain names). The spec deliberately departs from the prototype in several places: the bug-3 wallet format, 8 register columns instead of 6, the product-map RealX chips replacing 'RealX approval · Treasury + compliance', the bug-2 pill, and the added overview table and reconciliation card. The challenge exempts these, but the pass criterion does not, so the criteria contradict each other.",
+   "fix": "Add an explicit list of intentional deviations to the pass criteria, checked for pattern conformance rather than identity. Limit the register-row identity check to Holder, Type, Units, % and Status, and the chain identity check to the design's first three chips and the Paid date."
+  },
+  {
+   "severity": "medium",
+   "issue": "SPN-11 shows 'Approve as sponsor owner … as on SPN-09', but A34's valuation reads have no your_turn and the spec names no eligibility source for this screen. The builder would guess from the client role, which could show the control to the maker, even though the person-only pass criterion depends on it.",
+   "fix": "Render the control only when A14's GET /v1/approvals/{sponsor_approval_id} marks the caller eligible, or raise an A34 follow-up for a your_turn field computed by A14. Add a probe with the maker as SP-OWN to the person-only matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "A41 exposes a sponsor write, PUT /v1/vehicles/{id}/tax/runs/{run_id}/components (SP-FIN, while the run is draft). It sets the distribution's tax character, which drives withholding and AMMA, but no screen renders it. A human SP-FIN therefore cannot do something their agent can, which breaks D04 parity in reverse.",
+   "fix": "Add a Tax components block to SPN-09 while the run is draft: component type and basis points of gross, sent to A41, with the API's refusal shown once the run leaves draft. Add it to parity.json (sponsor:tax:write, delegation 'agent') and to the state list. Otherwise record, with A41, a decision that components are staff-only."
+  },
+  {
+   "severity": "medium",
+   "issue": "G22 testing of the delegable, money-adjacent actions (propose a distribution, export holder PII, submit a valuation) covers only scopes and person-only acts. Nothing probes the vehicle allow-list, amount caps, expiry, revocation, time windows, kill switches, or the person's sensitive-action notice.",
+   "fix": "Add probes that must all be refused: a token restricted to Bay Road proposing for Gympie Road, a proposal over the token's amount cap, and calls after revocation, after expiry and after a tenant kill switch. Assert that an agent's register export triggers A101's notice to the person and appears on SPN-16 filtered to that token."
+  },
+  {
+   "severity": "low",
+   "issue": "The design-extension path is wrong. The spec cites app/design-ext/RealX App Ext.dc.html, but A50 owns app/design-ext/investor-sponsor/RealX App Ext A.dc.html.",
+   "fix": "Correct the path and reference A50's screens.json keys for SPN-11 and SPN-12."
+  },
+  {
+   "severity": "low",
+   "issue": "The sponsor-owner confirm sheet shows the payment 'file hash' and 'holders', but at sponsor sign-off the run is still draft: no payment file exists yet and the snapshot is not locked.",
+   "fix": "Show the period, total, per-token figure, the rent-roll import sha256 and the approval payload_sha256 instead."
+  },
+  {
+   "severity": "low",
+   "issue": "The node's gates omit G06 and G07, which the product map lists for SPN-08 and J19 step 2 cites (G07). The cap tile and the residency column therefore have no gate-linked done criteria.",
+   "fix": "Add G06 and G07 (display) with done criteria: the cap tone comes only from cap_warning, and residency is shown exactly as A18 returns it."
+  },
+  {
+   "severity": "low",
+   "issue": "The field name does not match the A43 contract: A43 returns flags[].suggestion, but the spec renders suggested_wording.",
+   "fix": "Use flags[].suggestion, or raise a rename with A43 at Specify."
+  },
+  {
+   "severity": "low",
+   "issue": "The J19 agent run does not say whose agent submits the routine announcement. Under A43 only SP-OWN may submit, so the parity entry 'draft, check and submit' is ambiguous about the role.",
+   "fix": "State that SP-IR's agent drafts and checks and SP-OWN's agent submits, and that a submit with SP-IR's token is refused. Record the role on each parity.json entry."
+  }
+ ]
+}

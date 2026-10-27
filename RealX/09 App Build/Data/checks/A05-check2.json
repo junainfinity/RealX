@@ -1,0 +1,65 @@
+{
+ "pass": true,
+ "findings": [
+  {
+   "severity": "medium",
+   "issue": "The graph data (final-graph.json) still lists only A01 as A05's dependency, and the spec says so itself. The orchestrator can schedule A05 alongside A02 and A03, but it needs their passed exports (format.ts, Cents, gates.ts, the state tables, labels.ts).",
+   "fix": "Add the A02 -> A05 and A03 -> A05 edges to final-graph.json and app-graph.json, then remove the plan note from the spec."
+  },
+  {
+   "severity": "medium",
+   "issue": "toneFor form (b) is a flat display-string map, but the prototype gives the same string different tones. 'Review' is amber at dc line 849, red at 860 (PEP screen) and grey at 880. 'Missing' is amber at 847 and red at 882. Composite strings ('Break · 2 units', '2 flags', 'Closed · no SMR') would not match an exact key and would fall to grey. The challenge requires 'Break · 2 units' and the PEP 'Review' to be red, so no build can satisfy both the prototype and the challenge.",
+   "fix": "Key form (b) on (vocabulary or context, text), for example {vocab:'kycCheck', text:'Review'}. Name the vocabularies from design analysis section 7. Define a head-word rule for composites ('Break · n units', 'n flags'). Add test rows for each context-dependent string with its dc line number."
+  },
+  {
+   "severity": "medium",
+   "issue": "The state count is wrong. A03 has 181 catalogue states and exports 183 once its section 2.5 extensions are added (SM-00 and SM-04 gain one each). A05 asks for 'an explicit entry for all 181 A03 states' in three places, while its exhaustiveness test iterates A03's exported states.",
+   "fix": "Say 'every state A03 exports (183 including the extensions)' and derive the count in the test from A03's export, never from a literal."
+  },
+  {
+   "severity": "medium",
+   "issue": "The PriceBand props do not match A02. The spec makes the band edges and marker 'basis points of valuation', with fixtures 85/115/52. But 52 is a track position, not a share of valuation. A02's bandMarker returns trackPositionBp, with trackBandStartBp 1500 and trackBandEndBp 8500, and A02 says A05 draws trackPositionBp. Mapping valuation percentages onto the track would put arithmetic in the component, and nothing defines that mapping.",
+   "fix": "Make the required props trackBandStartBp, trackBandEndBp and trackPositionBp (0..10000, from A02's bandMarker), plus lo, hi and valuation labels already formatted with formatAud. Fixtures pass 1500/8500/5200. Add a challenge with a price below lo, where trackPositionBp lands in the out-of-band zone."
+  },
+  {
+   "severity": "medium",
+   "issue": "The 'Verify wiring' challenge cannot go red. If Fable removes the realx.verify block and then runs scripts:sync, the generated targets match again, so A01's step 12 passes. A01 has no 'missing-step check'. Verify stays green, so the challenge fails, or the builder invents a mechanism the spec does not describe.",
+   "fix": "Add a Vitest test in packages/ui, run by A01's step 7. It reads scripts/verify-steps.lock.json and asserts that ui:lint, ui:build, ui:dist-check, ui:catalogue-a11y and ui:phone-width are registered with their groups. The challenge then expects that test to fail."
+  },
+  {
+   "severity": "medium",
+   "issue": "A01's step 12 requires git status to be identical at the start and end of verify. ui:build writes dist/, and the Playwright steps write test-results and reports. The realx block declares no gitignore lines, so verify goes red, or the builder commits dist/. Nothing forbids verify steps from rewriting the tracked tokens.json or the evidence screenshots under packages/ui/evidence.",
+   "fix": "Add realx.gitignore lines: packages/ui/dist/, packages/ui/test-results/, packages/ui/playwright-report/ and the catalogue build output. State that verify steps only compare tokens.json, design-source.json and the screenshots, never write them. Produce the screenshots with a separate non-verify script, such as ui:evidence."
+  },
+  {
+   "severity": "medium",
+   "issue": "The spec requires a green focus ring on every component and classes focus indicators as ui-boundary, which needs 3:1. Green #1F5E4B measures 2.19:1 on dark.1 #1C1E22 (AdminSidebar items) and 2.32:1 on ink #17191C (OrderSummaryAside, the dark surfaces). The contrast test then fails with no permitted fix, or the builder breaks Fable's 'visible green focus ring' check.",
+   "fix": "Define focus.ring tokens: green #1F5E4B on light surfaces and green.onDark #8FC3AC on dark surfaces (8.40:1 on dark.1). Add both to the contrast table and make Fable's focus check surface-aware."
+  },
+  {
+   "severity": "medium",
+   "issue": "The dev-entry guard relies on the exports 'development' condition and on dist/ checks. A01's tsconfig.base maps @realx/* to each workspace's src/index.ts, and the Next.js apps honour those paths. Apps therefore compile packages/ui from source, not from dist/. 'No fixtures in dist' says nothing about app bundles, and 'a production build fails to resolve @realx/ui/dev' is not proven for Next.js.",
+   "fix": "Add a test that src/index.ts and everything it imports never reaches src/dev (a dependency-graph check). Name the challenge's scratch consumer as a Next.js production build that uses A01's tsconfig. Record for A52 and A53 that they must apply @realx/ui/lint and scan their production bundles for the fixture strings."
+  },
+  {
+   "severity": "low",
+   "issue": "A02's formatAud(cents, {decimals}) and formatBp(bp, {decimals}) require an options argument. The challenge feeds cents only. The float fixture formatAud(2395.92) fails tsc because the argument is missing, which would happen even if Cents were a plain number, so it proves nothing. formatPerUnit, another A02 display formatter, is not re-exported. The planted 'local formatAud divides a number by 100' fails lint only if the parameter has a money name.",
+   "fix": "Write the vectors as formatAud(x, {decimals: 2}). Make the fixture formatAud(2395.92, {decimals: 2}) and assert error TS2345 on argument 1. Re-export formatPerUnit. Write the plant as priceCents / 100, or rely on a test that format/ exports exactly the named set."
+  },
+  {
+   "severity": "low",
+   "issue": "The Unlocks wikilinks [[A50 - Design extension A: ...]] and [[A51 - Design extension B: ...]] use colons. The files are named 'A50 - Design extension A- ...', so both links are broken.",
+   "fix": "Link to [[A50 - Design extension A- investor and sponsor screens not in the prototype]] and [[A51 - Design extension B- operator console screens not in the prototype]]."
+  },
+  {
+   "severity": "low",
+   "issue": "The daylight-saving vectors are given in local wall time ('just before 3:00 on 5 Apr', 'just after'), and 2:00-3:00 happens twice that night. The Brisbane comparison is not tied to a date; Brisbane only differs from Sydney during AEDT.",
+   "fix": "Give UTC instants: 2026-04-04T15:59:59Z prints AEDT 02:59 and 16:00:00Z prints AEST 02:00; 2026-10-03T15:59:59Z prints AEST 01:59 and 16:00:00Z prints AEDT 03:00. Tie the Brisbane check to 14 Oct 2026."
+  },
+  {
+   "severity": "low",
+   "issue": "The pass criterion says A05.json and A05.qa.md are the only files A05 writes outside packages/ui. The gauntlet convention and A01's carve-out put the verify JSON at evidence\\A05\\verify.json.",
+   "fix": "Allow the evidence\\A05\\ folder as well, matching A01's owned-path tolerance."
+  }
+ ]
+}

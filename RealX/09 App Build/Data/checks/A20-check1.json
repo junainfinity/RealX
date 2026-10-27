@@ -1,0 +1,110 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "high",
+   "issue": "The break-count expectations contradict the rules as written. One planted drift trips several rules, each with a different dedup key. Gympie Road (register 9,998, chain 10,000) opens an R2 qty break (subject: the vehicle) and an R3 qty break (subject: the holder). The Bay Road unknown wallet also trips R2 or R3, plus R4 stale_registration. So three expectations cannot all hold: the challenge's 'exactly three breaks', the design criterion 'breaks_open: 1, breaks_open_units: 2', and the fast-check property 'every single perturbation gives exactly one break'.",
+   "fix": "Specify a break-set grouping rule in the pure builder. For example: merge R2 into R3 holder breaks when the holder deltas explain it (one qty break per vehicle, with holder child lines), and attach R4 findings to an existing unknown_holder break. Restate the expected break sets in the challenge, the summary criterion and the property test before Fable writes the oracle."
+  },
+  {
+   "severity": "high",
+   "issue": "'trusts_matched: 7' cannot come out of the spec's own semantics. Open offers (Kent Street, Ann Street, Unley Road) are 'not_issued'; the spec requires Kent Street to return result: not_issued. Marine Parade is 'neither matched nor breaking'. That leaves 3 matched (6 if escrow rows count as matched), never 7. The '7 of 8' pass criterion and the challenge cannot be met.",
+   "fix": "Define trusts_matched with one formula, for example total − breaking − incomplete, with not_issued vehicles whose R10 escrow leg matches counted as matched. Otherwise record '7 of 8' as a reconciled design difference. Make the challenge, the pass criteria and the summary fields agree."
+  },
+  {
+   "severity": "high",
+   "issue": "The register side is taken at the wrong time from the wrong source. A18 writes the internal snapshot at 00:00, but the registrar extract (where the -DRIFT sandbox option shows up) is only fetched at 02:10 (source: registry). A20's 02:00 nightly compares against the 00:00 internal version. No rule compares RealX's internal copy with the registrar extract. Result: the planted Gympie drift is never seen by the nightly run the seed says opened it, and the legal record is never on the compared side. Field names also differ from A18 (register_version_id vs version_id; certified_by realx_extract vs A18's source enum).",
+   "fix": "Run the nightly after the extract fetch: either schedule it later or trigger it on register.version.created with source registry, and keep 02:00 as the documented label. Use the registry extract or the certified version as the register side of R2 and R3. Add a rule R3a register_divergence (Sev1): internal snapshot vs registry extract, per holder. Adopt A18's field names and source enum."
+  },
+  {
+   "severity": "high",
+   "issue": "The targeted-run trigger events do not exist under those names. A20 listens for registry.ack.received, registry.instruction.rejected and ledger.statement.imported. A18 actually emits register.instruction.acked, register.instruction.rejected, register.changed, register.version.created and register.instruction.pending_sla. Bank statements come from A17 (statement.ready), not A16. Because fixture emitters stand in for the producers, a build wired to the wrong names passes A20's gate and then never fires in the integrated stack.",
+   "fix": "Use the producers' real event names: A18 register.instruction.acked and rejected, register.changed, register.version.created, register.instruction.pending_sla; A17 statement.ready; A15 custody.op.confirmed. Add a pass criterion that checks the subscriptions against A18's and A17's outbox catalogues."
+  },
+  {
+   "severity": "high",
+   "issue": "The bank leg has no real upstream. The spec takes bank statements and balancesAsOf from A16, but A17 owns getStatement, statementId and the daily statement. A16 exposes snapshot({tenant_id, as_of_seq | statement_id}), not balancesAsOf. A17 is neither a direct nor a transitive dependency of A20.",
+   "fix": "Add A17 as a dependency (AM1, depends only on A16, so no cycle). Build the BankSnapshot from A17's statement. Take the ledger side from A16 snapshot({statement_id}) with its accounts_hash. Mark non-client-money accounts with A16's is_client_money = false."
+  },
+  {
+   "severity": "high",
+   "issue": "The halt interface conflicts with A19. A19 owns the halts table, exports openHalt and closeHalt, and says A20 opens the recon halt through openHalt. A19 defines no registerHaltSource; that function only appears in A48. The G10 pass criterion depends on an interface A20's dependency does not provide, so the builder would have to edit A19, outside its owned paths.",
+   "fix": "Choose one contract and state it the same way in A19, A20 and A48. For example, A20 calls A19 openHalt/closeHalt (cause recon_break, with the reopening criterion) in the same transaction as the Sev1 break, and keeps recon_halt as a detail table. Add a contract test against A19's real export."
+  },
+  {
+   "severity": "high",
+   "issue": "Rule inputs beyond the four snapshots are undefined. R1, R4, R5, R6, R2/R7 (allocation files, approved burns, mint events carrying approval ids), R8, R11/R13/R17 (chain events, holding changes), R12, R14 and R18 need data that is neither in compare(register, chain, bank, ledger, ruleSetVersion) nor in the ChainSnapshot type, which has no events. The oracle therefore has no frozen input shape to bind to. Several of these sources are AM3 nodes with no stub contract. Replay on the three keys would also fail spuriously, or pass wrongly, whenever that off-chain state changes.",
+   "fix": "Define a frozen AuxInputs type with named provider interfaces and AM1 stubs. Store aux_inputs_sha256 and the aux snapshot on recon_run, and replay from the stored copy; reproducibility becomes 'three keys plus the aux hash'. Add events[] to ChainSnapshot (mint, burn, transfer and forced transfer, with tx hash and approval id)."
+  },
+  {
+   "severity": "high",
+   "issue": "SM-07 and frozen-amount reconciliation cannot be tested. The spec claims frozen amounts are compared exactly, and A28 and A91 rely on R3 doing it. But the RegisterSnapshot carries no frozen or locked quantity, and R3 compares balances only. The SM-07 states locked, partially_frozen and deregistered, and the lock-in release transition, are not checked by any rule.",
+   "fix": "Add R3b freeze_drift (Sev1): chain frozen_amount = units in register lots still under lock-in + active freeze orders (supplied as an aux input). Extend the SM-07 'done' clause to every transition, with one named fixture each."
+  },
+  {
+   "severity": "high",
+   "issue": "The scope of a cash break is undefined and conflicts with the run model. Breaks and halts are keyed by vehicle_id, and the platform run covers R18 only. Client-money accounts are shared across vehicles, so running R10 in every vehicle run opens one cash break per vehicle: 8 breaks for the one-cent case, not the challenge's 1. The challenge says a cash break halts only payouts and escrow release, while the body blocks all nine actions. The account-to-vehicle mapping is never defined, and A39 calls assertClear(null, 'payout'), which A20's signature does not support.",
+   "fix": "Run R10 for shared accounts in the platform run, with subject_ref = account_ref. Define the account-to-vehicle mapping from A16's owner_ref and the exact actions a cash break blocks, including platform-level assertClear(null, action). Add this case to the halt-guard matrix."
+  },
+  {
+   "severity": "high",
+   "issue": "Force re-sync bypasses maker-checker. The product map, the catalogue and A18 all require REGO as maker and the head of operations as checker (4E, register.resync). A20's POST /v1/recon/vehicles/{id}/resync needs only REGO and asks A18 for a fresh extract. That is a single-person path, and an M11 agent token can use it too.",
+   "fix": "Have A20's endpoint create only the A14 register.resync 4E request (a token may act as maker only), and queue the targeted run on A18's register.resync.diffed event. Alternatively, remove the endpoint. Add a challenge proving that REGO alone, or a REGO token, cannot trigger the fetch."
+  },
+  {
+   "severity": "high",
+   "issue": "The SM-00 confirmed -> reconciled transition is satisfied only by a fake. markReconciled and markBreak are a fixture stub. A15 owns CustodyOp and says the reconciled state is driven through A14's internal transition endpoint, and A14 refuses closed without a reconciled event (APR_NOT_RECONCILED). A15 is not a dependency of A20.",
+   "fix": "Add A15 as a dependency (no cycle). Drive reconciled through A15's status interface and A14's internal transition endpoint, carrying the approval id. Assert the A14 request reaches reconciled and then closed only after a clean run."
+  },
+  {
+   "severity": "medium",
+   "issue": "The graph is missing dependencies the spec uses. A06 (seed data and AS_OF) is not an ancestor, yet every design-fidelity criterion uses the standard seed. A104 (MCP server) is not an ancestor, yet a hygiene criterion checks the MCP tool catalogue. No AM1 source is named for the vehicle 'issued or later' state, which comes from SM-04 in AM3.",
+   "fix": "Add A06 and A104 as dependencies. Name the AM1 source for the vehicle list and its issued state, as a stub that A36 replaces."
+  },
+  {
+   "severity": "medium",
+   "issue": "The consumer contracts do not match. (a) A14 uses reason code APR_RECON_BREAK_OPEN and A40 uses DST_RECON_BREAK_OPEN, and both block on Sev1 only; A20 says the code is recon_not_clear and that Sev2 blocks distribution_approval. (b) A38 calls preflight with purpose 'allocation', which A20's list does not include. (c) recon.run.completed, recon.break.closed and recon.halt.set/cleared are declared only as audit events, but A38 and A48 subscribe to them as outbox events. (d) A28 opens unknown_execution and role_drift breaks through A20, but A20 exposes no API for that.",
+   "fix": "Publish one consumer contract table in A20 covering: the purpose enum (add allocation), the reason code (align with A14), the Sev2 blocking set (and align A14 and A40 with it), the outbox events with their payloads, and raiseExternalBreak() with an unknown_execution type."
+  },
+  {
+   "severity": "medium",
+   "issue": "The G10 behaviour differs from the product map with no recorded decision. G10, ADM-17's purpose and mock ('BREAK Sev2 ... Resale halted') and the catalogue all halt resale on any break. The spec halts resale and blocks board_trade only for Sev1.",
+   "fix": "Either add board_trade and the G10 halt source to the Sev2 blocking set, or record the Sev1-only rule as an engineering decision (citing the architecture brief §7) in Decisions.md and the coverage matrix."
+  },
+  {
+   "severity": "medium",
+   "issue": "ADM-17 roles TP-RE and TP-REG are missing from the permission matrix. The trustee holds the legal register and is a checker on 6E adjustments, but the spec lists only TP-AUD and TP-OBS for read access.",
+   "fix": "Grant TP-RE and TP-REG read access scoped to their appointed vehicles, include them in the matrix-generated permission tests, and give their agent tokens read-only parity."
+  },
+  {
+   "severity": "medium",
+   "issue": "The source_unavailable and replay_mismatch break types appear in the challenges but not in the break-type table. Their severity, owner, dedup key, escalation, halt effect and closing condition are unspecified.",
+   "fix": "Add both types to the break table. source_unavailable: Sev2, owner REGO, blocks pre-flights, escalates at 24 h, closes on the next complete run. replay_mismatch: Sev1, owner ENGO/SECO. Add their entries to the cause/fix table."
+  },
+  {
+   "severity": "medium",
+   "issue": "Nothing emits the ADM-18 alert money.client_money_delta. A20 says A16 emits it, but A16 says the bank-vs-ledger delta belongs to A20's R10, and A39 only consumes that result.",
+   "fix": "Have A20 emit money.client_money_delta (TRSY + CFO, ADM-18) for R10 cash breaks, exactly one alert per break, and update the A13 cross-reference."
+  },
+  {
+   "severity": "medium",
+   "issue": "The nightly cycle writes app/evidence/recon/<date>.json. That path is outside A20's owned paths and is the gauntlet's evidence folder, so the running app would change build evidence.",
+   "fix": "Keep daily recon evidence in the database or in a separate data path, and expose it only through the API."
+  },
+  {
+   "severity": "low",
+   "issue": "The seed timestamps conflict. The run is 'recorded at 06:00' and the subline reads last_cycle.finished_at, but the break-opened audit event and alert are at 06:02.",
+   "fix": "Pin started_at 06:00, finished_at 06:02 and opened_at 06:02, and render the 06:00 strings from started_at. State which field each design string reads."
+  },
+  {
+   "severity": "low",
+   "issue": "Two design references are wrong. The key 'ProofBand' does not occur in RealX App.dc.html; the text 'Register and chain agree' at line 277 does. The adRecon data is not in support.js; it is defined at line 885 of the dc.html.",
+   "fix": "Cite the prop region by its text anchor, and cite the adRecon definition in RealX App.dc.html."
+  },
+  {
+   "severity": "low",
+   "issue": "The scope names recon:read, recon:run, recon:act and recon:resync are invented locally, while A12 says scopes come from A03's permission matrix.",
+   "fix": "Define them as A03 matrix cells through A03's extension point, and test them via validateTokenScopes."
+  }
+ ]
+}

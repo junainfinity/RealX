@@ -1,0 +1,65 @@
+{
+ "pass": false,
+ "findings": [
+  {
+   "severity": "critical",
+   "issue": "The tenant model contradicts itself and A04, which blocks the core money path. LedgerAccount.tenant_id puts investor_cash and bank_mirror in the platform tenant, and offer_escrow, distribution_payable, withholding_payable and rounding in sponsor tenants. But the spec refuses 'mixed tenants' journals (LDG_LEGS_NOT_IN_CATALOGUE), and A04's deferred trigger requires every entry's tenant_id to equal its journal's. That makes order.fund, order.refund, escrow.release, distribution.fund and distribution.pay unpostable. The zero-sum check 'per tenant' also fails, because sponsor tenants hold client-money liabilities but no bank_mirror asset.",
+   "fix": "Put every client-money account (plus operating and revenue) in the RealX platform tenant. Carry sponsor_tenant_id and vehicle_id only as attributes for sponsor read scoping (an RLS view with an own-vehicles constraint). Check zero-sum per currency across the platform ledger. Add oracle cases that post order.fund and distribution.pay for a sponsor vehicle."
+  },
+  {
+   "severity": "high",
+   "issue": "The approval binding (G13) can be bypassed, and it cannot be met as written. (a) 'object_ref equals external_ref' contradicts rows bound to a run, batch, sweep or transfer (distribution.pay per line, order.refund per order under a batch approval, fee.sweep, bank.internal_transfer). (b) No amount or payload hash is checked, so an approval for A$100 can post A$49,000. (c) The approval's policy_code is not checked against the row and amount, so a single-checker 4E approval satisfies a withdrawal of A$50,000 or more, or an escrow.release that needs 6E. (d) 'queued_for_custody and beyond' also accepts confirmed, reconciled and closed approvals, and expiry and terminal states are not addressed.",
+   "fix": "Define a per-row approval_object_ref mapping. Verify an explicit allow-list of A14 states and that the approval is not expired. Check that the amount equals the approved canonical payload, or that Σ lines ≤ the approved total under lock. Check that the approval's policy_code is at least as strict as what A14's resolver returns for the row and amount. Make the approval id single-use for single-object rows. Add oracle cases for wrong amount, weaker policy, closed approval, expired approval and reused id."
+  },
+  {
+   "severity": "high",
+   "issue": "The withdrawal thresholds have two sources of truth, and the config route bypasses maker-checker. A16 keeps the AUTO and second-approval thresholds in per-environment config, and its pass criterion says 'changed config alters the result without a code change'. A14 keeps them as immutable approval_policies rows that only a 6E policy.change can alter. So the AUTO cap can be raised by a config edit, and A16 and A14 can disagree. `4E_SECOND_APPROVAL` is not an A14 policy code. The 'pure' evaluator has no allow-list input, and 'same day' has no time zone and no rule for which withdrawal states count.",
+   "fix": "Make A14's policy rows the single source, read by evaluateWithdrawalPolicy through A14's resolver (a fake plus a contract test until A14 lands). Change the pass criterion to 'an approved policy.change alters the result'. Map the second approval to a real A14 code (e.g. 6E) in A16 and A39. Pass destination_allowlisted as an input. Define 'same day' as the Australia/Sydney civil date and count requested, approved, paying and paid withdrawals. Test at the Sydney midnight boundaries. Note the design's 'over A$50,000' wording against the inclusive ≥ rule."
+  },
+  {
+   "severity": "high",
+   "issue": "The schema and config work collides with paths other nodes own. Build sub-agent (1) creates plural ledger tables, the deferred balance constraint, the insert-only trigger and the config keys. A04 owns packages/db/src/schema (ledger.ts) and the migrations, and already defines the singular ledger_account, ledger_journal, ledger_entry and ledger_snapshot tables and the balance and cross-tenant trigger. A04 lacks ledger_reservation and ledger_journal_type and the columns is_client_money, posting_seq, balance_after_cents, frozen_approval_id and the reversal links. A08 owns packages/config. The 'only owned path changed' criterion cannot pass, and Escalate contradicts sub-agent (1).",
+   "fix": "Reopen A04 now to add ledger_reservation, ledger_journal_type, the missing columns and constraints (UNIQUE tenant_id+journal_type+external_ref, gapless posting_seq, is_client_money check) using the singular names. Alternatively, name exactly which tables A16 registers through A09's module-schema registry and how they are migrated. Drop the duplicate trigger and constraint work from A16. Declare the ledger.* config keys through A08's schema extension mechanism."
+  },
+  {
+   "severity": "high",
+   "issue": "Dependencies are missing. deps are only A09 and A02, but the spec writes audit events through A10's writer in the same transaction and passes on A10's chain verifier. It also raises Sev1 through A13, binds approvals to A14 state and policy (faked), uses A06's seed for design fidelity (A06 is not transitive through A09), and probes with A12 token prefixes and an MCP call (A104). With A10 and A14 faked, a wrong binding or a non-transactional audit write can pass.",
+   "fix": "Add A10, A13, A14 and A06 to deps, and A12 and A104 if the probes stay. None of these depends on A16, so there is no cycle. If A14 must stay a fake, add a criterion to A14's gate that re-runs A16's binding oracle against the real engine. Update final-graph.json and the Depends-on line together."
+  },
+  {
+   "severity": "medium",
+   "issue": "The read-route scope ids `wallet:read` and `treasury:read` do not fit A03's model, where scopeId === actionId (e.g. 'INV.order.place'). A09's registration throws on unknown scope ids. Sponsor access to /v1/ledger/accounts is also under a staff scope with no sponsor action or role named.",
+   "fix": "Use the A03 action ids for the POR-05, POR-04 and ADM-18/M16 read actions. Name the sponsor action with an own-vehicles constraint, or drop sponsor access. Test that every x-realx-scope resolves in A03."
+  },
+  {
+   "severity": "medium",
+   "issue": "awaiting_investment_cents ('Σ funded still-open orders') and G11's done test ('offer_escrow = Σ funded open orders at every instant') need A37's order state, and A37 depends on A16. escrow.release is a single offering-level leg, so an investor's escrow share cannot be derived after release. A17 says A37 owns this figure.",
+   "fix": "Derive both from the ledger alone: offer_escrow legs carry line_ref = order id, and refunds and release post per order line (or through a per-investor sub-ledger). Restate G11 done as 'Σ per-order escrow sub-balances = offer_escrow balance after every journal', and align A17's note on who owns the figure."
+  },
+  {
+   "severity": "medium",
+   "issue": "The treasury summary's fidelity target conflicts with itself. The design shows 'Client money A$18,420,316.44 · 4 accounts', where the total covers the 3 client accounts but the count includes operating. A16 excludes operating from account_count but demands a field-for-field match, and A39's fidelity test expects '(4 accounts)' from A16. npp_in_today and payouts_queued are also defined differently in A16 (ledger balances) and A39 (withdrawal, refund and release queues, and A17 KPIs).",
+   "fix": "Fix account_count at 3 client-money accounts and record '4 accounts' as a design discrepancy for the console node. Alternatively, return both counts and state which one the tile shows. Remove npp_in_today and payouts_queued from A16 or define them exactly as A39 does, and update A39's test."
+  },
+  {
+   "severity": "medium",
+   "issue": "The large-deposit control differs from the product map. J04 step 6 and D07 require manual matching with TRSY -> CFO approval above $10k. The spec auto-posts deposit.matched and places an aml_hold that A42 (an AM3 node) clears. That control has no maker-checker, and every J04 deposit of A$25k stays reserved until A42 exists.",
+   "fix": "Post receipts at or above manual_review_cents to suspense_unmatched, or require a 4E TRSY -> CFO approval bound to the receipt. Leave AML holds to A42's explicit reserve(aml_hold). Add catalogue tests at A$9,999.99 and A$10,000.00, or record the deviation as a question for the user."
+  },
+  {
+   "severity": "medium",
+   "issue": "The reversal row uses 'the original's policy or stricter', so journals whose policy is 'none' (deposit.matched, deposit.unmatched, withdrawal.settle, distribution.fund, interest.float) can be reversed without maker-checker by the owning service. For example, A17 could wipe a credited deposit on its own.",
+   "fix": "Set a minimum of 4E TRSY -> CFO for every reversal (6E where the original was 6E), bound to the original journal id and amount. Only bank-originated returns are exempt, and they use their own rows. Add an oracle case that reverses deposit.matched with no approval and expects LDG_APPROVAL_REQUIRED."
+  },
+  {
+   "severity": "medium",
+   "issue": "Agent provenance is not carried to the posting. Write routes accept only service principals, but agent-caused postings must be audited as 'agent <token> on behalf of <person>'. postJournal has no origin field, a caller-supplied value would be trusted, and A04's audit CHECK (token_id requires on_behalf_of_id) can reject a wrongly shaped event.",
+   "fix": "Add origin {principal_kind, token_id?, human_id} to postJournal and reserve. For approval-bound rows, copy it from A14's maker_principal and refuse on mismatch; otherwise take it from A09's signed internal request context. Store it on the journal and the audit event. Add a challenge that an agent's order and withdrawal show the provenance in the journal, the audit row and me/ledger."
+  },
+  {
+   "severity": "medium",
+   "issue": "A fee sweep can strand refunds. order.fund credits the fee to fee_payable_realx while the order is still open, and order.refund pays it back from that account. fee.sweep has no rule restricting it to fees on finalised orders. After a sweep, a soft-cap refund hits LDG_INSUFFICIENT_AVAILABLE and J05's 5-business-day refund is blocked.",
+   "fix": "Hold the fee in offer_escrow (or a per-offering fee_pending client account) until escrow.release moves it to fee_payable_realx, or limit fee.sweep to fees on finalised orders. Add a fund -> sweep -> refund challenge that expects the refund to post."
+  }
+ ]
+}
